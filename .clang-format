@@ -1,0 +1,18 @@
+﻿---
+BasedOnStyle: Google
+AlignAfterOpenBracket: DontAlign
+AllowShortFunctionsOnASingleLine: Inline
+AllowShortIfStatementsOnASingleLine: AllIfsAndElse
+AllowShortLoopsOnASingleLine: false
+DerivePointerAlignment: false
+FixNamespaceComments: false
+IndentWidth: 4
+NamespaceIndentation: All
+PointerAlignment: Left
+SpaceBeforeParens: Never
+TabWidth: 4
+AccessModifierOffset: -4
+SpacesBeforeTrailingComments: 1
+IncludeBlocks: Merge
+ColumnLimit: 120
+...
