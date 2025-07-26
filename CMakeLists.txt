@@ -1,11 +1,102 @@
 cmake_minimum_required(VERSION 4.0)
 project(wallpaperd)
 
-set(CMAKE_CXX_STANDARD 23)
+option(WD_WLROOTS "Enable wlroots backend" OFF)
+
+option(WD_SDL_SHARED "Dynamically link to system SDL" OFF)
+option(WD_SDL_IMAGE_SHARED "Dynamically link to system SDL_image" OFF)
+option(WD_SDL_MIXER_SHARED "Dynamically link to system SDL_mixer" OFF)
+
+set(BUILD_SHARED_LIBS OFF)
 
 file(GLOB_RECURSE WD_SOURCES src/*.c)
-
 add_executable(wallpaperd ${WD_SOURCES})
-
 target_include_directories(wallpaperd PRIVATE src)
+
+if(WD_SDL_SHARED)
+    find_package(SDL3 REQUIRED CONFIG REQUIRED COMPONENTS SDL3-shared)
+    target_link_libraries(wallpaperd PRIVATE SDL3::SDL3-shared)
+else()
+    set(SDL_STATIC ON)
+    set(SDL_DISABLE_INSTALL ON)
+    add_subdirectory(external/SDL EXCLUDE_FROM_ALL)
+    target_link_libraries(wallpaperd PRIVATE SDL3::SDL3-static)
+    target_include_directories(wallpaperd PRIVATE external/SDL/include)
+endif()
+
+if(WD_SDL_IMAGE_SHARED)
+    find_package(SDL3_image REQUIRED CONFIG REQUIRED COMPONENTS SDL3_image-shared)
+    target_link_libraries(wallpaperd PRIVATE SDL3_image::SDL3_image-shared)
+else()
+    set(SDLIMAGE_VENDORED ON)
+    set(SDLIMAGE_DEPS_SHARED OFF)
+    set(SDLIMAGE_INSTALL OFF)
+    set(SDLIMAGE_PNG ON)
+    set(SDLIMAGE_AVIF OFF)
+    set(SDLIMAGE_BMP OFF)
+    set(SDLIMAGE_GIF OFF)
+    set(SDLIMAGE_JPG OFF)
+    set(SDLIMAGE_JXL OFF)
+    set(SDLIMAGE_LBM OFF)
+    set(SDLIMAGE_PCX OFF)
+    set(SDLIMAGE_PNM OFF)
+    set(SDLIMAGE_QOI OFF)
+    set(SDLIMAGE_SVG OFF)
+    set(SDLIMAGE_TGA OFF)
+    set(SDLIMAGE_TIF OFF)
+    set(SDLIMAGE_WEBP OFF)
+    set(SDLIMAGE_XCF OFF)
+    set(SDLIMAGE_XPM OFF)
+    set(SDLIMAGE_XV OFF)
+    add_subdirectory(external/SDL_image EXCLUDE_FROM_ALL)
+    target_link_libraries(wallpaperd PRIVATE SDL3_image::SDL3_image-static)
+    target_include_directories(wallpaperd PRIVATE external/SDL_image/include)
+endif()
+
+if(WD_SDL_MIXER_SHARED)
+    find_package(SDL3_mixer REQUIRED CONFIG REQUIRED COMPONENTS SDL3_mixer-shared)
+    target_link_libraries(wallpaperd PRIVATE SDL3_mixer::SDL3_mixer-shared)
+else()
+    set(SDLMIXER_VENDORED ON)
+    set(SDLMIXER_DEPS_SHARED OFF)
+    set(SDLMIXER_INSTALL OFF)
+    set(SDLMIXER_GME OFF)
+    set(SDLMIXER_FLAC OFF)
+    set(SDLMIXER_MOD OFF)
+    set(SDLMIXER_MP3 OFF)
+    set(SDLMIXER_MIDI OFF)
+    set(SDLMIXER_OPUS OFF)
+    set(SDLMIXER_WAVE OFF)
+    set(SDLMIXER_WAVPACK OFF)
+    add_subdirectory(external/SDL_mixer EXCLUDE_FROM_ALL)
+    target_link_libraries(wallpaperd PRIVATE SDL3_mixer::SDL3_mixer-static)
+    target_include_directories(wallpaperd PRIVATE external/SDL_mixer/include)
+endif()
+
+if(WD_WLROOTS)
+    find_program(WAYLAND_SCANNER NAMES wayland-scanner)
+    if(NOT WAYLAND_SCANNER)
+        message(FATAL_ERROR "wayland-scanner not found")
+    endif()
+
+    function(add_protocol PROTOCOL_NAME)
+        set(PROTOCOL_XML "${CMAKE_CURRENT_SOURCE_DIR}/wayland/${PROTOCOL_NAME}.xml")
+        set(PROTOCOL_C "${CMAKE_CURRENT_BINARY_DIR}/${PROTOCOL_NAME}.c")
+        set(PROTOCOL_H "${CMAKE_CURRENT_BINARY_DIR}/${PROTOCOL_NAME}.h")
+
+        add_custom_command(
+            OUTPUT ${PROTOCOL_C} ${PROTOCOL_H}
+            COMMAND ${WAYLAND_SCANNER} private-code ${PROTOCOL_XML} ${PROTOCOL_C}
+            COMMAND ${WAYLAND_SCANNER} client-header ${PROTOCOL_XML} ${PROTOCOL_H}
+            DEPENDS ${PROTOCOL_XML}
+        )
+
+        target_sources(wallpaperd PRIVATE ${PROTOCOL_C})
+        target_include_directories(wallpaperd PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
+    endfunction()
+
+    add_protocol(xdg-shell)
+    add_protocol(wlr-layer-shell-unstable-v1)
+    target_link_libraries(wallpaperd PRIVATE wayland-client)
+endif()
 
