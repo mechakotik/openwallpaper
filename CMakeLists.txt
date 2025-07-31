@@ -1,13 +1,20 @@
 cmake_minimum_required(VERSION 4.0)
 project(wallpaperd)
 
-option(WD_WLROOTS "Enable wlroots backend" OFF)
+option(WD_WLROOTS "Enable wlroots output support" OFF)
 
 option(WD_SDL_SHARED "Dynamically link to system SDL" OFF)
 option(WD_SDL_IMAGE_SHARED "Dynamically link to system SDL_image" OFF)
 option(WD_SDL_MIXER_SHARED "Dynamically link to system SDL_mixer" OFF)
 
+option(WD_SANITIZE "Build with sanitizers" OFF)
+
 set(BUILD_SHARED_LIBS OFF)
+
+if(WD_SANITIZE)
+    add_compile_options(-fsanitize=address,leak,undefined)
+    add_link_options(-fsanitize=address,leak,undefined)
+endif()
 
 file(GLOB_RECURSE WD_SOURCES src/*.c)
 add_executable(wallpaperd ${WD_SOURCES})
@@ -98,5 +105,6 @@ if(WD_WLROOTS)
     add_protocol(xdg-shell)
     add_protocol(wlr-layer-shell-unstable-v1)
     target_link_libraries(wallpaperd PRIVATE wayland-client)
+    target_compile_definitions(wallpaperd PRIVATE -DWD_WLROOTS)
 endif()
 

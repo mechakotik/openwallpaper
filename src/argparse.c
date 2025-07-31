@@ -9,22 +9,12 @@ static struct args {
 
     int num_options;
     char** options_keys;
-    char** options_values; // value is empty string if unset
+    char** options_values; // value is empty if string is unset
 
     int num_wallpaper_options;
     char** wallpaper_options_keys;
-    char** wallpaper_options_values; // value is empty string if unset
-} args = {
-    .wallpaper_path = NULL,
-
-    .num_options = 0,
-    .options_keys = NULL,
-    .options_values = NULL,
-
-    .num_wallpaper_options = 0,
-    .wallpaper_options_keys = NULL,
-    .wallpaper_options_values = NULL,
-};
+    char** wallpaper_options_values; // value is empty if string is unset
+} args = {0};
 
 static void split_option(const char* option, char** key, char** value) {
     int len = strlen(option);
@@ -50,6 +40,7 @@ static void split_option(const char* option, char** key, char** value) {
         *value = malloc(sizeof(char) * (len - pos));
         strncpy(*key, option, pos);
         strncpy(*value, option + pos + 1, len - pos - 1);
+        (*key)[pos] = (*value)[len - pos - 1] = '\0';
     }
 }
 
@@ -113,7 +104,7 @@ const char* wd_get_option(const char* name) {
     return NULL;
 }
 
-const char* wd_get_wallpaer_path() {
+const char* wd_get_wallpaper_path() {
     return args.wallpaper_path;
 }
 
