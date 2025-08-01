@@ -4,7 +4,7 @@
 #include <string.h>
 #include "error.h"
 
-static struct args {
+static struct {
     char* wallpaper_path;
 
     int num_options;
@@ -14,7 +14,7 @@ static struct args {
     int num_wallpaper_options;
     char** wallpaper_options_keys;
     char** wallpaper_options_values; // value is empty if string is unset
-} args = {0};
+} state;
 
 static void split_option(const char* option, char** key, char** value) {
     int len = strlen(option);
@@ -45,73 +45,78 @@ static void split_option(const char* option, char** key, char** value) {
 }
 
 void wd_parse_args(int argc, char* argv[]) {
+    int num_options = 0;
+    int num_wallpaper_options = 0;
     bool path_set = false;
+
     for(int i = 1; i < argc; i++) {
         if(argv[i][0] == '-' && argv[i][1] == '-') {
             if(path_set) {
-                args.num_wallpaper_options++;
+                num_wallpaper_options++;
             } else {
-                args.num_options++;
+                num_options++;
             }
         } else {
             if(path_set) {
                 WD_ERROR("more than one wallpaper path provided, see --help");
             } else {
                 int len = strlen(argv[i]);
-                args.wallpaper_path = malloc(sizeof(char) * (len + 1));
-                strcpy(args.wallpaper_path, argv[i]);
+                state.wallpaper_path = malloc(sizeof(char) * (len + 1));
+                strcpy(state.wallpaper_path, argv[i]);
                 path_set = true;
             }
         }
     }
 
-    args.options_keys = malloc(sizeof(char*) * args.num_options);
-    args.options_values = malloc(sizeof(char*) * args.num_options);
-    args.wallpaper_options_keys = malloc(sizeof(char*) * args.num_wallpaper_options);
-    args.wallpaper_options_values = malloc(sizeof(char*) * args.num_wallpaper_options);
+    state.num_options = num_options;
+    state.num_wallpaper_options = num_wallpaper_options;
+    state.options_keys = calloc(state.num_options, sizeof(char*));
+    state.options_values = calloc(state.num_options, sizeof(char*));
+    state.wallpaper_options_keys = malloc(sizeof(char*) * state.num_wallpaper_options);
+    state.wallpaper_options_values = malloc(sizeof(char*) * state.num_wallpaper_options);
 
-    for(int i = 0; i < args.num_options; i++) {
-        split_option(argv[i + 1] + 2, &args.options_keys[i], &args.options_values[i]);
+    for(int i = 0; i < state.num_options; i++) {
+        split_option(argv[i + 1] + 2, &state.options_keys[i], &state.options_values[i]);
     }
-    for(int i = 0; i < args.num_wallpaper_options; i++) {
-        split_option(argv[i + args.num_wallpaper_options + 2] + 2, &args.wallpaper_options_keys[i],
-            &args.wallpaper_options_values[i]);
+    for(int i = 0; i < state.num_wallpaper_options; i++) {
+        split_option(argv[i + state.num_wallpaper_options + 2] + 2, &state.wallpaper_options_keys[i],
+            &state.wallpaper_options_values[i]);
     }
 }
 
 void wd_free_args() {
-    for(int i = 0; i < args.num_options; i++) {
-        free(args.options_keys[i]);
-        free(args.options_values[i]);
+    for(int i = 0; i < state.num_options; i++) {
+        free(state.options_keys[i]);
+        free(state.options_values[i]);
     }
-    for(int i = 0; i < args.num_wallpaper_options; i++) {
-        free(args.wallpaper_options_keys[i]);
-        free(args.wallpaper_options_values[i]);
+    for(int i = 0; i < state.num_wallpaper_options; i++) {
+        free(state.wallpaper_options_keys[i]);
+        free(state.wallpaper_options_values[i]);
     }
-    free(args.options_keys);
-    free(args.options_values);
-    free(args.wallpaper_path);
-    free(args.wallpaper_options_keys);
-    free(args.wallpaper_options_values);
+    free(state.options_keys);
+    free(state.options_values);
+    free(state.wallpaper_path);
+    free(state.wallpaper_options_keys);
+    free(state.wallpaper_options_values);
 }
 
 const char* wd_get_option(const char* name) {
-    for(int i = 0; i < args.num_options; i++) {
-        if(strcmp(args.options_keys[i], name) == 0) {
-            return args.options_values[i];
+    for(int i = 0; i < state.num_options; i++) {
+        if(strcmp(state.options_keys[i], name) == 0) {
+            return state.options_values[i];
         }
     }
     return NULL;
 }
 
 const char* wd_get_wallpaper_path() {
-    return args.wallpaper_path;
+    return state.wallpaper_path;
 }
 
 const char* wd_get_wallpaper_option(const char* name) {
-    for(int i = 0; i < args.num_wallpaper_options; i++) {
-        if(strcmp(args.wallpaper_options_keys[i], name) == 0) {
-            return args.wallpaper_options_values[i];
+    for(int i = 0; i < state.num_wallpaper_options; i++) {
+        if(strcmp(state.wallpaper_options_keys[i], name) == 0) {
+            return state.wallpaper_options_values[i];
         }
     }
     return NULL;

@@ -60,5 +60,7 @@ struct SDL_Window* wd_get_output_window() {
 }
 
 void wd_free_output() {
-    state.free_output();
+    if(state.free_output != NULL) {
+        state.free_output();
+    }
 }

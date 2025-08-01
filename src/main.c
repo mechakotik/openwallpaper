@@ -32,14 +32,12 @@ int main(int argc, char* argv[]) {
 
     if(wd_get_option("help") != NULL) {
         print_help();
-        wd_free_args();
-        return 0;
+        wd_quit(0);
     }
 
     if(wd_get_option("list-outputs") != NULL) {
         wd_list_outputs();
-        wd_free_args();
-        return 0;
+        wd_quit(0);
     }
 
     if(wd_get_wallpaper_path() == NULL) {
@@ -49,8 +47,5 @@ int main(int argc, char* argv[]) {
     wd_init_output();
     SDL_Window* window = wd_get_output_window();
 
-    wd_free_object_manager();
-    wd_free_output();
-    wd_free_args();
-    return 0;
+    wd_quit(0);
 }

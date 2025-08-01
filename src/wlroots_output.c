@@ -6,7 +6,7 @@
 #include "SDL3/SDL_hints.h"
 #include "error.h"
 
-static struct output_state {
+static struct {
     struct wl_display* display;
     struct wl_registry* registry;
     struct wl_compositor* compositor;
@@ -18,7 +18,7 @@ static struct output_state {
     SDL_Window* window;
     uint32_t width;
     uint32_t height;
-} state = {0};
+} state;
 
 static void registry_global(
     void* data, struct wl_registry* registry, uint32_t name, const char* interface, uint32_t version) {
@@ -105,12 +105,24 @@ void wd_wlroots_output_free() {
     SDL_DestroyWindow(state.window);
     SDL_Quit();
 
-    zwlr_layer_surface_v1_destroy(state.layer_surface);
-    wl_surface_destroy(state.surface);
-    zwlr_layer_shell_v1_destroy(state.layer_shell);
-    wl_compositor_destroy(state.compositor);
-    wl_registry_destroy(state.registry);
-    wl_display_disconnect(state.display);
+    if(state.layer_surface != NULL) {
+        zwlr_layer_surface_v1_destroy(state.layer_surface);
+    }
+    if(state.surface != NULL) {
+        wl_surface_destroy(state.surface);
+    }
+    if(state.layer_shell != NULL) {
+        zwlr_layer_shell_v1_destroy(state.layer_shell);
+    }
+    if(state.compositor != NULL) {
+        wl_compositor_destroy(state.compositor);
+    }
+    if(state.registry != NULL) {
+        wl_registry_destroy(state.registry);
+    }
+    if(state.display != NULL) {
+        wl_display_disconnect(state.display);
+    }
 }
 
 #endif

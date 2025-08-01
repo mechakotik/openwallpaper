@@ -3,6 +3,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include "quit.h"
 
 #define WD_LOG(...)      \
     printf(__VA_ARGS__); \
@@ -16,6 +17,6 @@
     printf("error: ");   \
     printf(__VA_ARGS__); \
     printf("\n");        \
-    exit(1);
+    wd_quit(1);
 
 #endif
