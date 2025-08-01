@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include "argparse.h"
 #include "error.h"
+#include "object_manager.h"
 #include "output.h"
 
 static void print_help() {
@@ -48,6 +49,8 @@ int main(int argc, char* argv[]) {
     wd_init_output();
     SDL_Window* window = wd_get_output_window();
 
+    wd_free_object_manager();
     wd_free_output();
+    wd_free_args();
     return 0;
 }
