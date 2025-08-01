@@ -18,7 +18,7 @@ endif()
 
 file(GLOB_RECURSE WD_SOURCES src/*.c)
 add_executable(wallpaperd ${WD_SOURCES})
-target_include_directories(wallpaperd PRIVATE src)
+target_include_directories(wallpaperd PRIVATE src include)
 
 if(WD_SDL_SHARED)
     find_package(SDL3 REQUIRED CONFIG REQUIRED COMPONENTS SDL3-shared)
