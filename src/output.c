@@ -1,4 +1,5 @@
 #include "output.h"
+#include <stdio.h>
 #include <string.h>
 #include "argparse.h"
 #include "error.h"
@@ -17,50 +18,47 @@ static const char* get_default_output() {
     return "window";
 }
 
-static const char* get_output() {
+static const char* get_output(wd_args_state* args) {
     const char* output;
-    if(wd_get_option("output") != NULL) {
-        output = wd_get_option("output");
+    if(wd_get_option(args, "output") != NULL) {
+        output = wd_get_option(args, "output");
     } else {
         output = get_default_output();
     }
     return output;
 }
 
-static struct output_state {
-    const char* output;
-    struct SDL_Window* window;
-    void (*free_output)();
-} state = {0};
+bool wd_init_output(wd_output_state* output, wd_args_state* args) {
+    const char* name = get_output(args);
 
-void wd_init_output() {
-    state.output = get_output();
-
-    if(strcmp(state.output, "window") == 0) {
-        WD_LOG("using window output");
-        wd_window_output_init();
-        state.window = wd_window_output_get_window();
-        state.free_output = wd_window_output_free;
-    } else if(strcmp(state.output, "wlroots") == 0) {
+    if(strcmp(name, "window") == 0) {
+        if(!wd_window_output_init(&output->data)) {
+            return false;
+        }
+        output->window = wd_window_output_get_window(output->data);
+        output->free_output = wd_window_output_free;
+    } else if(strcmp(name, "wlroots") == 0) {
 #ifdef WD_WLROOTS
-        WD_LOG("using wlroots output");
-        wd_wlroots_output_init();
-        state.window = wd_wlroots_output_get_window();
-        state.free_output = wd_wlroots_output_free;
+        if(!wd_wlroots_output_init(&output->data)) {
+            return false;
+        }
+        output->window = wd_wlroots_output_get_window(output->data);
+        output->free_output = wd_wlroots_output_free;
 #else
-        WD_ERROR("wlroots output support is disabled, compile with -DWD_WLROOTS=ON to use it");
+        wd_set_error("wlroots output support is disabled, compile with -DWD_WLROOTS=ON to use it");
+        return false;
 #endif
     } else {
-        WD_ERROR("unknown output '%s'", state.output);
+        wd_set_error("unknown output '%s'", name);
+        return false;
     }
+
+    return true;
 }
 
-struct SDL_Window* wd_get_output_window() {
-    return state.window;
-}
-
-void wd_free_output() {
-    if(state.free_output != NULL) {
-        state.free_output();
+void wd_free_output(wd_output_state* output) {
+    if(output->free_output) {
+        output->free_output(output->data);
+        output->data = NULL;
     }
 }

@@ -2,11 +2,12 @@
 
 #include "wlroots_output.h"
 #include <SDL3/SDL.h>
+#include <stdlib.h>
 #include <wlr-layer-shell-unstable-v1.h>
 #include "SDL3/SDL_hints.h"
 #include "error.h"
 
-static struct {
+typedef struct wlroots_output_state {
     struct wl_display* display;
     struct wl_registry* registry;
     struct wl_compositor* compositor;
@@ -18,14 +19,15 @@ static struct {
     SDL_Window* window;
     uint32_t width;
     uint32_t height;
-} state;
+} wlroots_output_state;
 
 static void registry_global(
     void* data, struct wl_registry* registry, uint32_t name, const char* interface, uint32_t version) {
+    wlroots_output_state* odata = (wlroots_output_state*)data;
     if(strcmp(interface, wl_compositor_interface.name) == 0) {
-        state.compositor = (struct wl_compositor*)wl_registry_bind(registry, name, &wl_compositor_interface, 4);
+        odata->compositor = (struct wl_compositor*)wl_registry_bind(registry, name, &wl_compositor_interface, 4);
     } else if(strcmp(interface, zwlr_layer_shell_v1_interface.name) == 0) {
-        state.layer_shell =
+        odata->layer_shell =
             (struct zwlr_layer_shell_v1*)wl_registry_bind(registry, name, &zwlr_layer_shell_v1_interface, 1);
     }
 }
@@ -37,11 +39,12 @@ static const struct wl_registry_listener registry_listener = {
 
 static void layer_surface_configure(
     void* data, struct zwlr_layer_surface_v1* surface, uint32_t serial, uint32_t width, uint32_t height) {
-    state.width = width;
-    state.height = height;
+    wlroots_output_state* odata = (wlroots_output_state*)data;
+    odata->width = width;
+    odata->height = height;
     zwlr_layer_surface_v1_ack_configure(surface, serial);
-    if(state.window != NULL) {
-        SDL_SetWindowSize(state.window, width, height);
+    if(odata->window != NULL) {
+        SDL_SetWindowSize(odata->window, width, height);
     }
 }
 
@@ -50,79 +53,90 @@ static void layer_surface_closed(void* data, struct zwlr_layer_surface_v1* surfa
 static const struct zwlr_layer_surface_v1_listener layer_surface_listener = {
     .configure = layer_surface_configure, .closed = layer_surface_closed};
 
-void wd_wlroots_output_init() {
-    state.display = wl_display_connect(NULL);
-    if(state.display == NULL) {
-        WD_ERROR("failed to connect to wayland display");
+bool wd_wlroots_output_init(void** data) {
+    *data = calloc(1, sizeof(wlroots_output_state));
+    wlroots_output_state* odata = (wlroots_output_state*)(*data);
+
+    odata->display = wl_display_connect(NULL);
+    if(odata->display == NULL) {
+        wd_set_error("failed to connect to wayland display");
+        return false;
     }
 
-    state.registry = wl_display_get_registry(state.display);
-    wl_registry_add_listener(state.registry, &registry_listener, NULL);
-    wl_display_roundtrip(state.display);
-    if(state.compositor == NULL) {
-        WD_ERROR("compositor does not support wl_compositor");
+    odata->registry = wl_display_get_registry(odata->display);
+    wl_registry_add_listener(odata->registry, &registry_listener, odata);
+    wl_display_roundtrip(odata->display);
+    if(odata->compositor == NULL) {
+        wd_set_error("compositor does not support wl_compositor");
+        return false;
     }
-    if(state.layer_shell == NULL) {
-        WD_ERROR("compositor does not support wlr_layer_shell_v1");
+    if(odata->layer_shell == NULL) {
+        wd_set_error("compositor does not support wlr_layer_shell_v1");
+        return false;
     }
 
-    state.surface = wl_compositor_create_surface(state.compositor);
-    state.layer_surface = zwlr_layer_shell_v1_get_layer_surface(
-        state.layer_shell, state.surface, NULL, ZWLR_LAYER_SHELL_V1_LAYER_BACKGROUND, "wallpaperd");
-    zwlr_layer_surface_v1_set_size(state.layer_surface, 0, 0);
+    odata->surface = wl_compositor_create_surface(odata->compositor);
+    odata->layer_surface = zwlr_layer_shell_v1_get_layer_surface(
+        odata->layer_shell, odata->surface, NULL, ZWLR_LAYER_SHELL_V1_LAYER_BACKGROUND, "wallpaperd");
+    zwlr_layer_surface_v1_set_size(odata->layer_surface, 0, 0);
     zwlr_layer_surface_v1_set_anchor(
-        state.layer_surface, ZWLR_LAYER_SURFACE_V1_ANCHOR_TOP | ZWLR_LAYER_SURFACE_V1_ANCHOR_RIGHT |
-                                 ZWLR_LAYER_SURFACE_V1_ANCHOR_BOTTOM | ZWLR_LAYER_SURFACE_V1_ANCHOR_LEFT);
-    zwlr_layer_surface_v1_add_listener(state.layer_surface, &layer_surface_listener, &state);
-    wl_surface_commit(state.surface);
-    wl_display_roundtrip(state.display);
+        odata->layer_surface, ZWLR_LAYER_SURFACE_V1_ANCHOR_TOP | ZWLR_LAYER_SURFACE_V1_ANCHOR_RIGHT |
+                                  ZWLR_LAYER_SURFACE_V1_ANCHOR_BOTTOM | ZWLR_LAYER_SURFACE_V1_ANCHOR_LEFT);
+    zwlr_layer_surface_v1_add_listener(odata->layer_surface, &layer_surface_listener, odata);
+    wl_surface_commit(odata->surface);
+    wl_display_roundtrip(odata->display);
 
     SDL_SetHint(SDL_HINT_VIDEO_DRIVER, "wayland");
-    SDL_SetPointerProperty(SDL_GetGlobalProperties(), SDL_PROP_GLOBAL_VIDEO_WAYLAND_WL_DISPLAY_POINTER, state.display);
+    SDL_SetPointerProperty(SDL_GetGlobalProperties(), SDL_PROP_GLOBAL_VIDEO_WAYLAND_WL_DISPLAY_POINTER, odata->display);
     if(!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS)) {
-        WD_ERROR("SDL_Init failed: %s", SDL_GetError());
+        wd_set_error("SDL_Init failed: %s", SDL_GetError());
+        return false;
     }
 
-    {
-        SDL_PropertiesID properties = SDL_CreateProperties();
-        SDL_SetPointerProperty(properties, SDL_PROP_WINDOW_CREATE_WAYLAND_WL_SURFACE_POINTER, state.surface);
-        SDL_SetBooleanProperty(properties, SDL_PROP_WINDOW_CREATE_OPENGL_BOOLEAN, true);
-        SDL_SetNumberProperty(properties, SDL_PROP_WINDOW_CREATE_WIDTH_NUMBER, state.width);
-        SDL_SetNumberProperty(properties, SDL_PROP_WINDOW_CREATE_HEIGHT_NUMBER, state.height);
-        state.window = SDL_CreateWindowWithProperties(properties);
-        SDL_DestroyProperties(properties);
-        if(!state.window) {
-            WD_ERROR("SDL_CreateWindowWithProperties failed: %s", SDL_GetError());
-        }
+    SDL_PropertiesID properties = SDL_CreateProperties();
+    SDL_SetPointerProperty(properties, SDL_PROP_WINDOW_CREATE_WAYLAND_WL_SURFACE_POINTER, odata->surface);
+    SDL_SetBooleanProperty(properties, SDL_PROP_WINDOW_CREATE_OPENGL_BOOLEAN, true);
+    SDL_SetNumberProperty(properties, SDL_PROP_WINDOW_CREATE_WIDTH_NUMBER, odata->width);
+    SDL_SetNumberProperty(properties, SDL_PROP_WINDOW_CREATE_HEIGHT_NUMBER, odata->height);
+    odata->window = SDL_CreateWindowWithProperties(properties);
+    SDL_DestroyProperties(properties);
+    if(!odata->window) {
+        wd_set_error("SDL_CreateWindowWithProperties failed: %s", SDL_GetError());
+        return false;
     }
+
+    return true;
 }
 
-SDL_Window* wd_wlroots_output_get_window() {
-    return state.window;
+SDL_Window* wd_wlroots_output_get_window(void* data) {
+    wlroots_output_state* odata = (wlroots_output_state*)data;
+    return odata->window;
 }
 
-void wd_wlroots_output_free() {
-    SDL_DestroyWindow(state.window);
+void wd_wlroots_output_free(void* data) {
+    wlroots_output_state* odata = (wlroots_output_state*)data;
+    SDL_DestroyWindow(odata->window);
     SDL_Quit();
 
-    if(state.layer_surface != NULL) {
-        zwlr_layer_surface_v1_destroy(state.layer_surface);
+    if(odata->layer_surface != NULL) {
+        zwlr_layer_surface_v1_destroy(odata->layer_surface);
     }
-    if(state.surface != NULL) {
-        wl_surface_destroy(state.surface);
+    if(odata->surface != NULL) {
+        wl_surface_destroy(odata->surface);
     }
-    if(state.layer_shell != NULL) {
-        zwlr_layer_shell_v1_destroy(state.layer_shell);
+    if(odata->layer_shell != NULL) {
+        zwlr_layer_shell_v1_destroy(odata->layer_shell);
     }
-    if(state.compositor != NULL) {
-        wl_compositor_destroy(state.compositor);
+    if(odata->compositor != NULL) {
+        wl_compositor_destroy(odata->compositor);
     }
-    if(state.registry != NULL) {
-        wl_registry_destroy(state.registry);
+    if(odata->registry != NULL) {
+        wl_registry_destroy(odata->registry);
     }
-    if(state.display != NULL) {
-        wl_display_disconnect(state.display);
+    if(odata->display != NULL) {
+        wl_display_disconnect(odata->display);
     }
+    free(odata);
 }
 
 #endif

@@ -2,8 +2,8 @@
 #include <stdio.h>
 #include "argparse.h"
 #include "error.h"
-#include "object_manager.h"
 #include "output.h"
+#include "state.h"
 
 static void print_help() {
     printf("Usage: wallpaperd [OPTIONS] [WALLPAPER_PATH] [WALLPAPER_OPTIONS]\n");
@@ -16,36 +16,56 @@ static void print_help() {
     printf("  --help               display help and exit\n");
 }
 
-typedef struct Vertex {
-    float x, y, z;
-    float r, g, b, a;
-} Vertex;
-
-static Vertex vertices[] = {
-    {0, 0.5, 0, 1, 0, 0, 1},
-    {-0.5, -0.5, 0, 0, 1, 0, 1},
-    {0.5, -0.5, 0, 0, 0, 1, 1},
-};
-
 int main(int argc, char* argv[]) {
-    wd_parse_args(argc, argv);
+    wd_state state;
+    wd_init_state(&state);
+    wd_parse_args(&state.args, argc, argv);
 
-    if(wd_get_option("help") != NULL) {
+    if(wd_get_option(&state.args, "help") != NULL) {
         print_help();
-        wd_quit(0);
+        wd_free_state(&state);
+        return 0;
     }
 
-    if(wd_get_option("list-outputs") != NULL) {
+    if(wd_get_option(&state.args, "list-outputs") != NULL) {
         wd_list_outputs();
-        wd_quit(0);
+        wd_free_state(&state);
+        return 0;
     }
 
-    if(wd_get_wallpaper_path() == NULL) {
-        WD_ERROR("no wallpaper path provided, see --help");
+    if(wd_get_wallpaper_path(&state.args) == NULL) {
+        printf("error: no wallpaper path provided, see --help\n");
+        wd_free_state(&state);
+        return 1;
     }
 
-    wd_init_output();
-    SDL_Window* window = wd_get_output_window();
+    if(!wd_init_output(&state.output, &state.args)) {
+        printf("%s", wd_get_last_error());
+        wd_free_state(&state);
+        return 1;
+    }
 
-    wd_quit(0);
+    SDL_Window* window = state.output.window;
+    SDL_Renderer* renderer = SDL_CreateRenderer(window, NULL);
+
+    while(true) {
+        SDL_Event event;
+        bool quit = false;
+        while(SDL_PollEvent(&event)) {
+            if(event.type == SDL_EVENT_QUIT) {
+                quit = true;
+                break;
+            }
+        }
+        if(quit) {
+            break;
+        }
+
+        SDL_RenderClear(renderer);
+        SDL_RenderPresent(renderer);
+    }
+
+    SDL_DestroyRenderer(renderer);
+    wd_free_state(&state);
+    return 0;
 }
