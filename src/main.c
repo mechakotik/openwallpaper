@@ -34,15 +34,13 @@ int main(int argc, char* argv[]) {
     }
 
     if(wd_get_wallpaper_path(&state.args) == NULL) {
-        printf("error: no wallpaper path provided, see --help\n");
-        wd_free_state(&state);
-        return 1;
+        goto handle_error;
     }
-
     if(!wd_init_output(&state.output, &state.args)) {
-        printf("%s", wd_get_last_error());
-        wd_free_state(&state);
-        return 1;
+        goto handle_error;
+    }
+    if(!wd_init_scene(&state.scene, &state.args)) {
+        goto handle_error;
     }
 
     SDL_Window* window = state.output.window;
@@ -61,6 +59,10 @@ int main(int argc, char* argv[]) {
             break;
         }
 
+        if(!wd_update_scene(&state)) {
+            goto handle_error;
+        }
+
         SDL_RenderClear(renderer);
         SDL_RenderPresent(renderer);
     }
@@ -68,4 +70,9 @@ int main(int argc, char* argv[]) {
     SDL_DestroyRenderer(renderer);
     wd_free_state(&state);
     return 0;
+
+handle_error:
+    printf("error: %s", wd_get_last_error());
+    wd_free_state(&state);
+    return 1;
 }

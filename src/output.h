@@ -10,8 +10,6 @@ typedef struct wd_output_state {
     void (*free_output)(void*);
 } wd_output_state;
 
-typedef struct wd_state wd_state;
-
 void wd_list_outputs();
 bool wd_init_output(wd_output_state* output, wd_args_state* args);
 void wd_free_output(wd_output_state* output);

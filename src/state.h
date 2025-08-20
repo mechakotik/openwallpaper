@@ -5,11 +5,13 @@
 #include "argparse.h"
 #include "object_manager.h"
 #include "output.h"
+#include "scene.h"
 
 typedef struct wd_state {
     wd_args_state args;
     wd_object_manager_state object_manager;
     wd_output_state output;
+    wd_scene_state scene;
 } wd_state;
 
 void wd_init_state(wd_state* state);
