@@ -1,4 +1,5 @@
 #include "state.h"
+#include "object_manager.h"
 #include "output.h"
 
 void wd_init_state(wd_state* state) {

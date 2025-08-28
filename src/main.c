@@ -1,5 +1,7 @@
 #include <SDL3/SDL.h>
 #include <stdio.h>
+#include "SDL3/SDL_error.h"
+#include "SDL3/SDL_gpu.h"
 #include "argparse.h"
 #include "error.h"
 #include "output.h"
@@ -39,12 +41,21 @@ int main(int argc, char* argv[]) {
     if(!wd_init_output(&state.output, &state.args)) {
         goto handle_error;
     }
-    if(!wd_init_scene(&state.scene, &state.args)) {
+
+    // It's unclear which component should manage the command buffer and swapchain texture,
+    // so let's just do it in main.
+    state.output.command_buffer = SDL_AcquireGPUCommandBuffer(state.output.gpu);
+    if(state.output.command_buffer == NULL) {
+        wd_set_error("SDL_AcquireGPUCommandBuffer failed: %s", SDL_GetError());
         goto handle_error;
     }
-
-    SDL_Window* window = state.output.window;
-    SDL_Renderer* renderer = SDL_CreateRenderer(window, NULL);
+    if(!wd_init_scene(&state, &state.args)) {
+        goto handle_error;
+    }
+    if(!SDL_SubmitGPUCommandBuffer(state.output.command_buffer)) {
+        wd_set_error("SDL_SubmitGPUCommandBuffer failed: %s", SDL_GetError());
+        goto handle_error;
+    }
 
     while(true) {
         SDL_Event event;
@@ -59,20 +70,45 @@ int main(int argc, char* argv[]) {
             break;
         }
 
-        if(!wd_update_scene(&state)) {
+        state.output.command_buffer = SDL_AcquireGPUCommandBuffer(state.output.gpu);
+        if(state.output.command_buffer == NULL) {
+            wd_set_error("SDL_AcquireGPUCommandBuffer failed: %s", SDL_GetError());
             goto handle_error;
         }
 
-        SDL_RenderClear(renderer);
-        SDL_RenderPresent(renderer);
+        if(!SDL_WaitAndAcquireGPUSwapchainTexture(state.output.command_buffer, state.output.window,
+               &state.output.swapchain_texture, &state.output.width, &state.output.height)) {
+            wd_set_error("SDL_WaitAndAcquireGPUSwapchainTexture failed: %s", SDL_GetError());
+            goto handle_error;
+        }
+
+        if(state.output.swapchain_texture == NULL) {
+            if(!SDL_SubmitGPUCommandBuffer(state.output.command_buffer)) {
+                wd_set_error("SDL_SubmitGPUCommandBuffer failed: %s", SDL_GetError());
+                goto handle_error;
+            }
+            continue;
+        }
+
+        if(!wd_update_scene(&state.scene)) {
+            goto handle_error;
+        }
+
+        if(!SDL_SubmitGPUCommandBuffer(state.output.command_buffer)) {
+            wd_set_error("SDL_SubmitGPUCommandBuffer failed: %s", SDL_GetError());
+            goto handle_error;
+        }
     }
 
-    SDL_DestroyRenderer(renderer);
     wd_free_state(&state);
     return 0;
 
 handle_error:
-    printf("error: %s", wd_get_last_error());
+    if(wd_is_last_error_scene_error()) {
+        printf("scene error: %s\n", wd_get_last_error());
+    } else {
+        printf("error: %s\n", wd_get_last_error());
+    }
     wd_free_state(&state);
     return 1;
 }

@@ -1,6 +1,9 @@
 #include "output.h"
+#include <SDL3/SDL.h>
 #include <stdio.h>
 #include <string.h>
+#include "SDL3/SDL_gpu.h"
+#include "SDL3/SDL_properties.h"
 #include "argparse.h"
 #include "error.h"
 #include "window_output.h"
@@ -53,11 +56,23 @@ bool wd_init_output(wd_output_state* output, wd_args_state* args) {
         return false;
     }
 
+    SDL_PropertiesID gpu_properties = SDL_CreateProperties();
+    SDL_SetBooleanProperty(gpu_properties, SDL_PROP_GPU_DEVICE_CREATE_PREFERLOWPOWER_BOOLEAN, true);
+    SDL_SetBooleanProperty(gpu_properties, SDL_PROP_GPU_DEVICE_CREATE_DEBUGMODE_BOOLEAN, false);
+    SDL_SetBooleanProperty(gpu_properties, SDL_PROP_GPU_DEVICE_CREATE_SHADERS_SPIRV_BOOLEAN, true);
+    output->gpu = SDL_CreateGPUDeviceWithProperties(gpu_properties);
+    SDL_ClaimWindowForGPUDevice(output->gpu, output->window);
+    SDL_SetGPUSwapchainParameters(
+        output->gpu, output->window, SDL_GPU_SWAPCHAINCOMPOSITION_SDR, SDL_GPU_PRESENTMODE_VSYNC);
     return true;
 }
 
 void wd_free_output(wd_output_state* output) {
-    if(output->free_output) {
+    if(output->gpu != NULL) {
+        SDL_DestroyGPUDevice(output->gpu);
+        output->gpu = NULL;
+    }
+    if(output->free_output != NULL) {
         output->free_output(output->data);
         output->data = NULL;
     }

@@ -1,13 +1,10 @@
-#ifndef OPENWALLPAPER_H
-#define OPENWALLPAPER_H
+#ifndef WASM_API_H
+#define WASM_API_H
 
-#include <stdbool.h>
-#include <stddef.h>
 #include <stdint.h>
+#include <wasm_export.h>
 
 #define OW_ID_SCREEN_TARGET 0xFFFFFFFF
-
-typedef uint32_t ow_id;
 
 typedef enum {
     OW_TEXTURE_RGBA8,
@@ -100,13 +97,13 @@ typedef enum {
 } ow_cull_mode;
 
 typedef struct {
-    ow_id color_target;
-    bool clear_color;
+    uint32_t color_target;
+    uint32_t clear_color;
     float clear_color_rgba[4];
-    ow_id depth_target;
-    bool clear_depth;
+    uint32_t depth_target;
+    uint32_t clear_depth;
     float clear_depth_value;
-    bool clear_stencil;
+    uint32_t clear_stencil;
     uint8_t clear_stencil_value;
 } ow_pass_info;
 
@@ -115,7 +112,7 @@ typedef struct {
     uint32_t height;
     uint32_t mip_levels;
     ow_texture_format format;
-    bool render_target;
+    uint32_t render_target;
 } ow_texture_info;
 
 typedef struct {
@@ -129,80 +126,77 @@ typedef struct {
 
 typedef struct {
     uint32_t slot;
-    size_t stride;
-    bool per_instance;
+    uint32_t stride;
+    uint32_t per_instance;
 } ow_vertex_binding_info;
 
 typedef struct {
     uint32_t location;
     ow_attribute_type type;
     uint32_t slot;
-    size_t offset;
+    uint32_t offset;
 } ow_vertex_attribute;
 
 typedef struct {
-    const ow_vertex_binding_info* vertex_bindings;
+    uint32_t vertex_bindings;
     uint32_t vertex_bindings_count;
-    const ow_vertex_attribute* vertex_attributes;
+    uint32_t vertex_attributes;
     uint32_t vertex_attributes_count;
-    ow_id vertex_shader;
-    ow_id fragment_shader;
+    uint32_t vertex_shader;
+    uint32_t fragment_shader;
     ow_blend_mode blend_mode;
     ow_depth_test_mode depth_test_mode;
-    bool depth_write;
+    uint32_t depth_write;
     ow_topology topology;
     ow_cull_mode cull_mode;
-    size_t push_constants_size;
+    uint32_t push_constants_size;
 } ow_pipeline_info;
 
 typedef struct {
     uint32_t slot;
-    ow_id texture;
-    ow_id sampler;
+    uint32_t texture;
+    uint32_t sampler;
 } ow_texture_binding;
 
 typedef struct {
-    ow_id buffer;
-    size_t offset;
+    uint32_t buffer;
+    uint32_t offset;
 } ow_vertex_buffer_binding;
 
 typedef struct {
-    const ow_vertex_buffer_binding* vertex_buffer_bindings;
+    uint32_t vertex_buffer_bindings;
     uint32_t vertex_buffer_bindings_count;
-    ow_id index_buffer;
-    size_t index_offset;
+    uint32_t index_buffer;
+    uint32_t index_offset;
     uint32_t index_count;
-    const ow_texture_binding* texture_bindings;
+    uint32_t texture_bindings;
     uint32_t texture_bindings_count;
 } ow_bindings_info;
 
-void init();
-void update(float delta);
+void ow_log(wasm_exec_env_t exec_env, uint32_t message_ptr);
+const char* ow_get_last_error(wasm_exec_env_t exec_env);
 
-extern void ow_log(const char* message);
-extern const char* ow_get_last_error();
+void ow_begin_copy_pass(wasm_exec_env_t exec_env);
+void ow_end_copy_pass(wasm_exec_env_t exec_env);
+void ow_begin_render_pass(wasm_exec_env_t exec_env, uint32_t info_ptr);
+void ow_end_render_pass(wasm_exec_env_t exec_env);
 
-extern void ow_begin_copy_pass();
-extern void ow_end_copy_pass();
-extern void ow_begin_render_pass(const ow_pass_info* info);
-extern void ow_end_render_pass();
+uint32_t ow_create_buffer(wasm_exec_env_t exec_env, ow_buffer_type type, uint32_t size);
+void ow_update_buffer(wasm_exec_env_t exec_env, uint32_t buffer, uint32_t offset, uint32_t data_ptr, uint32_t size);
 
-extern ow_id ow_create_buffer(ow_buffer_type type, uint32_t size);
-extern void ow_update_buffer(ow_id buffer, uint32_t offset, const void* data, uint32_t size);
+uint32_t ow_create_texture(wasm_exec_env_t exec_env, uint32_t data_ptr, uint32_t info_ptr);
+uint32_t ow_load_texture(wasm_exec_env_t exec_env, uint32_t path_ptr);
+uint32_t ow_create_sampler(wasm_exec_env_t exec_env, uint32_t info_ptr);
+uint32_t ow_create_shader(wasm_exec_env_t exec_env, uint32_t source_ptr, ow_shader_type type);
+uint32_t ow_load_shader(wasm_exec_env_t exec_env, uint32_t path_ptr, ow_shader_type type);
+uint32_t ow_create_pipeline(wasm_exec_env_t exec_env, uint32_t info_ptr);
 
-extern ow_id ow_create_texture(const void* data, const ow_texture_info* info);
-extern ow_id ow_load_texture(const char* path);
-extern ow_id ow_create_shader(const char* source, ow_shader_type type);
-extern ow_id ow_load_shader(const char* path, ow_shader_type type);
-extern ow_id ow_create_sampler(const ow_sampler_info* info);
-extern ow_id ow_create_pipeline(const ow_pipeline_info* info);
-
-extern void ow_push_constants(uint32_t slot, const void* data, uint32_t size);
-extern void ow_render_geometry(ow_id pipeline, const ow_bindings_info* bindings, uint32_t vertex_offset,
+void ow_push_constants(wasm_exec_env_t exec_env, uint32_t offset, uint32_t data_ptr, uint32_t size);
+void ow_render_geometry(wasm_exec_env_t exec_env, uint32_t pipeline, uint32_t bindings_ptr, uint32_t vertex_offset,
     uint32_t vertex_count, uint32_t instance_count);
-extern void ow_render_geometry_indexed(ow_id pipeline, const ow_bindings_info* bindings, uint32_t index_offset,
-    uint32_t index_count, uint32_t vertex_offset, uint32_t instance_count);
+void ow_render_geometry_indexed(wasm_exec_env_t exec_env, uint32_t pipeline, uint32_t bindings_ptr,
+    uint32_t index_offset, uint32_t index_count, uint32_t vertex_offset, uint32_t instance_count);
 
-extern void ow_free(ow_id id);
+void ow_free(wasm_exec_env_t exec_env, uint32_t id);
 
 #endif
