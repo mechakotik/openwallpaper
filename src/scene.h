@@ -16,7 +16,7 @@ typedef struct wd_scene_state {
 struct wd_state;
 
 bool wd_init_scene(struct wd_state* scene, wd_args_state* args);
-bool wd_update_scene(wd_scene_state* state);
+bool wd_update_scene(wd_scene_state* state, float delta);
 void wd_free_scene(wd_scene_state* scene);
 
 #endif

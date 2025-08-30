@@ -13,3 +13,6 @@
 [submodule "external/tomlc17"]
 	path = external/tomlc17
 	url = https://github.com/cktan/tomlc17
+[submodule "external/SDL_shadercross"]
+	path = external/SDL_shadercross
+	url = https://github.com/libsdl-org/SDL_shadercross

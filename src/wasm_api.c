@@ -1,5 +1,6 @@
 #include "wasm_api.h"
 #include <SDL3/SDL.h>
+#include <SDL3_shadercross/SDL_shadercross.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include "SDL3/SDL_gpu.h"
@@ -89,20 +90,20 @@ uint32_t ow_load_shader(wasm_exec_env_t exec_env, uint32_t path_ptr, ow_shader_t
     size_t code_size;
     void* code = SDL_LoadFile(path_ptr_real, &code_size);
 
-    SDL_GPUShaderCreateInfo info = {0};
-    info.code = code;
-    info.code_size = code_size;
+    SDL_ShaderCross_SPIRV_Info info = {0};
+    info.bytecode = code;
+    info.bytecode_size = code_size;
     info.entrypoint = "main";
-    info.format = SDL_GPU_SHADERFORMAT_SPIRV;
-    info.stage = (type == OW_SHADER_VERTEX ? SDL_GPU_SHADERSTAGE_VERTEX : SDL_GPU_SHADERSTAGE_FRAGMENT);
-    info.num_samplers = 0;
-    info.num_storage_buffers = 0;
-    info.num_storage_textures = 0;
-    info.num_uniform_buffers = 0;
+    info.shader_stage =
+        (type == OW_SHADER_VERTEX ? SDL_SHADERCROSS_SHADERSTAGE_VERTEX : SDL_SHADERCROSS_SHADERSTAGE_FRAGMENT);
 
-    SDL_GPUShader* shader = SDL_CreateGPUShader(state->output.gpu, &info);
+    SDL_ShaderCross_GraphicsShaderMetadata* metadata = SDL_ShaderCross_ReflectGraphicsSPIRV(code, code_size, 0);
+    DEBUG_CHECK_RET0(metadata != NULL, "SDL_ShaderCross_ReflectGraphicsSPIRV failed: %s", SDL_GetError());
+
+    SDL_GPUShader* shader = SDL_ShaderCross_CompileGraphicsShaderFromSPIRV(state->output.gpu, &info, metadata, 0);
     free(code);
-    DEBUG_CHECK_RET0(shader != NULL, "SDL_CreateGPUShader failed: %s", SDL_GetError());
+    free(metadata);
+    DEBUG_CHECK_RET0(shader != NULL, "SDL_ShaderCross_CompileGraphicsShaderFromSPIRV failed: %s", SDL_GetError());
 
     wd_object_type object_type = (type == OW_SHADER_VERTEX ? WD_OBJECT_VERTEX_SHADER : WD_OBJECT_FRAGMENT_SHADER);
     uint32_t result;
@@ -272,6 +273,26 @@ uint32_t ow_create_pipeline(wasm_exec_env_t exec_env, uint32_t info_ptr) {
     }
 
     return result;
+}
+
+void ow_push_uniform_data(wasm_exec_env_t exec_env, uint32_t type, uint32_t slot, uint32_t data, uint32_t size) {
+    wasm_module_inst_t instance = wasm_runtime_get_module_inst(exec_env);
+    wd_state* state = wasm_runtime_get_custom_data(instance);
+    void* data_real = wasm_runtime_addr_app_to_native(instance, data);
+    DEBUG_CHECK(slot < 4, "only 4 uniform data slots are available for one shader type");
+
+    switch(type) {
+        case OW_SHADER_VERTEX:
+            SDL_PushGPUVertexUniformData(state->output.command_buffer, slot, data_real, size);
+            break;
+        case OW_SHADER_FRAGMENT:
+            SDL_PushGPUFragmentUniformData(state->output.command_buffer, slot, data_real, size);
+            break;
+        default:
+            wd_set_scene_error("unknown shader type %d", type);
+            wasm_runtime_set_exception(instance, "");
+            return;
+    }
 }
 
 void ow_render_geometry(wasm_exec_env_t exec_env, uint32_t pipeline, uint32_t bindings_ptr, uint32_t vertex_offset,

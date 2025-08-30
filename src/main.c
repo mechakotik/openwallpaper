@@ -57,7 +57,13 @@ int main(int argc, char* argv[]) {
         goto handle_error;
     }
 
+    uint32_t prev_time = SDL_GetTicksNS();
+
     while(true) {
+        uint32_t cur_time = SDL_GetTicksNS();
+        float delta = (float)(cur_time - prev_time) / 1e9f;
+        prev_time = cur_time;
+
         SDL_Event event;
         bool quit = false;
         while(SDL_PollEvent(&event)) {
@@ -90,7 +96,7 @@ int main(int argc, char* argv[]) {
             continue;
         }
 
-        if(!wd_update_scene(&state.scene)) {
+        if(!wd_update_scene(&state.scene, delta)) {
             goto handle_error;
         }
 

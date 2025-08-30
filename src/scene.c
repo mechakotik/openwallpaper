@@ -16,6 +16,7 @@ static NativeSymbol native_symbols[] = {
     {"ow_update_buffer", ow_update_buffer, "(iiii)"},
     {"ow_load_shader", ow_load_shader, "(ii)i"},
     {"ow_create_pipeline", ow_create_pipeline, "(i)i"},
+    {"ow_push_uniform_data", ow_push_uniform_data, "(iiii)"},
     {"ow_render_geometry", ow_render_geometry, "(iiiii)"},
 };
 
@@ -84,8 +85,7 @@ bool wd_init_scene(wd_state* state, wd_args_state* args) {
     return true;
 }
 
-bool wd_update_scene(wd_scene_state* scene) {
-    float delta = 0;
+bool wd_update_scene(wd_scene_state* scene, float delta) {
     if(!wasm_runtime_call_wasm(scene->exec_env, scene->update_func, 1, (void*)&delta)) {
         return false;
     }
