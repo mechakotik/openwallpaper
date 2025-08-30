@@ -137,6 +137,7 @@ void ow_update_buffer(wasm_exec_env_t exec_env, uint32_t buffer, uint32_t offset
     wasm_module_inst_t instance = wasm_runtime_get_module_inst(exec_env);
     wd_state* state = wasm_runtime_get_custom_data(instance);
     void* data_ptr_real = wasm_runtime_addr_app_to_native(instance, data_ptr);
+    DEBUG_CHECK(state->output.copy_pass != NULL, "called ow_update_buffer when no copy pass is active");
 
     SDL_GPUBuffer* buffer_data = NULL;
     wd_object_type object_type;
@@ -277,6 +278,7 @@ void ow_render_geometry(wasm_exec_env_t exec_env, uint32_t pipeline, uint32_t bi
     uint32_t vertex_count, uint32_t instance_count) {
     wasm_module_inst_t instance = wasm_runtime_get_module_inst(exec_env);
     wd_state* state = wasm_runtime_get_custom_data(instance);
+    DEBUG_CHECK(state->output.render_pass != NULL, "called ow_render_geometry when no render pass is active");
 
     SDL_GPUGraphicsPipeline* sdl_pipeline = NULL;
     wd_object_type object_type;
