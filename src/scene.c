@@ -16,6 +16,7 @@ static NativeSymbol native_symbols[] = {
     {"ow_update_buffer", ow_update_buffer, "(iiii)"},
     {"ow_load_shader", ow_load_shader, "(ii)i"},
     {"ow_create_pipeline", ow_create_pipeline, "(i)i"},
+    {"ow_get_screen_size", ow_get_screen_size, "(ii)"},
     {"ow_push_uniform_data", ow_push_uniform_data, "(iiii)"},
     {"ow_render_geometry", ow_render_geometry, "(iiiii)"},
 };

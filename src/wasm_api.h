@@ -191,6 +191,7 @@ uint32_t ow_create_shader(wasm_exec_env_t exec_env, uint32_t source_ptr, ow_shad
 uint32_t ow_load_shader(wasm_exec_env_t exec_env, uint32_t path_ptr, ow_shader_type type);
 uint32_t ow_create_pipeline(wasm_exec_env_t exec_env, uint32_t info_ptr);
 
+void ow_get_screen_size(wasm_exec_env_t exec_env, uint32_t width, uint32_t height);
 void ow_push_uniform_data(wasm_exec_env_t exec_env, uint32_t type, uint32_t slot, uint32_t data, uint32_t size);
 void ow_render_geometry(wasm_exec_env_t exec_env, uint32_t pipeline, uint32_t bindings_ptr, uint32_t vertex_offset,
     uint32_t vertex_count, uint32_t instance_count);

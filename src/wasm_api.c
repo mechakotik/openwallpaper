@@ -275,6 +275,20 @@ uint32_t ow_create_pipeline(wasm_exec_env_t exec_env, uint32_t info_ptr) {
     return result;
 }
 
+void ow_get_screen_size(wasm_exec_env_t exec_env, uint32_t width, uint32_t height) {
+    wasm_module_inst_t instance = wasm_runtime_get_module_inst(exec_env);
+    wd_state* state = wasm_runtime_get_custom_data(instance);
+    uint32_t* width_real = wasm_runtime_addr_app_to_native(instance, width);
+    uint32_t* height_real = wasm_runtime_addr_app_to_native(instance, height);
+
+    int width_int, height_int;
+    bool ok = SDL_GetWindowSize(state->output.window, &width_int, &height_int);
+    DEBUG_CHECK(ok, "SDL_GetWindowSize failed: %s", SDL_GetError());
+
+    *width_real = (uint32_t)width_int;
+    *height_real = (uint32_t)height_int;
+}
+
 void ow_push_uniform_data(wasm_exec_env_t exec_env, uint32_t type, uint32_t slot, uint32_t data, uint32_t size) {
     wasm_module_inst_t instance = wasm_runtime_get_module_inst(exec_env);
     wd_state* state = wasm_runtime_get_custom_data(instance);

@@ -197,6 +197,7 @@ extern ow_id ow_load_shader(const char* path, ow_shader_type type);
 extern ow_id ow_create_sampler(const ow_sampler_info* info);
 extern ow_id ow_create_pipeline(const ow_pipeline_info* info);
 
+extern void ow_get_screen_size(uint32_t* width, uint32_t* height);
 extern void ow_push_uniform_data(ow_shader_type type, uint32_t slot, const void* data, uint32_t size);
 extern void ow_render_geometry(ow_id pipeline, const ow_bindings_info* bindings, uint32_t vertex_offset,
     uint32_t vertex_count, uint32_t instance_count);
