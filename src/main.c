@@ -1,5 +1,6 @@
 #include <SDL3/SDL.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include "SDL3/SDL_error.h"
 #include "SDL3/SDL_gpu.h"
 #include "argparse.h"
@@ -12,7 +13,7 @@ static void print_help() {
     printf("Interactive live wallpaper daemon\n\n");
 
     printf("  --output=<output>    set the output to use\n");
-    printf("  --fps=<fps>          set target framerate, default is 30\n");
+    printf("  --fps=<fps>          set target framerate, vsync if unspecified\n");
     printf("\n");
     printf("  --list-outputs       list available outputs and exit\n");
     printf("  --help               display help and exit\n");
@@ -57,9 +58,22 @@ int main(int argc, char* argv[]) {
         goto handle_error;
     }
 
+    uint32_t fps = 0, frame_time = 0;
+    if(wd_get_option(&state.args, "fps") != NULL) {
+        fps = atoi(wd_get_option(&state.args, "fps"));
+        frame_time = 1000000000 / fps;
+    }
+
     uint32_t prev_time = SDL_GetTicksNS();
 
     while(true) {
+        if(fps != 0) {
+            uint32_t delta = SDL_GetTicksNS() - prev_time;
+            if(delta < frame_time) {
+                SDL_DelayNS(frame_time - delta);
+            }
+        }
+
         uint32_t cur_time = SDL_GetTicksNS();
         float delta = (float)(cur_time - prev_time) / 1e9f;
         prev_time = cur_time;

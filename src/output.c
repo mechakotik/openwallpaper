@@ -62,8 +62,12 @@ bool wd_init_output(wd_output_state* output, wd_args_state* args) {
     SDL_SetBooleanProperty(gpu_properties, SDL_PROP_GPU_DEVICE_CREATE_SHADERS_SPIRV_BOOLEAN, true);
     output->gpu = SDL_CreateGPUDeviceWithProperties(gpu_properties);
     SDL_ClaimWindowForGPUDevice(output->gpu, output->window);
-    SDL_SetGPUSwapchainParameters(
-        output->gpu, output->window, SDL_GPU_SWAPCHAINCOMPOSITION_SDR, SDL_GPU_PRESENTMODE_VSYNC);
+
+    if(wd_get_option(args, "fps") == NULL) {
+        SDL_SetGPUSwapchainParameters(
+            output->gpu, output->window, SDL_GPU_SWAPCHAINCOMPOSITION_SDR, SDL_GPU_PRESENTMODE_VSYNC);
+    }
+
     return true;
 }
 
