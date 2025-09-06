@@ -8,6 +8,7 @@ void wd_init_state(wd_state* state) {
 
 void wd_free_state(wd_state* state) {
     wd_free_scene(&state->scene);
+    wd_free_zip(&state->zip);
     wd_free_output(&state->output);
     wd_free_object_manager(&state->object_manager);
     wd_free_args(&state->args);

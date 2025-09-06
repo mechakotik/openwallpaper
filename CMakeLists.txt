@@ -19,7 +19,7 @@ endif()
 
 file(GLOB_RECURSE WD_SOURCES src/*.c)
 add_executable(wallpaperd ${WD_SOURCES})
-target_include_directories(wallpaperd PRIVATE src include)
+target_include_directories(wallpaperd PRIVATE include)
 
 if(WD_SDL_SHARED)
     find_package(SDL3 REQUIRED CONFIG REQUIRED COMPONENTS SDL3-shared)
@@ -91,6 +91,9 @@ else()
     target_link_libraries(wallpaperd PRIVATE SDL3_shadercross::SDL3_shadercross-static)
     target_include_directories(wallpaperd PRIVATE external/SDL_shadercross/include)
 endif()
+
+find_package(libzip REQUIRED CONFIG)
+target_link_libraries(wallpaperd PRIVATE zip)
 
 set(WAMR_BUILD_PLATFORM "linux")
 set(WAMR_BUILD_TARGET "X86_64")

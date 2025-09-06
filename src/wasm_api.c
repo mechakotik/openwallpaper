@@ -87,8 +87,12 @@ uint32_t ow_load_shader(wasm_exec_env_t exec_env, uint32_t path_ptr, ow_shader_t
     wd_state* state = wasm_runtime_get_custom_data(instance);
     const char* path_ptr_real = wasm_runtime_addr_app_to_native(instance, path_ptr);
 
+    uint8_t* code;
     size_t code_size;
-    void* code = SDL_LoadFile(path_ptr_real, &code_size);
+    if(!wd_read_from_zip(&state->zip, path_ptr_real, &code, &code_size)) {
+        wasm_runtime_set_exception(instance, "");
+        return 0;
+    }
 
     SDL_ShaderCross_SPIRV_Info info = {0};
     info.bytecode = code;

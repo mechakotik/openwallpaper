@@ -1,10 +1,11 @@
 #include "scene.h"
-#include <bh_read_file.h>
 #include <lib_export.h>
+#include <stdlib.h>
 #include <wasm_export.h>
 #include "error.h"
 #include "state.h"
 #include "wasm_api.h"
+#include "zip.h"
 
 static NativeSymbol native_symbols[] = {
     {"ow_log", ow_log, "(i)"},
@@ -39,10 +40,12 @@ bool wd_init_scene(wd_state* state, wd_args_state* args) {
     }
 
     const char* path = wd_get_wallpaper_path(args);
-    uint32_t size;
-    scene->module_buffer = (uint8_t*)bh_read_file_to_buffer(path, &size);
-    if(scene->module_buffer == NULL) {
-        wd_set_error("failed to read file '%s'", path);
+    if(!wd_init_zip(&state->zip, path)) {
+        return false;
+    }
+
+    size_t size;
+    if(!wd_read_from_zip(&state->zip, "scene.wasm", &scene->module_buffer, &size)) {
         return false;
     }
 
