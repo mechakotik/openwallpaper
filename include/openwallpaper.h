@@ -201,7 +201,7 @@ extern ow_id ow_create_texture(const ow_texture_info* info);
 extern ow_id ow_update_texture_from_data(
     const void* data, size_t pixels_per_row, const ow_texture_update_destination* dest);
 extern ow_id ow_create_sampler(const ow_sampler_info* info);
-extern ow_id ow_create_shader_from_bytecode(const char* bytecode, ow_shader_type type);
+extern ow_id ow_create_shader_from_bytecode(const char* bytecode, size_t size, ow_shader_type type);
 extern ow_id ow_create_shader_from_file(const char* path, ow_shader_type type);
 extern ow_id ow_create_pipeline(const ow_pipeline_info* info);
 

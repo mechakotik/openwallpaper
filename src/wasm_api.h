@@ -197,7 +197,8 @@ void ow_update_buffer(wasm_exec_env_t exec_env, uint32_t buffer, uint32_t offset
 uint32_t ow_create_texture(wasm_exec_env_t exec_env, uint32_t info_ptr);
 uint32_t ow_update_texture(wasm_exec_env_t exec_env, uint32_t file_ptr, uint32_t pixels_per_row, uint32_t dest_ptr);
 uint32_t ow_create_sampler(wasm_exec_env_t exec_env, uint32_t info_ptr);
-uint32_t ow_create_shader_from_bytecode(wasm_exec_env_t exec_env, uint32_t bytecode_ptr, ow_shader_type type);
+uint32_t ow_create_shader_from_bytecode(
+    wasm_exec_env_t exec_env, uint32_t bytecode_ptr, uint32_t size, ow_shader_type type);
 uint32_t ow_create_shader_from_file(wasm_exec_env_t exec_env, uint32_t path_ptr, ow_shader_type type);
 uint32_t ow_create_pipeline(wasm_exec_env_t exec_env, uint32_t info_ptr);
 

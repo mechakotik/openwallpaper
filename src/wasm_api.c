@@ -82,30 +82,22 @@ void ow_end_render_pass(wasm_exec_env_t exec_env) {
     state->output.render_pass = NULL;
 }
 
-uint32_t ow_create_shader_from_file(wasm_exec_env_t exec_env, uint32_t path_ptr, ow_shader_type type) {
+static uint32_t create_shader_from_bytecode(
+    wasm_exec_env_t exec_env, const uint8_t* bytecode, size_t size, ow_shader_type type) {
     wasm_module_inst_t instance = wasm_runtime_get_module_inst(exec_env);
     wd_state* state = wasm_runtime_get_custom_data(instance);
-    const char* path_ptr_real = wasm_runtime_addr_app_to_native(instance, path_ptr);
-
-    uint8_t* code;
-    size_t code_size;
-    if(!wd_read_from_zip(&state->zip, path_ptr_real, &code, &code_size)) {
-        wasm_runtime_set_exception(instance, "");
-        return 0;
-    }
 
     SDL_ShaderCross_SPIRV_Info info = {0};
-    info.bytecode = code;
-    info.bytecode_size = code_size;
+    info.bytecode = bytecode;
+    info.bytecode_size = size;
     info.entrypoint = "main";
     info.shader_stage =
         (type == OW_SHADER_VERTEX ? SDL_SHADERCROSS_SHADERSTAGE_VERTEX : SDL_SHADERCROSS_SHADERSTAGE_FRAGMENT);
 
-    SDL_ShaderCross_GraphicsShaderMetadata* metadata = SDL_ShaderCross_ReflectGraphicsSPIRV(code, code_size, 0);
+    SDL_ShaderCross_GraphicsShaderMetadata* metadata = SDL_ShaderCross_ReflectGraphicsSPIRV(bytecode, size, 0);
     DEBUG_CHECK_RET0(metadata != NULL, "SDL_ShaderCross_ReflectGraphicsSPIRV failed: %s", SDL_GetError());
 
     SDL_GPUShader* shader = SDL_ShaderCross_CompileGraphicsShaderFromSPIRV(state->output.gpu, &info, metadata, 0);
-    free(code);
     free(metadata);
     DEBUG_CHECK_RET0(shader != NULL, "SDL_ShaderCross_CompileGraphicsShaderFromSPIRV failed: %s", SDL_GetError());
 
@@ -116,6 +108,30 @@ uint32_t ow_create_shader_from_file(wasm_exec_env_t exec_env, uint32_t path_ptr,
         return 0;
     }
 
+    return result;
+}
+
+uint32_t ow_create_shader_from_bytecode(
+    wasm_exec_env_t exec_env, uint32_t bytecode_ptr, uint32_t size, ow_shader_type type) {
+    wasm_module_inst_t instance = wasm_runtime_get_module_inst(exec_env);
+    const uint8_t* bytecode_ptr_real = wasm_runtime_addr_app_to_native(instance, bytecode_ptr);
+    return create_shader_from_bytecode(exec_env, bytecode_ptr_real, size, type);
+}
+
+uint32_t ow_create_shader_from_file(wasm_exec_env_t exec_env, uint32_t path_ptr, ow_shader_type type) {
+    wasm_module_inst_t instance = wasm_runtime_get_module_inst(exec_env);
+    wd_state* state = wasm_runtime_get_custom_data(instance);
+    const char* path_ptr_real = wasm_runtime_addr_app_to_native(instance, path_ptr);
+
+    uint8_t* bytecode;
+    size_t size;
+    if(!wd_read_from_zip(&state->zip, path_ptr_real, &bytecode, &size)) {
+        wasm_runtime_set_exception(instance, "");
+        return 0;
+    }
+
+    uint32_t result = create_shader_from_bytecode(exec_env, bytecode, size, type);
+    free(bytecode);
     return result;
 }
 

@@ -15,6 +15,7 @@ static NativeSymbol native_symbols[] = {
     {"ow_end_render_pass", ow_end_render_pass, "()"},
     {"ow_create_buffer", ow_create_buffer, "(ii)i"},
     {"ow_update_buffer", ow_update_buffer, "(iiii)"},
+    {"ow_create_shader_from_bytecode", ow_create_shader_from_bytecode, "(iii)i"},
     {"ow_create_shader_from_file", ow_create_shader_from_file, "(ii)i"},
     {"ow_create_pipeline", ow_create_pipeline, "(i)i"},
     {"ow_get_screen_size", ow_get_screen_size, "(ii)"},
