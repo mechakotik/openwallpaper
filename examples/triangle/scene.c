@@ -19,8 +19,8 @@ static struct {
 
 __attribute__((export_name("init"))) void init() {
     state.vertex_buffer = ow_create_buffer(OW_BUFFER_VERTEX, sizeof(vertices));
-    ow_id vertex_shader = ow_load_shader("vertex.spv", OW_SHADER_VERTEX);
-    ow_id fragment_shader = ow_load_shader("fragment.spv", OW_SHADER_FRAGMENT);
+    ow_id vertex_shader = ow_create_shader_from_file("vertex.spv", OW_SHADER_VERTEX);
+    ow_id fragment_shader = ow_create_shader_from_file("fragment.spv", OW_SHADER_FRAGMENT);
 
     ow_vertex_binding_info vertex_binding_info = {0};
     vertex_binding_info.slot = 0;

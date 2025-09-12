@@ -119,6 +119,15 @@ typedef struct {
 } ow_texture_info;
 
 typedef struct {
+    ow_id texture;
+    uint32_t mip_level;
+    uint32_t x;
+    uint32_t y;
+    uint32_t w;
+    uint32_t h;
+} ow_texture_update_destination;
+
+typedef struct {
     ow_filter_mode min_filter;
     ow_filter_mode mag_filter;
     ow_filter_mode mip_filter;
@@ -152,7 +161,6 @@ typedef struct {
     bool depth_write;
     ow_topology topology;
     ow_cull_mode cull_mode;
-    size_t push_constants_size;
 } ow_pipeline_info;
 
 typedef struct {
@@ -189,12 +197,12 @@ extern void ow_end_render_pass();
 
 extern ow_id ow_create_buffer(ow_buffer_type type, uint32_t size);
 extern void ow_update_buffer(ow_id buffer, uint32_t offset, const void* data, uint32_t size);
-
-extern ow_id ow_create_texture(const void* data, const ow_texture_info* info);
-extern ow_id ow_load_texture(const char* path);
-extern ow_id ow_create_shader(const char* source, ow_shader_type type);
-extern ow_id ow_load_shader(const char* path, ow_shader_type type);
+extern ow_id ow_create_texture(const ow_texture_info* info);
+extern ow_id ow_update_texture_from_data(
+    const void* data, size_t pixels_per_row, const ow_texture_update_destination* dest);
 extern ow_id ow_create_sampler(const ow_sampler_info* info);
+extern ow_id ow_create_shader_from_bytecode(const char* bytecode, ow_shader_type type);
+extern ow_id ow_create_shader_from_file(const char* path, ow_shader_type type);
 extern ow_id ow_create_pipeline(const ow_pipeline_info* info);
 
 extern void ow_get_screen_size(uint32_t* width, uint32_t* height);

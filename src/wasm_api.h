@@ -2,7 +2,7 @@
 #define WASM_API_H
 
 #include <stdint.h>
-#include <wasm_export.h>
+#include "wasm_export.h"
 
 #define OW_ID_SCREEN_TARGET 0xFFFFFFFF
 
@@ -116,6 +116,15 @@ typedef struct {
 } ow_texture_info;
 
 typedef struct {
+    uint32_t texture;
+    uint32_t mip_level;
+    uint32_t x;
+    uint32_t y;
+    uint32_t w;
+    uint32_t h;
+} ow_texture_update_destination;
+
+typedef struct {
     ow_filter_mode min_filter;
     ow_filter_mode mag_filter;
     ow_filter_mode mip_filter;
@@ -138,9 +147,9 @@ typedef struct {
 } ow_vertex_attribute;
 
 typedef struct {
-    uint32_t vertex_bindings;
+    uint32_t vertex_bindings_ptr;
     uint32_t vertex_bindings_count;
-    uint32_t vertex_attributes;
+    uint32_t vertex_attributes_ptr;
     uint32_t vertex_attributes_count;
     uint32_t vertex_shader;
     uint32_t fragment_shader;
@@ -149,7 +158,6 @@ typedef struct {
     uint32_t depth_write;
     ow_topology topology;
     ow_cull_mode cull_mode;
-    uint32_t push_constants_size;
 } ow_pipeline_info;
 
 typedef struct {
@@ -164,14 +172,17 @@ typedef struct {
 } ow_vertex_buffer_binding;
 
 typedef struct {
-    uint32_t vertex_buffer_bindings;
+    uint32_t vertex_buffer_bindings_ptr;
     uint32_t vertex_buffer_bindings_count;
     uint32_t index_buffer;
     uint32_t index_offset;
     uint32_t index_count;
-    uint32_t texture_bindings;
+    uint32_t texture_bindings_ptr;
     uint32_t texture_bindings_count;
 } ow_bindings_info;
+
+void init();
+void update(float delta);
 
 void ow_log(wasm_exec_env_t exec_env, uint32_t message_ptr);
 const char* ow_get_last_error(wasm_exec_env_t exec_env);
@@ -183,21 +194,21 @@ void ow_end_render_pass(wasm_exec_env_t exec_env);
 
 uint32_t ow_create_buffer(wasm_exec_env_t exec_env, ow_buffer_type type, uint32_t size);
 void ow_update_buffer(wasm_exec_env_t exec_env, uint32_t buffer, uint32_t offset, uint32_t data_ptr, uint32_t size);
-
-uint32_t ow_create_texture(wasm_exec_env_t exec_env, uint32_t data_ptr, uint32_t info_ptr);
-uint32_t ow_load_texture(wasm_exec_env_t exec_env, uint32_t path_ptr);
+uint32_t ow_create_texture(wasm_exec_env_t exec_env, uint32_t info_ptr);
+uint32_t ow_update_texture(wasm_exec_env_t exec_env, uint32_t file_ptr, uint32_t pixels_per_row, uint32_t dest_ptr);
 uint32_t ow_create_sampler(wasm_exec_env_t exec_env, uint32_t info_ptr);
-uint32_t ow_create_shader(wasm_exec_env_t exec_env, uint32_t source_ptr, ow_shader_type type);
-uint32_t ow_load_shader(wasm_exec_env_t exec_env, uint32_t path_ptr, ow_shader_type type);
+uint32_t ow_create_shader_from_bytecode(wasm_exec_env_t exec_env, uint32_t bytecode_ptr, ow_shader_type type);
+uint32_t ow_create_shader_from_file(wasm_exec_env_t exec_env, uint32_t path_ptr, ow_shader_type type);
 uint32_t ow_create_pipeline(wasm_exec_env_t exec_env, uint32_t info_ptr);
 
-void ow_get_screen_size(wasm_exec_env_t exec_env, uint32_t width, uint32_t height);
-void ow_push_uniform_data(wasm_exec_env_t exec_env, uint32_t type, uint32_t slot, uint32_t data, uint32_t size);
+void ow_get_screen_size(wasm_exec_env_t exec_env, uint32_t width_ptr, uint32_t height_ptr);
+void ow_push_uniform_data(
+    wasm_exec_env_t exec_env, ow_shader_type type, uint32_t slot, uint32_t data_ptr, uint32_t size);
 void ow_render_geometry(wasm_exec_env_t exec_env, uint32_t pipeline, uint32_t bindings_ptr, uint32_t vertex_offset,
     uint32_t vertex_count, uint32_t instance_count);
 void ow_render_geometry_indexed(wasm_exec_env_t exec_env, uint32_t pipeline, uint32_t bindings_ptr,
     uint32_t index_offset, uint32_t index_count, uint32_t vertex_offset, uint32_t instance_count);
 
-void ow_free(wasm_exec_env_t exec_env, uint32_t id);
+void ow_free(uint32_t id);
 
 #endif

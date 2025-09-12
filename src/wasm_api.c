@@ -82,7 +82,7 @@ void ow_end_render_pass(wasm_exec_env_t exec_env) {
     state->output.render_pass = NULL;
 }
 
-uint32_t ow_load_shader(wasm_exec_env_t exec_env, uint32_t path_ptr, ow_shader_type type) {
+uint32_t ow_create_shader_from_file(wasm_exec_env_t exec_env, uint32_t path_ptr, ow_shader_type type) {
     wasm_module_inst_t instance = wasm_runtime_get_module_inst(exec_env);
     wd_state* state = wasm_runtime_get_custom_data(instance);
     const char* path_ptr_real = wasm_runtime_addr_app_to_native(instance, path_ptr);
@@ -196,7 +196,7 @@ uint32_t ow_create_pipeline(wasm_exec_env_t exec_env, uint32_t info_ptr) {
     SDL_GPUVertexBufferDescription* sdl_vertex_buffer_descriptions =
         calloc(info->vertex_bindings_count, sizeof(SDL_GPUVertexBufferDescription));
     ow_vertex_binding_info* vertex_bindings =
-        (ow_vertex_binding_info*)wasm_runtime_addr_app_to_native(instance, info->vertex_bindings);
+        (ow_vertex_binding_info*)wasm_runtime_addr_app_to_native(instance, info->vertex_bindings_ptr);
 
     for(uint32_t i = 0; i < info->vertex_bindings_count; i++) {
         sdl_vertex_buffer_descriptions[i].slot = vertex_bindings[i].slot;
@@ -214,7 +214,7 @@ uint32_t ow_create_pipeline(wasm_exec_env_t exec_env, uint32_t info_ptr) {
     SDL_GPUVertexAttribute* sdl_vertex_attributes =
         calloc(info->vertex_attributes_count, sizeof(SDL_GPUVertexAttribute));
     ow_vertex_attribute* vertex_attributes =
-        (ow_vertex_attribute*)wasm_runtime_addr_app_to_native(instance, info->vertex_attributes);
+        (ow_vertex_attribute*)wasm_runtime_addr_app_to_native(instance, info->vertex_attributes_ptr);
 
     for(uint32_t i = 0; i < info->vertex_attributes_count; i++) {
         sdl_vertex_attributes[i].buffer_slot = vertex_attributes[i].slot;
@@ -329,7 +329,7 @@ void ow_render_geometry(wasm_exec_env_t exec_env, uint32_t pipeline, uint32_t bi
     SDL_GPUBufferBinding* sdl_vertex_buffer_bindings =
         calloc(bindings->vertex_buffer_bindings_count, sizeof(SDL_GPUBufferBinding));
     ow_vertex_buffer_binding* vertex_buffer_bindings =
-        (ow_vertex_buffer_binding*)wasm_runtime_addr_app_to_native(instance, bindings->vertex_buffer_bindings);
+        (ow_vertex_buffer_binding*)wasm_runtime_addr_app_to_native(instance, bindings->vertex_buffer_bindings_ptr);
 
     for(uint32_t i = 0; i < bindings->vertex_buffer_bindings_count; i++) {
         SDL_GPUBuffer* sdl_buffer = NULL;

@@ -13,8 +13,8 @@ typedef struct {
 } UniformData;
 
 __attribute__((export_name("init"))) void init() {
-    state.vertex_shader = ow_load_shader("vertex.spv", OW_SHADER_VERTEX);
-    state.fragment_shader = ow_load_shader("fragment.spv", OW_SHADER_FRAGMENT);
+    state.vertex_shader = ow_create_shader_from_file("vertex.spv", OW_SHADER_VERTEX);
+    state.fragment_shader = ow_create_shader_from_file("fragment.spv", OW_SHADER_FRAGMENT);
 
     ow_pipeline_info pipe = {0};
     pipe.vertex_shader = state.vertex_shader;
