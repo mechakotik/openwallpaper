@@ -7,11 +7,11 @@
 #define OW_ID_SCREEN_TARGET 0xFFFFFFFF
 
 typedef enum {
-    OW_TEXTURE_RGBA8,
-    OW_TEXTURE_RGBA8_SRGB,
-    OW_TEXTURE_RGBA16F,
-    OW_TEXTURE_DEPTH16,
-    OW_TEXTURE_DEPTH24_STENCIL8,
+    OW_TEXTURE_RGBA8_UNORM,
+    OW_TEXTURE_RGBA8_UNORM_SRGB,
+    OW_TEXTURE_RGBA16_FLOAT,
+    OW_TEXTURE_R8_UNORM,
+    OW_TEXTURE_DEPTH16_UNORM,
 } ow_texture_format;
 
 typedef enum {
@@ -103,8 +103,6 @@ typedef struct {
     uint32_t depth_target;
     uint32_t clear_depth;
     float clear_depth_value;
-    uint32_t clear_stencil;
-    uint8_t clear_stencil_value;
 } ow_pass_info;
 
 typedef struct {
@@ -186,6 +184,7 @@ void update(float delta);
 
 void ow_log(wasm_exec_env_t exec_env, uint32_t message_ptr);
 const char* ow_get_last_error(wasm_exec_env_t exec_env);
+void ow_load_file(uint32_t path_ptr, uint32_t data_ptr, uint32_t size_ptr);
 
 void ow_begin_copy_pass(wasm_exec_env_t exec_env);
 void ow_end_copy_pass(wasm_exec_env_t exec_env);
@@ -195,7 +194,9 @@ void ow_end_render_pass(wasm_exec_env_t exec_env);
 uint32_t ow_create_buffer(wasm_exec_env_t exec_env, ow_buffer_type type, uint32_t size);
 void ow_update_buffer(wasm_exec_env_t exec_env, uint32_t buffer, uint32_t offset, uint32_t data_ptr, uint32_t size);
 uint32_t ow_create_texture(wasm_exec_env_t exec_env, uint32_t info_ptr);
-uint32_t ow_update_texture(wasm_exec_env_t exec_env, uint32_t file_ptr, uint32_t pixels_per_row, uint32_t dest_ptr);
+uint32_t ow_create_texture_from_png(wasm_exec_env_t exec_env, uint32_t path_ptr, uint32_t info_ptr);
+void ow_update_texture(wasm_exec_env_t exec_env, uint32_t data_ptr, uint32_t pixels_per_row, uint32_t dest_ptr);
+void ow_generate_mipmaps(wasm_exec_env_t exec_env, uint32_t texture);
 uint32_t ow_create_sampler(wasm_exec_env_t exec_env, uint32_t info_ptr);
 uint32_t ow_create_shader_from_bytecode(
     wasm_exec_env_t exec_env, uint32_t bytecode_ptr, uint32_t size, ow_shader_type type);

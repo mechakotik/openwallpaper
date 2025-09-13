@@ -4,6 +4,8 @@
 
 void wd_init_state(wd_state* state) {
     *state = (wd_state){0};
+    uint32_t unused;
+    wd_new_object(&state->object_manager, WD_OBJECT_EMPTY, NULL, &unused);
 }
 
 void wd_free_state(wd_state* state) {

@@ -1,9 +1,9 @@
 #include "wasm_api.h"
 #include <SDL3/SDL.h>
+#include <SDL3_image/SDL_image.h>
 #include <SDL3_shadercross/SDL_shadercross.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include "SDL3/SDL_gpu.h"
 #include "error.h"
 #include "object_manager.h"
 #include "state.h"
@@ -151,6 +151,7 @@ uint32_t ow_create_buffer(wasm_exec_env_t exec_env, ow_buffer_type type, uint32_
         wasm_runtime_set_exception(instance, "");
         return 0;
     }
+
     return result;
 }
 
@@ -188,6 +189,199 @@ void ow_update_buffer(wasm_exec_env_t exec_env, uint32_t buffer, uint32_t offset
     dest.size = size;
 
     SDL_UploadToGPUBuffer(state->output.copy_pass, &source, &dest, true);
+    SDL_ReleaseGPUTransferBuffer(state->output.gpu, transfer_buffer);
+}
+
+uint32_t ow_create_texture(wasm_exec_env_t exec_env, uint32_t info_ptr) {
+    wasm_module_inst_t instance = wasm_runtime_get_module_inst(exec_env);
+    wd_state* state = wasm_runtime_get_custom_data(instance);
+    ow_texture_info* info = (ow_texture_info*)wasm_runtime_addr_app_to_native(instance, info_ptr);
+
+    SDL_GPUTextureCreateInfo texture_info = {0};
+    texture_info.width = info->width;
+    texture_info.height = info->height;
+    texture_info.num_levels = info->mip_levels;
+    texture_info.layer_count_or_depth = 1;
+
+    switch(info->format) {
+        case OW_TEXTURE_RGBA8_UNORM:
+            texture_info.format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM;
+            break;
+        case OW_TEXTURE_RGBA8_UNORM_SRGB:
+            texture_info.format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM_SRGB;
+            break;
+        case OW_TEXTURE_RGBA16_FLOAT:
+            texture_info.format = SDL_GPU_TEXTUREFORMAT_R16G16B16A16_FLOAT;
+            break;
+        case OW_TEXTURE_R8_UNORM:
+            texture_info.format = SDL_GPU_TEXTUREFORMAT_R8_UNORM;
+            break;
+        case OW_TEXTURE_DEPTH16_UNORM:
+            texture_info.format = SDL_GPU_TEXTUREFORMAT_D16_UNORM;
+            break;
+        default:
+            wd_set_scene_error("unknown texture format %d", info->format);
+            wasm_runtime_set_exception(instance, "");
+            return 0;
+    }
+
+    texture_info.usage = SDL_GPU_TEXTUREUSAGE_SAMPLER;
+    if(info->render_target) {
+        if(info->format == OW_TEXTURE_DEPTH16_UNORM) {
+            texture_info.usage |= SDL_GPU_TEXTUREUSAGE_DEPTH_STENCIL_TARGET;
+        } else {
+            texture_info.usage |= SDL_GPU_TEXTUREUSAGE_COLOR_TARGET;
+        }
+    }
+
+    SDL_GPUTexture* texture = SDL_CreateGPUTexture(state->output.gpu, &texture_info);
+    DEBUG_CHECK_RET0(texture != NULL, "SDL_CreateGPUTexture failed: %s", SDL_GetError());
+
+    uint32_t result;
+    if(!wd_new_object(&state->object_manager, WD_OBJECT_TEXTURE, texture, &result)) {
+        wasm_runtime_set_exception(instance, "");
+        return 0;
+    }
+
+    return result;
+}
+
+uint32_t ow_create_texture_from_png(wasm_exec_env_t exec_env, uint32_t path_ptr, uint32_t info_ptr) {
+    wasm_module_inst_t instance = wasm_runtime_get_module_inst(exec_env);
+    wd_state* state = wasm_runtime_get_custom_data(instance);
+    const char* path = wasm_runtime_addr_app_to_native(instance, path_ptr);
+    ow_texture_info* info = (ow_texture_info*)wasm_runtime_addr_app_to_native(instance, info_ptr);
+    DEBUG_CHECK_RET0(state->output.copy_pass != NULL, "called ow_create_texture_from_png when no copy pass is active");
+
+    if(info->format != OW_TEXTURE_RGBA8_UNORM && info->format != OW_TEXTURE_RGBA8_UNORM_SRGB) {
+        wd_set_scene_error("unsupported texture format (TODO)");
+        wasm_runtime_set_exception(instance, "");
+        return 0;
+    }
+
+    size_t image_size;
+    uint8_t* image_data;
+    if(!wd_read_from_zip(&state->zip, path, &image_data, &image_size)) {
+        free(image_data);
+        wasm_runtime_set_exception(instance, "");
+        return 0;
+    }
+
+    SDL_IOStream* image_stream = SDL_IOFromConstMem(image_data, image_size);
+    SDL_Surface* raw_surface = IMG_Load_IO(image_stream, true);
+    DEBUG_CHECK_RET0(raw_surface != NULL, "IMG_Load failed: %s", SDL_GetError());
+
+    SDL_Surface* surface = SDL_ConvertSurface(raw_surface, SDL_PIXELFORMAT_ABGR8888);
+    SDL_DestroySurface(raw_surface);
+    DEBUG_CHECK_RET0(surface != NULL, "SDL_ConvertSurface failed: %s", SDL_GetError());
+    DEBUG_CHECK_RET0(
+        surface->pitch == surface->w * 4, "converted surface pitch is not equal to width * 4, this is not supported");
+
+    info->width = surface->w;
+    info->height = surface->h;
+
+    uint32_t result = ow_create_texture(exec_env, info_ptr);
+    if(result == 0) {
+        SDL_DestroySurface(surface);
+        free(image_data);
+        return 0;
+    }
+
+    SDL_GPUTexture* sdl_texture = NULL;
+    wd_object_type object_type;
+    wd_get_object(&state->object_manager, result, &object_type, (void**)(&sdl_texture));
+    DEBUG_CHECK_RET0(sdl_texture != NULL, "ow_create_texture succeeded, but object is null, please report this");
+    DEBUG_CHECK_RET0(object_type == WD_OBJECT_TEXTURE,
+        "ow_create_texture succeeded, but object is not a texture, please report this");
+
+    SDL_GPUTransferBufferCreateInfo transfer_info = {0};
+    transfer_info.size = surface->w * surface->h * 4;
+    transfer_info.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
+
+    SDL_GPUTransferBuffer* transfer_buffer = SDL_CreateGPUTransferBuffer(state->output.gpu, &transfer_info);
+    DEBUG_CHECK_RET0(transfer_buffer != NULL, "SDL_CreateGPUTransferBuffer failed: %s", SDL_GetError());
+
+    void* transfer_data = SDL_MapGPUTransferBuffer(state->output.gpu, transfer_buffer, false);
+    DEBUG_CHECK_RET0(transfer_data != NULL, "SDL_MapGPUTransferBuffer failed: %s", SDL_GetError());
+
+    memcpy(transfer_data, surface->pixels, (uint32_t)(surface->w * surface->h * 4));
+    SDL_UnmapGPUTransferBuffer(state->output.gpu, transfer_buffer);
+
+    SDL_GPUTextureTransferInfo source = {0};
+    source.transfer_buffer = transfer_buffer;
+    source.pixels_per_row = surface->w;
+
+    SDL_GPUTextureRegion dest = {0};
+    dest.texture = sdl_texture;
+    dest.w = surface->w;
+    dest.h = surface->h;
+    dest.d = 1;
+
+    SDL_UploadToGPUTexture(state->output.copy_pass, &source, &dest, false);
+    SDL_ReleaseGPUTransferBuffer(state->output.gpu, transfer_buffer);
+    SDL_DestroySurface(surface);
+    free(image_data);
+    return result;
+}
+
+uint32_t ow_create_sampler(wasm_exec_env_t exec_env, uint32_t info_ptr) {
+    wasm_module_inst_t instance = wasm_runtime_get_module_inst(exec_env);
+    wd_state* state = wasm_runtime_get_custom_data(instance);
+    ow_sampler_info* info = (ow_sampler_info*)wasm_runtime_addr_app_to_native(instance, info_ptr);
+
+    SDL_GPUSamplerCreateInfo sampler_info = {0};
+    sampler_info.min_filter = (info->min_filter == OW_FILTER_LINEAR ? SDL_GPU_FILTER_LINEAR : SDL_GPU_FILTER_NEAREST);
+    sampler_info.mag_filter = (info->mag_filter == OW_FILTER_LINEAR ? SDL_GPU_FILTER_LINEAR : SDL_GPU_FILTER_NEAREST);
+    sampler_info.mipmap_mode =
+        (info->mip_filter == OW_FILTER_LINEAR ? SDL_GPU_SAMPLERMIPMAPMODE_LINEAR : SDL_GPU_SAMPLERMIPMAPMODE_NEAREST);
+
+    switch(info->wrap_x) {
+        case OW_WRAP_CLAMP:
+            sampler_info.address_mode_u = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
+            break;
+        case OW_WRAP_REPEAT:
+            sampler_info.address_mode_u = SDL_GPU_SAMPLERADDRESSMODE_REPEAT;
+            break;
+        case OW_WRAP_MIRROR:
+            sampler_info.address_mode_u = SDL_GPU_SAMPLERADDRESSMODE_MIRRORED_REPEAT;
+            break;
+        default:
+            wd_set_scene_error("unknown wrap mode %d", info->wrap_x);
+            wasm_runtime_set_exception(instance, "");
+            return 0;
+    }
+
+    switch(info->wrap_y) {
+        case OW_WRAP_CLAMP:
+            sampler_info.address_mode_v = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
+            break;
+        case OW_WRAP_REPEAT:
+            sampler_info.address_mode_v = SDL_GPU_SAMPLERADDRESSMODE_REPEAT;
+            break;
+        case OW_WRAP_MIRROR:
+            sampler_info.address_mode_v = SDL_GPU_SAMPLERADDRESSMODE_MIRRORED_REPEAT;
+            break;
+        default:
+            wd_set_scene_error("unknown wrap mode %d", info->wrap_y);
+            wasm_runtime_set_exception(instance, "");
+            return 0;
+    }
+
+    if(info->anisotropy != 0) {
+        sampler_info.enable_anisotropy = true;
+        sampler_info.max_anisotropy = info->anisotropy;
+    }
+
+    SDL_GPUSampler* sampler = SDL_CreateGPUSampler(state->output.gpu, &sampler_info);
+    DEBUG_CHECK_RET0(sampler != NULL, "SDL_CreateGPUSampler failed: %s", SDL_GetError());
+
+    uint32_t result;
+    if(!wd_new_object(&state->object_manager, WD_OBJECT_SAMPLER, sampler, &result)) {
+        wasm_runtime_set_exception(instance, "");
+        return 0;
+    }
+
+    return result;
 }
 
 uint32_t ow_create_pipeline(wasm_exec_env_t exec_env, uint32_t info_ptr) {
@@ -289,6 +483,7 @@ uint32_t ow_create_pipeline(wasm_exec_env_t exec_env, uint32_t info_ptr) {
 
     uint32_t result;
     if(!wd_new_object(&state->object_manager, WD_OBJECT_PIPELINE, pipeline, &result)) {
+        wasm_runtime_set_exception(instance, "");
         return 0;
     }
 
@@ -356,11 +551,32 @@ void ow_render_geometry(wasm_exec_env_t exec_env, uint32_t pipeline, uint32_t bi
         sdl_vertex_buffer_bindings[i].offset = vertex_buffer_bindings[i].offset;
     }
 
+    ow_texture_binding* texture_bindings =
+        (ow_texture_binding*)wasm_runtime_addr_app_to_native(instance, bindings->texture_bindings_ptr);
+    SDL_GPUTextureSamplerBinding* sdl_texture_bindings =
+        calloc(bindings->texture_bindings_count, sizeof(SDL_GPUTextureSamplerBinding));
+
+    for(uint32_t i = 0; i < bindings->texture_bindings_count; i++) {
+        SDL_GPUTexture* sdl_texture = NULL;
+        wd_get_object(&state->object_manager, texture_bindings[i].texture, &object_type, (void**)&sdl_texture);
+        DEBUG_CHECK(sdl_texture != NULL, "passed non-existent object as ow_render_geometry texture");
+        DEBUG_CHECK(object_type == WD_OBJECT_TEXTURE, "passed non-texture object as ow_render_geometry texture");
+        sdl_texture_bindings[i].texture = sdl_texture;
+
+        SDL_GPUSampler* sdl_sampler = NULL;
+        wd_get_object(&state->object_manager, texture_bindings[i].sampler, &object_type, (void**)&sdl_sampler);
+        DEBUG_CHECK(sdl_sampler != NULL, "passed non-existent object as ow_render_geometry sampler");
+        DEBUG_CHECK(object_type == WD_OBJECT_SAMPLER, "passed non-sampler object as ow_render_geometry sampler");
+        sdl_texture_bindings[i].sampler = sdl_sampler;
+    }
+
     SDL_BindGPUGraphicsPipeline(state->output.render_pass, sdl_pipeline);
     SDL_BindGPUVertexBuffers(
         state->output.render_pass, 0, sdl_vertex_buffer_bindings, bindings->vertex_buffer_bindings_count);
+    SDL_BindGPUFragmentSamplers(state->output.render_pass, 0, sdl_texture_bindings, bindings->texture_bindings_count);
 
     SDL_DrawGPUPrimitives(state->output.render_pass, vertex_count, instance_count, vertex_offset, 0);
 
     free(sdl_vertex_buffer_bindings);
+    free(sdl_texture_bindings);
 }

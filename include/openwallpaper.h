@@ -10,11 +10,11 @@
 typedef uint32_t ow_id;
 
 typedef enum {
-    OW_TEXTURE_RGBA8,
-    OW_TEXTURE_RGBA8_SRGB,
-    OW_TEXTURE_RGBA16F,
-    OW_TEXTURE_DEPTH16,
-    OW_TEXTURE_DEPTH24_STENCIL8,
+    OW_TEXTURE_RGBA8_UNORM,
+    OW_TEXTURE_RGBA8_UNORM_SRGB,
+    OW_TEXTURE_RGBA16_FLOAT,
+    OW_TEXTURE_R8_UNORM,
+    OW_TEXTURE_DEPTH16_UNORM,
 } ow_texture_format;
 
 typedef enum {
@@ -106,8 +106,6 @@ typedef struct {
     ow_id depth_target;
     bool clear_depth;
     float clear_depth_value;
-    bool clear_stencil;
-    uint8_t clear_stencil_value;
 } ow_pass_info;
 
 typedef struct {
@@ -189,6 +187,7 @@ void update(float delta);
 
 extern void ow_log(const char* message);
 extern const char* ow_get_last_error();
+extern void ow_load_file(const char* path, uint8_t** data, size_t* size);
 
 extern void ow_begin_copy_pass();
 extern void ow_end_copy_pass();
@@ -198,10 +197,11 @@ extern void ow_end_render_pass();
 extern ow_id ow_create_buffer(ow_buffer_type type, uint32_t size);
 extern void ow_update_buffer(ow_id buffer, uint32_t offset, const void* data, uint32_t size);
 extern ow_id ow_create_texture(const ow_texture_info* info);
-extern ow_id ow_update_texture_from_data(
-    const void* data, size_t pixels_per_row, const ow_texture_update_destination* dest);
+extern ow_id ow_create_texture_from_png(const char* path, const ow_texture_info* info);
+extern void ow_update_texture(const void* data, uint32_t pixels_per_row, const ow_texture_update_destination* dest);
+extern ow_id ow_generate_mipmaps(ow_id texture);
 extern ow_id ow_create_sampler(const ow_sampler_info* info);
-extern ow_id ow_create_shader_from_bytecode(const char* bytecode, size_t size, ow_shader_type type);
+extern ow_id ow_create_shader_from_bytecode(const uint8_t* bytecode, size_t size, ow_shader_type type);
 extern ow_id ow_create_shader_from_file(const char* path, ow_shader_type type);
 extern ow_id ow_create_pipeline(const ow_pipeline_info* info);
 
