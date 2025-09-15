@@ -1,11 +1,11 @@
 #ifdef WD_WLROOTS
 
-#include "wlroots_output.h"
 #include <SDL3/SDL.h>
 #include <stdlib.h>
 #include <wlr-layer-shell-unstable-v1.h>
 #include "SDL3/SDL_hints.h"
 #include "error.h"
+#include "wlroots_output.h"
 
 typedef struct wlroots_output_state {
     struct wl_display* display;
@@ -96,6 +96,7 @@ bool wd_wlroots_output_init(void** data) {
     SDL_PropertiesID properties = SDL_CreateProperties();
     SDL_SetPointerProperty(properties, SDL_PROP_WINDOW_CREATE_WAYLAND_WL_SURFACE_POINTER, odata->surface);
     SDL_SetBooleanProperty(properties, SDL_PROP_WINDOW_CREATE_OPENGL_BOOLEAN, true);
+    SDL_SetBooleanProperty(properties, SDL_PROP_WINDOW_CREATE_HIGH_PIXEL_DENSITY_BOOLEAN, true);
     SDL_SetNumberProperty(properties, SDL_PROP_WINDOW_CREATE_WIDTH_NUMBER, odata->width);
     SDL_SetNumberProperty(properties, SDL_PROP_WINDOW_CREATE_HEIGHT_NUMBER, odata->height);
     odata->window = SDL_CreateWindowWithProperties(properties);

@@ -497,8 +497,8 @@ void ow_get_screen_size(wasm_exec_env_t exec_env, uint32_t width, uint32_t heigh
     uint32_t* height_real = wasm_runtime_addr_app_to_native(instance, height);
 
     int width_int, height_int;
-    bool ok = SDL_GetWindowSize(state->output.window, &width_int, &height_int);
-    DEBUG_CHECK(ok, "SDL_GetWindowSize failed: %s", SDL_GetError());
+    bool ok = SDL_GetWindowSizeInPixels(state->output.window, &width_int, &height_int);
+    DEBUG_CHECK(ok, "SDL_GetWindowSizeInPixels failed: %s", SDL_GetError());
 
     *width_real = (uint32_t)width_int;
     *height_real = (uint32_t)height_int;
