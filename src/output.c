@@ -1,6 +1,6 @@
 #include "output.h"
 #include <SDL3/SDL.h>
-#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include "SDL3/SDL_gpu.h"
 #include "SDL3/SDL_properties.h"
@@ -9,26 +9,14 @@
 #include "window_output.h"
 #include "wlroots_output.h"
 
-void wd_list_outputs() {
-    printf("window");
-#ifdef WD_WLROOTS
-    printf(" wlroots");
-#endif
-    printf("\n");
-}
-
-static const char* get_default_output() {
-    return "window";
-}
-
 static const char* get_output(wd_args_state* args) {
-    const char* output;
-    if(wd_get_option(args, "output") != NULL) {
-        output = wd_get_option(args, "output");
-    } else {
-        output = get_default_output();
+    if(wd_get_option(args, "window") != NULL) {
+        return "window";
     }
-    return output;
+    if(getenv("WAYLAND_DISPLAY") != NULL) {
+        return "wlroots";
+    }
+    return "window";
 }
 
 bool wd_init_output(wd_output_state* output, wd_args_state* args) {
