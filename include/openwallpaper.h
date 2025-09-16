@@ -70,7 +70,11 @@ typedef enum {
 typedef enum {
     OW_BLEND_NONE,
     OW_BLEND_ALPHA,
+    OW_BLEND_ALPHA_PREMULTIPLIED,
     OW_BLEND_ADD,
+    OW_BLEND_ADD_PREMULTIPLIED,
+    OW_BLEND_MODULATE,
+    OW_BLEND_MULTIPLY,
 } ow_blend_mode;
 
 typedef enum {
