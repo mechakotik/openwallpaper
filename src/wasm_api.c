@@ -66,7 +66,17 @@ void ow_begin_render_pass(wasm_exec_env_t exec_env, uint32_t info_ptr) {
         .a = info->clear_color_rgba[3]};
     color_target_info.load_op = SDL_GPU_LOADOP_CLEAR;
     color_target_info.store_op = SDL_GPU_STOREOP_STORE;
-    color_target_info.texture = state->output.swapchain_texture;
+
+    if(info->color_target == 0) {
+        color_target_info.texture = state->output.swapchain_texture;
+    } else {
+        SDL_GPUTexture* texture = NULL;
+        wd_object_type object_type;
+        wd_get_object(&state->object_manager, info->color_target, &object_type, (void**)&texture);
+        DEBUG_CHECK(texture != NULL, "passed non-existent object as ow_pass_info color target");
+        DEBUG_CHECK(object_type == WD_OBJECT_TEXTURE, "passed non-texture object as ow_pass_info color target");
+        color_target_info.texture = texture;
+    }
 
     state->output.render_pass = SDL_BeginGPURenderPass(state->output.command_buffer, &color_target_info, 1, NULL);
 }

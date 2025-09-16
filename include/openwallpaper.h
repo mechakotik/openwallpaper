@@ -5,8 +5,6 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define OW_ID_SCREEN_TARGET 0xFFFFFFFF
-
 typedef uint32_t ow_id;
 
 typedef enum {
