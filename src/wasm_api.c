@@ -239,6 +239,25 @@ uint32_t ow_create_texture(wasm_exec_env_t exec_env, uint32_t info_ptr) {
             return 0;
     }
 
+    switch(info->samples) {
+        case 0:
+            texture_info.sample_count = SDL_GPU_SAMPLECOUNT_1;
+            break;
+        case 1:
+            texture_info.sample_count = SDL_GPU_SAMPLECOUNT_2;
+            break;
+        case 2:
+            texture_info.sample_count = SDL_GPU_SAMPLECOUNT_4;
+            break;
+        case 3:
+            texture_info.sample_count = SDL_GPU_SAMPLECOUNT_8;
+            break;
+        default:
+            wd_set_scene_error("unsupported texture sample count %d", info->samples);
+            wasm_runtime_set_exception(instance, "");
+            return 0;
+    }
+
     texture_info.usage = SDL_GPU_TEXTUREUSAGE_SAMPLER;
     if(info->render_target) {
         if(info->format == OW_TEXTURE_DEPTH16_UNORM) {

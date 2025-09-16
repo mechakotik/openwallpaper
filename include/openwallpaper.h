@@ -115,6 +115,7 @@ typedef struct {
     uint32_t width;
     uint32_t height;
     uint32_t mip_levels;
+    uint32_t samples;
     ow_texture_format format;
     bool render_target;
 } ow_texture_info;
