@@ -214,6 +214,10 @@ uint32_t ow_create_texture(wasm_exec_env_t exec_env, uint32_t info_ptr) {
     texture_info.layer_count_or_depth = 1;
 
     switch(info->format) {
+        case OW_TEXTURE_SWAPCHAIN:
+            wd_set_scene_error("passed swapchain format as offscreen texture format");
+            wasm_runtime_set_exception(instance, "");
+            return 0;
         case OW_TEXTURE_RGBA8_UNORM:
             texture_info.format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM;
             break;
@@ -482,7 +486,31 @@ uint32_t ow_create_pipeline(wasm_exec_env_t exec_env, uint32_t info_ptr) {
     }
 
     SDL_GPUColorTargetDescription color_target_description = {0};
-    color_target_description.format = SDL_GetGPUSwapchainTextureFormat(state->output.gpu, state->output.window);
+    switch(info->color_target_format) {
+        case OW_TEXTURE_SWAPCHAIN:
+            color_target_description.format = SDL_GetGPUSwapchainTextureFormat(state->output.gpu, state->output.window);
+            break;
+        case OW_TEXTURE_RGBA8_UNORM:
+            color_target_description.format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM;
+            break;
+        case OW_TEXTURE_RGBA8_UNORM_SRGB:
+            color_target_description.format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM_SRGB;
+            break;
+        case OW_TEXTURE_RGBA16_FLOAT:
+            color_target_description.format = SDL_GPU_TEXTUREFORMAT_R16G16B16A16_FLOAT;
+            break;
+        case OW_TEXTURE_R8_UNORM:
+            color_target_description.format = SDL_GPU_TEXTUREFORMAT_R8_UNORM;
+            break;
+        case OW_TEXTURE_DEPTH16_UNORM:
+            wd_set_scene_error("passed depth format as color target format");
+            wasm_runtime_set_exception(instance, "");
+            break;
+        default:
+            wd_set_scene_error("unknown color target format %d", info->color_target_format);
+            wasm_runtime_set_exception(instance, "");
+            return 0;
+    }
 
     switch(info->blend_mode) {
         case OW_BLEND_NONE:

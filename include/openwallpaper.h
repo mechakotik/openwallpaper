@@ -8,6 +8,7 @@
 typedef uint32_t ow_id;
 
 typedef enum {
+    OW_TEXTURE_SWAPCHAIN,
     OW_TEXTURE_RGBA8_UNORM,
     OW_TEXTURE_RGBA8_UNORM_SRGB,
     OW_TEXTURE_RGBA16_FLOAT,
@@ -154,6 +155,7 @@ typedef struct {
     uint32_t vertex_bindings_count;
     const ow_vertex_attribute* vertex_attributes;
     uint32_t vertex_attributes_count;
+    ow_texture_format color_target_format;
     ow_id vertex_shader;
     ow_id fragment_shader;
     ow_blend_mode blend_mode;

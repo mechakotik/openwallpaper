@@ -7,6 +7,7 @@
 #define OW_ID_SCREEN_TARGET 0xFFFFFFFF
 
 typedef enum {
+    OW_TEXTURE_SWAPCHAIN,
     OW_TEXTURE_RGBA8_UNORM,
     OW_TEXTURE_RGBA8_UNORM_SRGB,
     OW_TEXTURE_RGBA16_FLOAT,
@@ -153,6 +154,7 @@ typedef struct {
     uint32_t vertex_bindings_count;
     uint32_t vertex_attributes_ptr;
     uint32_t vertex_attributes_count;
+    ow_texture_format color_target_format;
     uint32_t vertex_shader;
     uint32_t fragment_shader;
     ow_blend_mode blend_mode;
