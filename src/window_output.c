@@ -9,7 +9,7 @@ typedef struct window_output_data {
 } window_output_state;
 
 bool wd_window_output_init(void** data) {
-    if(!SDL_Init(SDL_INIT_VIDEO)) {
+    if(!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS)) {
         wd_set_error("SDL_Init failed: %s", SDL_GetError());
     }
 

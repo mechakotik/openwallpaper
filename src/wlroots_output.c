@@ -19,6 +19,11 @@ typedef struct wlroots_output_state {
     SDL_Window* window;
     uint32_t width;
     uint32_t height;
+
+    enum {
+        SESSION_WLROOTS,
+        SESSION_HYPRLAND,
+    } session_type;
 } wlroots_output_state;
 
 static void registry_global(
@@ -105,12 +110,34 @@ bool wd_wlroots_output_init(void** data) {
         return false;
     }
 
+    if(strcmp(getenv("XDG_CURRENT_DESKTOP"), "Hyprland") == 0) {
+        odata->session_type = SESSION_HYPRLAND;
+    } else {
+        odata->session_type = SESSION_WLROOTS;
+    }
+
     return true;
 }
 
 SDL_Window* wd_wlroots_output_get_window(void* data) {
     wlroots_output_state* odata = (wlroots_output_state*)data;
     return odata->window;
+}
+
+bool wd_wlroots_output_hidden(void* data) {
+    wlroots_output_state* odata = (wlroots_output_state*)data;
+
+    if(system("pgrep \"swaylock|waylock|gtklock|hyprlock\" > /dev/null") == 0) {
+        return true;
+    }
+    if(odata->session_type == SESSION_HYPRLAND &&
+        system("hyprctl activewindow | grep -q \"floating: 0\\|fullscreen: 2\" > /dev/null") == 0) {
+        return true;
+    }
+
+    // TODO: check for fullscreen window with wlr-foreign-toplevel-management
+    // TODO: check whether the screen is turned off by idle daemon somehow
+    return false;
 }
 
 void wd_wlroots_output_free(void* data) {

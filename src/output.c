@@ -34,6 +34,7 @@ bool wd_init_output(wd_output_state* output, wd_args_state* args) {
             return false;
         }
         output->window = wd_wlroots_output_get_window(output->data);
+        output->output_hidden = wd_wlroots_output_hidden;
         output->free_output = wd_wlroots_output_free;
 #else
         wd_set_error("wlroots output support is disabled, compile with -DWD_WLROOTS=ON to use it");
@@ -57,6 +58,13 @@ bool wd_init_output(wd_output_state* output, wd_args_state* args) {
     }
 
     return true;
+}
+
+bool wd_output_hidden(wd_output_state* output) {
+    if(output->output_hidden != NULL) {
+        return output->output_hidden(output->data);
+    }
+    return false;
 }
 
 void wd_free_output(wd_output_state* output) {

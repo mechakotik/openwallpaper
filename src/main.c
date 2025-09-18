@@ -61,19 +61,28 @@ int main(int argc, char* argv[]) {
         frame_time = 1000000000 / fps;
     }
 
-    uint32_t prev_time = SDL_GetTicksNS();
+    uint64_t prev_time = SDL_GetTicksNS();
+    bool frame_skipped = false;
 
     while(true) {
+        uint64_t cur_time = SDL_GetTicksNS();
+
         if(fps != 0) {
-            uint32_t delta = SDL_GetTicksNS() - prev_time;
+            uint64_t delta = 0;
+            if(cur_time > prev_time) {
+                delta = cur_time - prev_time;
+            }
             if(delta < frame_time) {
                 SDL_DelayNS(frame_time - delta);
             }
         }
 
-        uint32_t cur_time = SDL_GetTicksNS();
-        float delta = (float)(cur_time - prev_time) / 1e9f;
+        float delta = 0;
+        if(!frame_skipped && cur_time > prev_time) {
+            delta = (float)(cur_time - prev_time) / 1e9;
+        }
         prev_time = cur_time;
+        frame_skipped = false;
 
         SDL_Event event;
         bool quit = false;
@@ -85,6 +94,12 @@ int main(int argc, char* argv[]) {
         }
         if(quit) {
             break;
+        }
+
+        if(wd_get_option(&state.args, "pause-hidden") != NULL && wd_output_hidden(&state.output)) {
+            SDL_Delay(200);
+            frame_skipped = true;
+            continue;
         }
 
         state.output.command_buffer = SDL_AcquireGPUCommandBuffer(state.output.gpu);
