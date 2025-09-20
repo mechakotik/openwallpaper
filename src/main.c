@@ -62,7 +62,10 @@ int main(int argc, char* argv[]) {
     }
 
     uint64_t prev_time = SDL_GetTicksNS();
+
+    bool pause_hidden = (wd_get_option(&state.args, "pause-hidden") != NULL);
     bool frame_skipped = false;
+    uint64_t last_hidden_check = prev_time;
 
     while(true) {
         uint64_t cur_time = SDL_GetTicksNS();
@@ -96,10 +99,14 @@ int main(int argc, char* argv[]) {
             break;
         }
 
-        if(wd_get_option(&state.args, "pause-hidden") != NULL && wd_output_hidden(&state.output)) {
-            SDL_Delay(200);
-            frame_skipped = true;
-            continue;
+        if(pause_hidden && last_hidden_check < cur_time - 2e8) {
+            if(wd_output_hidden(&state.output)) {
+                SDL_Delay(200);
+                frame_skipped = true;
+                continue;
+            } else {
+                last_hidden_check = cur_time;
+            }
         }
 
         state.output.command_buffer = SDL_AcquireGPUCommandBuffer(state.output.gpu);
