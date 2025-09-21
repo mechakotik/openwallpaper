@@ -33,7 +33,8 @@ typedef enum {
 
 typedef enum {
     OW_BUFFER_VERTEX,
-    OW_BUFFER_INDEX,
+    OW_BUFFER_INDEX16,
+    OW_BUFFER_INDEX32,
 } ow_buffer_type;
 
 typedef enum {
@@ -182,8 +183,6 @@ typedef struct {
     uint32_t vertex_buffer_bindings_ptr;
     uint32_t vertex_buffer_bindings_count;
     uint32_t index_buffer;
-    uint32_t index_offset;
-    uint32_t index_count;
     uint32_t texture_bindings_ptr;
     uint32_t texture_bindings_count;
 } ow_bindings_info;
