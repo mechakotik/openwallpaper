@@ -675,18 +675,17 @@ void ow_render_geometry(wasm_exec_env_t exec_env, uint32_t pipeline, uint32_t bi
 
     ow_bindings_info* bindings = (ow_bindings_info*)wasm_runtime_addr_app_to_native(instance, bindings_ptr);
     SDL_GPUBufferBinding* sdl_vertex_buffer_bindings =
-        calloc(bindings->vertex_buffer_bindings_count, sizeof(SDL_GPUBufferBinding));
-    ow_vertex_buffer_binding* vertex_buffer_bindings =
-        (ow_vertex_buffer_binding*)wasm_runtime_addr_app_to_native(instance, bindings->vertex_buffer_bindings_ptr);
+        calloc(bindings->vertex_buffers_count, sizeof(SDL_GPUBufferBinding));
+    uint32_t* vertex_buffers = wasm_runtime_addr_app_to_native(instance, bindings->vertex_buffers_ptr);
 
-    for(uint32_t i = 0; i < bindings->vertex_buffer_bindings_count; i++) {
+    for(uint32_t i = 0; i < bindings->vertex_buffers_count; i++) {
         SDL_GPUBuffer* sdl_buffer = NULL;
-        wd_get_object(&state->object_manager, vertex_buffer_bindings[i].buffer, &object_type, (void**)&sdl_buffer);
+        wd_get_object(&state->object_manager, vertex_buffers[i], &object_type, (void**)&sdl_buffer);
         DEBUG_CHECK(sdl_buffer != NULL, "passed non-existent object as ow_render_geometry vertex buffer");
         DEBUG_CHECK(object_type == WD_OBJECT_VERTEX_BUFFER,
             "passed non-vertex buffer object as ow_render_geometry vertex buffer");
         sdl_vertex_buffer_bindings[i].buffer = sdl_buffer;
-        sdl_vertex_buffer_bindings[i].offset = vertex_buffer_bindings[i].offset;
+        sdl_vertex_buffer_bindings[i].offset = 0;
     }
 
     ow_texture_binding* texture_bindings =
@@ -709,8 +708,7 @@ void ow_render_geometry(wasm_exec_env_t exec_env, uint32_t pipeline, uint32_t bi
     }
 
     SDL_BindGPUGraphicsPipeline(state->output.render_pass, sdl_pipeline);
-    SDL_BindGPUVertexBuffers(
-        state->output.render_pass, 0, sdl_vertex_buffer_bindings, bindings->vertex_buffer_bindings_count);
+    SDL_BindGPUVertexBuffers(state->output.render_pass, 0, sdl_vertex_buffer_bindings, bindings->vertex_buffers_count);
     SDL_BindGPUFragmentSamplers(state->output.render_pass, 0, sdl_texture_bindings, bindings->texture_bindings_count);
 
     SDL_DrawGPUPrimitives(state->output.render_pass, vertex_count, instance_count, vertex_offset, 0);
@@ -733,18 +731,17 @@ void ow_render_geometry_indexed(wasm_exec_env_t exec_env, uint32_t pipeline, uin
 
     ow_bindings_info* bindings = (ow_bindings_info*)wasm_runtime_addr_app_to_native(instance, bindings_ptr);
     SDL_GPUBufferBinding* sdl_vertex_buffer_bindings =
-        calloc(bindings->vertex_buffer_bindings_count, sizeof(SDL_GPUBufferBinding));
-    ow_vertex_buffer_binding* vertex_buffer_bindings =
-        (ow_vertex_buffer_binding*)wasm_runtime_addr_app_to_native(instance, bindings->vertex_buffer_bindings_ptr);
+        calloc(bindings->vertex_buffers_count, sizeof(SDL_GPUBufferBinding));
+    uint32_t* vertex_buffers = wasm_runtime_addr_app_to_native(instance, bindings->vertex_buffers_ptr);
 
-    for(uint32_t i = 0; i < bindings->vertex_buffer_bindings_count; i++) {
+    for(uint32_t i = 0; i < bindings->vertex_buffers_count; i++) {
         SDL_GPUBuffer* sdl_buffer = NULL;
-        wd_get_object(&state->object_manager, vertex_buffer_bindings[i].buffer, &object_type, (void**)&sdl_buffer);
+        wd_get_object(&state->object_manager, vertex_buffers[i], &object_type, (void**)&sdl_buffer);
         DEBUG_CHECK(sdl_buffer != NULL, "passed non-existent object as ow_render_geometry vertex buffer");
         DEBUG_CHECK(object_type == WD_OBJECT_VERTEX_BUFFER,
             "passed non-vertex buffer object as ow_render_geometry vertex buffer");
         sdl_vertex_buffer_bindings[i].buffer = sdl_buffer;
-        sdl_vertex_buffer_bindings[i].offset = vertex_buffer_bindings[i].offset;
+        sdl_vertex_buffer_bindings[i].offset = 0;
     }
 
     ow_texture_binding* texture_bindings =
@@ -778,8 +775,7 @@ void ow_render_geometry_indexed(wasm_exec_env_t exec_env, uint32_t pipeline, uin
     sdl_index_buffer_binding.offset = 0;
 
     SDL_BindGPUGraphicsPipeline(state->output.render_pass, sdl_pipeline);
-    SDL_BindGPUVertexBuffers(
-        state->output.render_pass, 0, sdl_vertex_buffer_bindings, bindings->vertex_buffer_bindings_count);
+    SDL_BindGPUVertexBuffers(state->output.render_pass, 0, sdl_vertex_buffer_bindings, bindings->vertex_buffers_count);
     SDL_BindGPUIndexBuffer(state->output.render_pass, &sdl_index_buffer_binding, sdl_index_element_size);
     SDL_BindGPUFragmentSamplers(state->output.render_pass, 0, sdl_texture_bindings, bindings->texture_bindings_count);
 

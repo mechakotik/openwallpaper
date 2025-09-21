@@ -175,13 +175,8 @@ typedef struct {
 } ow_texture_binding;
 
 typedef struct {
-    uint32_t buffer;
-    uint32_t offset;
-} ow_vertex_buffer_binding;
-
-typedef struct {
-    uint32_t vertex_buffer_bindings_ptr;
-    uint32_t vertex_buffer_bindings_count;
+    uint32_t vertex_buffers_ptr;
+    uint32_t vertex_buffers_count;
     uint32_t index_buffer;
     uint32_t texture_bindings_ptr;
     uint32_t texture_bindings_count;
