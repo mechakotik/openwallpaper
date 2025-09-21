@@ -2,6 +2,7 @@
 #include <SDL3/SDL.h>
 #include <SDL3_image/SDL_image.h>
 #include <SDL3_shadercross/SDL_shadercross.h>
+#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include "error.h"
@@ -464,19 +465,15 @@ uint32_t ow_create_pipeline(wasm_exec_env_t exec_env, uint32_t info_ptr) {
         sdl_vertex_attributes[i].location = vertex_attributes[i].location;
         sdl_vertex_attributes[i].offset = vertex_attributes[i].offset;
 
-        switch(vertex_attributes[i].type) {
-            case OW_ATTRIBUTE_FLOAT3:
-                sdl_vertex_attributes[i].format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3;
-                break;
-            case OW_ATTRIBUTE_FLOAT4:
-                sdl_vertex_attributes[i].format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT4;
-                break;
-            default:
-                wd_set_scene_error("unknown vertex attribute type %d", vertex_attributes[i].type);
-                free(sdl_vertex_buffer_descriptions);
-                free(sdl_vertex_attributes);
-                wasm_runtime_set_exception(instance, "");
-                return 0;
+        if(0 <= vertex_attributes[i].type && vertex_attributes[i].type <= OW_ATTRIBUTE_HALF4) {
+            static_assert(OW_ATTRIBUTE_HALF4 + 1 == SDL_GPU_VERTEXELEMENTFORMAT_HALF4, "invalid attribute mapping");
+            sdl_vertex_attributes[i].format = vertex_attributes[i].type + 1;
+        } else {
+            wd_set_scene_error("unknown vertex attribute type %d", vertex_attributes[i].type);
+            free(sdl_vertex_buffer_descriptions);
+            free(sdl_vertex_attributes);
+            wasm_runtime_set_exception(instance, "");
+            return 0;
         }
     }
 
