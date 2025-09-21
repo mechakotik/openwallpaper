@@ -186,7 +186,6 @@ void init();
 void update(float delta);
 
 void ow_log(wasm_exec_env_t exec_env, uint32_t message_ptr);
-const char* ow_get_last_error(wasm_exec_env_t exec_env);
 void ow_load_file(uint32_t path_ptr, uint32_t data_ptr, uint32_t size_ptr);
 
 void ow_begin_copy_pass(wasm_exec_env_t exec_env);

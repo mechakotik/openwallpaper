@@ -185,7 +185,6 @@ void init();
 void update(float delta);
 
 extern void ow_log(const char* message);
-extern const char* ow_get_last_error();
 extern void ow_load_file(const char* path, uint8_t** data, size_t* size);
 
 extern void ow_begin_copy_pass();

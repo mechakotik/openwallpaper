@@ -5,6 +5,7 @@
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include "SDL3/SDL_gpu.h"
 #include "error.h"
 #include "object_manager.h"
 #include "state.h"
@@ -356,7 +357,6 @@ uint32_t ow_create_texture_from_png(wasm_exec_env_t exec_env, uint32_t path_ptr,
 
     void* transfer_data = SDL_MapGPUTransferBuffer(state->output.gpu, transfer_buffer, false);
     DEBUG_CHECK_RET0(transfer_data != NULL, "SDL_MapGPUTransferBuffer failed: %s", SDL_GetError());
-
     memcpy(transfer_data, surface->pixels, (uint32_t)(surface->w * surface->h * 4));
     SDL_UnmapGPUTransferBuffer(state->output.gpu, transfer_buffer);
 
@@ -375,6 +375,48 @@ uint32_t ow_create_texture_from_png(wasm_exec_env_t exec_env, uint32_t path_ptr,
     SDL_DestroySurface(surface);
     free(image_data);
     return result;
+}
+
+void ow_update_texture(wasm_exec_env_t exec_env, uint32_t data_ptr, uint32_t pixels_per_row, uint32_t dest_ptr) {
+    wasm_module_inst_t instance = wasm_runtime_get_module_inst(exec_env);
+    wd_state* state = wasm_runtime_get_custom_data(instance);
+
+    void* data = wasm_runtime_addr_app_to_native(instance, data_ptr);
+    ow_texture_update_destination* dest = wasm_runtime_addr_app_to_native(instance, dest_ptr);
+
+    SDL_GPUTexture* sdl_texture;
+    wd_object_type object_type;
+    wd_get_object(&state->object_manager, dest->texture, &object_type, (void**)&sdl_texture);
+    DEBUG_CHECK(sdl_texture != NULL, "passed non-existent object as ow_update_texture destination texture");
+    DEBUG_CHECK(object_type == WD_OBJECT_TEXTURE, "passed non-texture object as ow_update_texture destination texture");
+
+    SDL_GPUTransferBufferCreateInfo transfer_info = {0};
+    transfer_info.size = dest->w * dest->h * 4;
+    transfer_info.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
+
+    SDL_GPUTransferBuffer* transfer_buffer = SDL_CreateGPUTransferBuffer(state->output.gpu, &transfer_info);
+    DEBUG_CHECK(transfer_buffer != NULL, "SDL_CreateGPUTransferBuffer failed: %s", SDL_GetError());
+
+    void* transfer_data = SDL_MapGPUTransferBuffer(state->output.gpu, transfer_buffer, false);
+    DEBUG_CHECK(transfer_data != NULL, "SDL_MapGPUTransferBuffer failed: %s", SDL_GetError());
+    memcpy(transfer_data, data, transfer_info.size);
+    SDL_UnmapGPUTransferBuffer(state->output.gpu, transfer_buffer);
+
+    SDL_GPUTextureTransferInfo source = {0};
+    source.transfer_buffer = transfer_buffer;
+    source.pixels_per_row = pixels_per_row;
+
+    SDL_GPUTextureRegion region = {0};
+    region.texture = sdl_texture;
+    region.x = dest->x;
+    region.y = dest->y;
+    region.w = dest->w;
+    region.h = dest->h;
+    region.d = 1;
+    region.mip_level = dest->mip_level;
+
+    SDL_UploadToGPUTexture(state->output.copy_pass, &source, &region, false);
+    SDL_ReleaseGPUTransferBuffer(state->output.gpu, transfer_buffer);
 }
 
 uint32_t ow_create_sampler(wasm_exec_env_t exec_env, uint32_t info_ptr) {
