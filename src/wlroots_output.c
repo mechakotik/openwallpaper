@@ -87,6 +87,7 @@ bool wd_wlroots_output_init(void** data) {
     zwlr_layer_surface_v1_set_anchor(
         odata->layer_surface, ZWLR_LAYER_SURFACE_V1_ANCHOR_TOP | ZWLR_LAYER_SURFACE_V1_ANCHOR_RIGHT |
                                   ZWLR_LAYER_SURFACE_V1_ANCHOR_BOTTOM | ZWLR_LAYER_SURFACE_V1_ANCHOR_LEFT);
+    zwlr_layer_surface_v1_set_exclusive_zone(odata->layer_surface, -1);
     zwlr_layer_surface_v1_add_listener(odata->layer_surface, &layer_surface_listener, odata);
     wl_surface_commit(odata->surface);
     wl_display_roundtrip(odata->display);
