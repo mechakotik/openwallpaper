@@ -9,6 +9,7 @@
 
 static NativeSymbol native_symbols[] = {
     {"ow_log", ow_log, "(i)"},
+    {"ow_load_file", ow_load_file, "(iii)"},
     {"ow_begin_copy_pass", ow_begin_copy_pass, "()"},
     {"ow_end_copy_pass", ow_end_copy_pass, "()"},
     {"ow_begin_render_pass", ow_begin_render_pass, "(i)"},
@@ -18,6 +19,7 @@ static NativeSymbol native_symbols[] = {
     {"ow_create_texture", ow_create_texture, "(i)i"},
     {"ow_create_texture_from_png", ow_create_texture_from_png, "(ii)i"},
     {"ow_update_texture", ow_update_texture, "(iii)"},
+    {"ow_generate_mipmaps", ow_generate_mipmaps, "(i)"},
     {"ow_create_sampler", ow_create_sampler, "(i)i"},
     {"ow_create_shader_from_bytecode", ow_create_shader_from_bytecode, "(iii)i"},
     {"ow_create_shader_from_file", ow_create_shader_from_file, "(ii)i"},

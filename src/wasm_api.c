@@ -31,6 +31,28 @@ void ow_log(wasm_exec_env_t exec_env, uint32_t message_ptr) {
     printf("%s\n", message_ptr_real);
 }
 
+void ow_load_file(wasm_exec_env_t exec_env, uint32_t path_ptr, uint32_t data_ptr, uint32_t size_ptr) {
+    wasm_module_inst_t instance = wasm_runtime_get_module_inst(exec_env);
+    wd_state* state = wasm_runtime_get_custom_data(instance);
+
+    const char* path = wasm_runtime_addr_app_to_native(instance, path_ptr);
+    uint8_t* data;
+    size_t size;
+    if(!wd_read_from_zip(&state->zip, path, &data, &size)) {
+        wasm_runtime_set_exception(instance, "");
+        return;
+    }
+
+    uint8_t* data_wasm = wasm_runtime_malloc(size);
+    memcpy(data_wasm, data, size);
+    free(data);
+
+    uint32_t* data_ptr_real = wasm_runtime_addr_app_to_native(instance, data_ptr);
+    *data_ptr_real = wasm_runtime_addr_native_to_app(instance, data_wasm);
+    uint32_t* size_ptr_real = wasm_runtime_addr_app_to_native(instance, size_ptr);
+    *size_ptr_real = size;
+}
+
 void ow_begin_copy_pass(wasm_exec_env_t exec_env) {
     wasm_module_inst_t instance = wasm_runtime_get_module_inst(exec_env);
     wd_state* state = wasm_runtime_get_custom_data(instance);
@@ -417,6 +439,19 @@ void ow_update_texture(wasm_exec_env_t exec_env, uint32_t data_ptr, uint32_t pix
 
     SDL_UploadToGPUTexture(state->output.copy_pass, &source, &region, false);
     SDL_ReleaseGPUTransferBuffer(state->output.gpu, transfer_buffer);
+}
+
+void ow_generate_mipmaps(wasm_exec_env_t exec_env, uint32_t texture) {
+    wasm_module_inst_t instance = wasm_runtime_get_module_inst(exec_env);
+    wd_state* state = wasm_runtime_get_custom_data(instance);
+
+    SDL_GPUTexture* sdl_texture = NULL;
+    wd_object_type object_type;
+    wd_get_object(&state->object_manager, texture, &object_type, (void**)&sdl_texture);
+    DEBUG_CHECK(sdl_texture != NULL, "passed non-existent object as ow_generate_mipmaps texture");
+    DEBUG_CHECK(object_type == WD_OBJECT_TEXTURE, "passed non-texture object as ow_generate_mipmaps texture");
+
+    SDL_GenerateMipmapsForGPUTexture(state->output.command_buffer, sdl_texture);
 }
 
 uint32_t ow_create_sampler(wasm_exec_env_t exec_env, uint32_t info_ptr) {
