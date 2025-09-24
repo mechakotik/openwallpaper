@@ -687,6 +687,18 @@ uint32_t ow_create_pipeline(wasm_exec_env_t exec_env, uint32_t info_ptr) {
             return 0;
     }
 
+    switch(info->cull_mode) {
+        case OW_CULL_NONE:
+            pipeline_info.rasterizer_state.cull_mode = SDL_GPU_CULLMODE_NONE;
+            break;
+        case OW_CULL_FRONT:
+            pipeline_info.rasterizer_state.cull_mode = SDL_GPU_CULLMODE_FRONT;
+            break;
+        case OW_CULL_BACK:
+            pipeline_info.rasterizer_state.cull_mode = SDL_GPU_CULLMODE_BACK;
+            break;
+    }
+
     pipeline_info.target_info.num_color_targets = 1;
     pipeline_info.target_info.color_target_descriptions = &color_target_description;
 
