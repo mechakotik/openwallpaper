@@ -1,11 +1,11 @@
 #ifdef WD_WLROOTS
 
-#include "wlroots_output.h"
 #include <SDL3/SDL.h>
 #include <stdlib.h>
 #include <wlr-layer-shell-unstable-v1.h>
 #include "SDL3/SDL_hints.h"
 #include "error.h"
+#include "wlroots_output.h"
 
 typedef struct wlroots_output_state {
     struct wl_display* display;
@@ -110,6 +110,8 @@ bool wd_wlroots_output_init(void** data) {
         wd_set_error("SDL_CreateWindowWithProperties failed: %s", SDL_GetError());
         return false;
     }
+
+    SDL_EnableScreenSaver();
 
     if(strcmp(getenv("XDG_CURRENT_DESKTOP"), "Hyprland") == 0) {
         odata->session_type = SESSION_HYPRLAND;
