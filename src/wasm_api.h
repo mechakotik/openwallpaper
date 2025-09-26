@@ -213,6 +213,6 @@ void ow_render_geometry(wasm_exec_env_t exec_env, uint32_t pipeline, uint32_t bi
 void ow_render_geometry_indexed(wasm_exec_env_t exec_env, uint32_t pipeline, uint32_t bindings_ptr,
     uint32_t index_offset, uint32_t index_count, uint32_t vertex_offset, uint32_t instance_count);
 
-void ow_free(uint32_t id);
+void ow_free(wasm_exec_env_t exec_env, uint32_t id);
 
 #endif

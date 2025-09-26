@@ -874,3 +874,40 @@ void ow_render_geometry_indexed(wasm_exec_env_t exec_env, uint32_t pipeline, uin
     free(sdl_vertex_buffer_bindings);
     free(sdl_texture_bindings);
 }
+
+void ow_free(wasm_exec_env_t exec_env, uint32_t id) {
+    if(id == 0) {
+        return;
+    }
+
+    wasm_module_inst_t instance = wasm_runtime_get_module_inst(exec_env);
+    wd_state* state = wasm_runtime_get_custom_data(instance);
+
+    wd_object_type object_type;
+    void* data;
+    wd_get_object(&state->object_manager, id, &object_type, &data);
+    DEBUG_CHECK(data != NULL, "attempted to free non-existent object with ow_free");
+
+    switch(object_type) {
+        case WD_OBJECT_VERTEX_BUFFER:
+        case WD_OBJECT_INDEX16_BUFFER:
+        case WD_OBJECT_INDEX32_BUFFER:
+            SDL_ReleaseGPUBuffer(state->output.gpu, (SDL_GPUBuffer*)data);
+            break;
+        case WD_OBJECT_TEXTURE:
+            SDL_ReleaseGPUTexture(state->output.gpu, (SDL_GPUTexture*)data);
+            break;
+        case WD_OBJECT_SAMPLER:
+            SDL_ReleaseGPUSampler(state->output.gpu, (SDL_GPUSampler*)data);
+            break;
+        case WD_OBJECT_VERTEX_SHADER:
+        case WD_OBJECT_FRAGMENT_SHADER:
+            SDL_ReleaseGPUShader(state->output.gpu, (SDL_GPUShader*)data);
+            break;
+        case WD_OBJECT_PIPELINE:
+            SDL_ReleaseGPUGraphicsPipeline(state->output.gpu, (SDL_GPUGraphicsPipeline*)data);
+            break;
+        default:
+            break;
+    }
+}
