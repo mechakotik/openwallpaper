@@ -10,9 +10,6 @@
 [submodule "external/wasm-micro-runtime"]
 	path = external/wasm-micro-runtime
 	url = https://github.com/bytecodealliance/wasm-micro-runtime
-[submodule "external/tomlc17"]
-	path = external/tomlc17
-	url = https://github.com/cktan/tomlc17
 [submodule "external/SDL_shadercross"]
 	path = external/SDL_shadercross
 	url = https://github.com/libsdl-org/SDL_shadercross
