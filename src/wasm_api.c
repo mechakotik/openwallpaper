@@ -628,58 +628,70 @@ uint32_t ow_create_pipeline(wasm_exec_env_t exec_env, uint32_t info_ptr) {
         case OW_BLEND_NONE:
             break;
         case OW_BLEND_ALPHA:
-            color_target_description.blend_state.enable_blend = true;
-            color_target_description.blend_state.color_blend_op = SDL_GPU_BLENDOP_ADD;
-            color_target_description.blend_state.alpha_blend_op = SDL_GPU_BLENDOP_ADD;
-            color_target_description.blend_state.src_color_blendfactor = SDL_GPU_BLENDFACTOR_SRC_ALPHA;
-            color_target_description.blend_state.dst_color_blendfactor = SDL_GPU_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
-            color_target_description.blend_state.src_alpha_blendfactor = SDL_GPU_BLENDFACTOR_ONE;
-            color_target_description.blend_state.dst_alpha_blendfactor = SDL_GPU_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
+            color_target_description.blend_state = (SDL_GPUColorTargetBlendState){
+                .enable_blend = true,
+                .color_blend_op = SDL_GPU_BLENDOP_ADD,
+                .alpha_blend_op = SDL_GPU_BLENDOP_ADD,
+                .src_color_blendfactor = SDL_GPU_BLENDFACTOR_SRC_ALPHA,
+                .dst_color_blendfactor = SDL_GPU_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
+                .src_alpha_blendfactor = SDL_GPU_BLENDFACTOR_ONE,
+                .dst_alpha_blendfactor = SDL_GPU_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
+            };
             break;
         case OW_BLEND_ALPHA_PREMULTIPLIED:
-            color_target_description.blend_state.enable_blend = true;
-            color_target_description.blend_state.color_blend_op = SDL_GPU_BLENDOP_ADD;
-            color_target_description.blend_state.alpha_blend_op = SDL_GPU_BLENDOP_ADD;
-            color_target_description.blend_state.src_color_blendfactor = SDL_GPU_BLENDFACTOR_ONE;
-            color_target_description.blend_state.dst_color_blendfactor = SDL_GPU_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
-            color_target_description.blend_state.src_alpha_blendfactor = SDL_GPU_BLENDFACTOR_ONE;
-            color_target_description.blend_state.dst_alpha_blendfactor = SDL_GPU_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
+            color_target_description.blend_state = (SDL_GPUColorTargetBlendState){
+                .enable_blend = true,
+                .color_blend_op = SDL_GPU_BLENDOP_ADD,
+                .alpha_blend_op = SDL_GPU_BLENDOP_ADD,
+                .src_color_blendfactor = SDL_GPU_BLENDFACTOR_ONE,
+                .dst_color_blendfactor = SDL_GPU_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
+                .src_alpha_blendfactor = SDL_GPU_BLENDFACTOR_ONE,
+                .dst_alpha_blendfactor = SDL_GPU_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
+            };
             break;
         case OW_BLEND_ADD:
-            color_target_description.blend_state.enable_blend = true;
-            color_target_description.blend_state.color_blend_op = SDL_GPU_BLENDOP_ADD;
-            color_target_description.blend_state.alpha_blend_op = SDL_GPU_BLENDOP_ADD;
-            color_target_description.blend_state.src_color_blendfactor = SDL_GPU_BLENDFACTOR_SRC_ALPHA;
-            color_target_description.blend_state.dst_color_blendfactor = SDL_GPU_BLENDFACTOR_ONE;
-            color_target_description.blend_state.src_alpha_blendfactor = SDL_GPU_BLENDFACTOR_ZERO;
-            color_target_description.blend_state.dst_alpha_blendfactor = SDL_GPU_BLENDFACTOR_ONE;
+            color_target_description.blend_state = (SDL_GPUColorTargetBlendState){
+                .enable_blend = true,
+                .color_blend_op = SDL_GPU_BLENDOP_ADD,
+                .alpha_blend_op = SDL_GPU_BLENDOP_ADD,
+                .src_color_blendfactor = SDL_GPU_BLENDFACTOR_SRC_ALPHA,
+                .dst_color_blendfactor = SDL_GPU_BLENDFACTOR_ONE,
+                .src_alpha_blendfactor = SDL_GPU_BLENDFACTOR_ZERO,
+                .dst_alpha_blendfactor = SDL_GPU_BLENDFACTOR_ONE,
+            };
             break;
         case OW_BLEND_ADD_PREMULTIPLIED:
-            color_target_description.blend_state.enable_blend = true;
-            color_target_description.blend_state.color_blend_op = SDL_GPU_BLENDOP_ADD;
-            color_target_description.blend_state.alpha_blend_op = SDL_GPU_BLENDOP_ADD;
-            color_target_description.blend_state.src_color_blendfactor = SDL_GPU_BLENDFACTOR_ONE;
-            color_target_description.blend_state.dst_color_blendfactor = SDL_GPU_BLENDFACTOR_ONE;
-            color_target_description.blend_state.src_alpha_blendfactor = SDL_GPU_BLENDFACTOR_ZERO;
-            color_target_description.blend_state.dst_alpha_blendfactor = SDL_GPU_BLENDFACTOR_ONE;
+            color_target_description.blend_state = (SDL_GPUColorTargetBlendState){
+                .enable_blend = true,
+                .color_blend_op = SDL_GPU_BLENDOP_ADD,
+                .alpha_blend_op = SDL_GPU_BLENDOP_ADD,
+                .src_color_blendfactor = SDL_GPU_BLENDFACTOR_ONE,
+                .dst_color_blendfactor = SDL_GPU_BLENDFACTOR_ONE,
+                .src_alpha_blendfactor = SDL_GPU_BLENDFACTOR_ZERO,
+                .dst_alpha_blendfactor = SDL_GPU_BLENDFACTOR_ONE,
+            };
             break;
         case OW_BLEND_MODULATE:
-            color_target_description.blend_state.enable_blend = true;
-            color_target_description.blend_state.color_blend_op = SDL_GPU_BLENDOP_ADD;
-            color_target_description.blend_state.alpha_blend_op = SDL_GPU_BLENDOP_ADD;
-            color_target_description.blend_state.src_color_blendfactor = SDL_GPU_BLENDFACTOR_DST_COLOR;
-            color_target_description.blend_state.dst_color_blendfactor = SDL_GPU_BLENDFACTOR_ZERO;
-            color_target_description.blend_state.src_alpha_blendfactor = SDL_GPU_BLENDFACTOR_ZERO;
-            color_target_description.blend_state.dst_alpha_blendfactor = SDL_GPU_BLENDFACTOR_ONE;
+            color_target_description.blend_state = (SDL_GPUColorTargetBlendState){
+                .enable_blend = true,
+                .color_blend_op = SDL_GPU_BLENDOP_ADD,
+                .alpha_blend_op = SDL_GPU_BLENDOP_ADD,
+                .src_color_blendfactor = SDL_GPU_BLENDFACTOR_DST_COLOR,
+                .dst_color_blendfactor = SDL_GPU_BLENDFACTOR_ZERO,
+                .src_alpha_blendfactor = SDL_GPU_BLENDFACTOR_ZERO,
+                .dst_alpha_blendfactor = SDL_GPU_BLENDFACTOR_ONE,
+            };
             break;
         case OW_BLEND_MULTIPLY:
-            color_target_description.blend_state.enable_blend = true;
-            color_target_description.blend_state.color_blend_op = SDL_GPU_BLENDOP_ADD;
-            color_target_description.blend_state.alpha_blend_op = SDL_GPU_BLENDOP_ADD;
-            color_target_description.blend_state.src_color_blendfactor = SDL_GPU_BLENDFACTOR_DST_COLOR;
-            color_target_description.blend_state.dst_color_blendfactor = SDL_GPU_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
-            color_target_description.blend_state.src_alpha_blendfactor = SDL_GPU_BLENDFACTOR_ZERO;
-            color_target_description.blend_state.dst_alpha_blendfactor = SDL_GPU_BLENDFACTOR_ONE;
+            color_target_description.blend_state = (SDL_GPUColorTargetBlendState){
+                .enable_blend = true,
+                .color_blend_op = SDL_GPU_BLENDOP_ADD,
+                .alpha_blend_op = SDL_GPU_BLENDOP_ADD,
+                .src_color_blendfactor = SDL_GPU_BLENDFACTOR_DST_COLOR,
+                .dst_color_blendfactor = SDL_GPU_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
+                .src_alpha_blendfactor = SDL_GPU_BLENDFACTOR_ZERO,
+                .dst_alpha_blendfactor = SDL_GPU_BLENDFACTOR_ONE,
+            };
             break;
         default:
             wd_set_scene_error("unknown blend mode %d", info->blend_mode);
