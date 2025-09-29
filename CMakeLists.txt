@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 4.0)
 project(wallpaperd)
 
+include(GNUInstallDirs)
+
 option(WD_WLROOTS "Enable wlroots output support" OFF)
 
 option(WD_SDL_SHARED "Dynamically link to system SDL" OFF)
@@ -87,6 +89,8 @@ if(WD_SDL_SHADERCROSS_SHARED)
 else()
     set(SDLSHADERCROSS_VENDORED ON)
     set(SDLSHADERCROSS_STATIC ON)
+    set(SDLSHADERCROSS_DXC OFF)
+    set(SDLSHADERCROSS_SPIRVCROSS_SHARED OFF)
     add_subdirectory(external/SDL_shadercross EXCLUDE_FROM_ALL)
     target_link_libraries(wallpaperd PRIVATE SDL3_shadercross::SDL3_shadercross-static)
     target_include_directories(wallpaperd PRIVATE external/SDL_shadercross/include)
@@ -138,4 +142,6 @@ if(WD_WLROOTS)
     target_link_libraries(wallpaperd PRIVATE wayland-client)
     target_compile_definitions(wallpaperd PRIVATE -DWD_WLROOTS)
 endif()
+
+install(TARGETS wallpaperd RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 
