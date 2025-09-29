@@ -13,3 +13,9 @@
 [submodule "external/SDL_shadercross"]
 	path = external/SDL_shadercross
 	url = https://github.com/libsdl-org/SDL_shadercross
+[submodule "external/libzip"]
+	path = external/libzip
+	url = https://github.com/nih-at/libzip
+[submodule "external/zlib"]
+	path = external/zlib
+	url = https://github.com/madler/zlib
