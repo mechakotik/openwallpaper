@@ -145,11 +145,7 @@ int main(int argc, char* argv[]) {
     return 0;
 
 handle_error:
-    if(wd_is_last_error_scene_error()) {
-        printf("scene error: %s\n", wd_get_last_error());
-    } else {
-        printf("error: %s\n", wd_get_last_error());
-    }
+    printf("error: %s\n", wd_get_last_error());
     wd_free_state(&state);
     return 1;
 }

@@ -13,7 +13,7 @@ struct {
 
 bool wd_new_object(wd_object_manager_state* state, wd_object_type type, void* data, uint32_t* result) {
     if((state->top >> BUCKET_SIZE_LOG2) >= MAX_BUCKETS) {
-        wd_set_scene_error("more that %d objects allocated", MAX_BUCKETS * (1 << BUCKET_SIZE_LOG2));
+        wd_set_error("more that %d objects allocated", MAX_BUCKETS * (1 << BUCKET_SIZE_LOG2));
         return false;
     }
 

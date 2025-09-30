@@ -13,14 +13,14 @@
 
 #define DEBUG_CHECK(x, ...)                       \
     if(!(x)) {                                    \
-        wd_set_scene_error(__VA_ARGS__);          \
+        wd_set_error(__VA_ARGS__);                \
         wasm_runtime_set_exception(instance, ""); \
         return;                                   \
     }
 
 #define DEBUG_CHECK_RET0(x, ...)                  \
     if(!(x)) {                                    \
-        wd_set_scene_error(__VA_ARGS__);          \
+        wd_set_error(__VA_ARGS__);                \
         wasm_runtime_set_exception(instance, ""); \
         return 0;                                 \
     }
@@ -185,7 +185,7 @@ uint32_t ow_create_buffer(wasm_exec_env_t exec_env, ow_buffer_type type, uint32_
             object_type = WD_OBJECT_INDEX32_BUFFER;
             break;
         default:
-            wd_set_scene_error("unknown buffer type %d", type);
+            wd_set_error("unknown buffer type %d", type);
             wasm_runtime_set_exception(instance, "");
             return 0;
     }
@@ -258,7 +258,7 @@ uint32_t ow_create_texture(wasm_exec_env_t exec_env, uint32_t info_ptr) {
 
     switch(info->format) {
         case OW_TEXTURE_SWAPCHAIN:
-            wd_set_scene_error("passed swapchain format as offscreen texture format");
+            wd_set_error("passed swapchain format as offscreen texture format");
             wasm_runtime_set_exception(instance, "");
             return 0;
         case OW_TEXTURE_RGBA8_UNORM:
@@ -277,7 +277,7 @@ uint32_t ow_create_texture(wasm_exec_env_t exec_env, uint32_t info_ptr) {
             texture_info.format = SDL_GPU_TEXTUREFORMAT_D16_UNORM;
             break;
         default:
-            wd_set_scene_error("unknown texture format %d", info->format);
+            wd_set_error("unknown texture format %d", info->format);
             wasm_runtime_set_exception(instance, "");
             return 0;
     }
@@ -296,7 +296,7 @@ uint32_t ow_create_texture(wasm_exec_env_t exec_env, uint32_t info_ptr) {
             texture_info.sample_count = SDL_GPU_SAMPLECOUNT_8;
             break;
         default:
-            wd_set_scene_error("unsupported texture sample count %d", info->samples);
+            wd_set_error("unsupported texture sample count %d", info->samples);
             wasm_runtime_set_exception(instance, "");
             return 0;
     }
@@ -330,7 +330,7 @@ uint32_t ow_create_texture_from_png(wasm_exec_env_t exec_env, uint32_t path_ptr,
     DEBUG_CHECK_RET0(state->output.copy_pass != NULL, "called ow_create_texture_from_png when no copy pass is active");
 
     if(info->format != OW_TEXTURE_RGBA8_UNORM && info->format != OW_TEXTURE_RGBA8_UNORM_SRGB) {
-        wd_set_scene_error("unsupported texture format (TODO)");
+        wd_set_error("unsupported texture format (TODO)");
         wasm_runtime_set_exception(instance, "");
         return 0;
     }
@@ -476,7 +476,7 @@ uint32_t ow_create_sampler(wasm_exec_env_t exec_env, uint32_t info_ptr) {
             sampler_info.address_mode_u = SDL_GPU_SAMPLERADDRESSMODE_MIRRORED_REPEAT;
             break;
         default:
-            wd_set_scene_error("unknown wrap mode %d", info->wrap_x);
+            wd_set_error("unknown wrap mode %d", info->wrap_x);
             wasm_runtime_set_exception(instance, "");
             return 0;
     }
@@ -492,7 +492,7 @@ uint32_t ow_create_sampler(wasm_exec_env_t exec_env, uint32_t info_ptr) {
             sampler_info.address_mode_v = SDL_GPU_SAMPLERADDRESSMODE_MIRRORED_REPEAT;
             break;
         default:
-            wd_set_scene_error("unknown wrap mode %d", info->wrap_y);
+            wd_set_error("unknown wrap mode %d", info->wrap_y);
             wasm_runtime_set_exception(instance, "");
             return 0;
     }
@@ -565,7 +565,7 @@ uint32_t ow_create_pipeline(wasm_exec_env_t exec_env, uint32_t info_ptr) {
             static_assert(OW_ATTRIBUTE_HALF4 + 1 == SDL_GPU_VERTEXELEMENTFORMAT_HALF4, "invalid attribute mapping");
             sdl_vertex_attributes[i].format = vertex_attributes[i].type + 1;
         } else {
-            wd_set_scene_error("unknown vertex attribute type %d", vertex_attributes[i].type);
+            wd_set_error("unknown vertex attribute type %d", vertex_attributes[i].type);
             free(sdl_vertex_buffer_descriptions);
             free(sdl_vertex_attributes);
             wasm_runtime_set_exception(instance, "");
@@ -590,7 +590,7 @@ uint32_t ow_create_pipeline(wasm_exec_env_t exec_env, uint32_t info_ptr) {
             pipeline_info.primitive_type = SDL_GPU_PRIMITIVETYPE_LINESTRIP;
             break;
         default:
-            wd_set_scene_error("unknown pipeline topology %d", info->topology);
+            wd_set_error("unknown pipeline topology %d", info->topology);
             free(sdl_vertex_attributes);
             free(sdl_vertex_buffer_descriptions);
             wasm_runtime_set_exception(instance, "");
@@ -615,11 +615,11 @@ uint32_t ow_create_pipeline(wasm_exec_env_t exec_env, uint32_t info_ptr) {
             color_target_description.format = SDL_GPU_TEXTUREFORMAT_R8_UNORM;
             break;
         case OW_TEXTURE_DEPTH16_UNORM:
-            wd_set_scene_error("passed depth format as color target format");
+            wd_set_error("passed depth format as color target format");
             wasm_runtime_set_exception(instance, "");
             break;
         default:
-            wd_set_scene_error("unknown color target format %d", info->color_target_format);
+            wd_set_error("unknown color target format %d", info->color_target_format);
             wasm_runtime_set_exception(instance, "");
             return 0;
     }
@@ -694,7 +694,7 @@ uint32_t ow_create_pipeline(wasm_exec_env_t exec_env, uint32_t info_ptr) {
             };
             break;
         default:
-            wd_set_scene_error("unknown blend mode %d", info->blend_mode);
+            wd_set_error("unknown blend mode %d", info->blend_mode);
             wasm_runtime_set_exception(instance, "");
             return 0;
     }
@@ -756,7 +756,7 @@ void ow_push_uniform_data(wasm_exec_env_t exec_env, uint32_t type, uint32_t slot
             SDL_PushGPUFragmentUniformData(state->output.command_buffer, slot, data_real, size);
             break;
         default:
-            wd_set_scene_error("unknown shader type %d", type);
+            wd_set_error("unknown shader type %d", type);
             wasm_runtime_set_exception(instance, "");
             return;
     }
