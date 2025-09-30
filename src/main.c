@@ -63,9 +63,14 @@ int main(int argc, char* argv[]) {
     uint64_t prev_time = SDL_GetTicksNS();
 
     bool pause_hidden = (wd_get_option(&state.args, "pause-hidden") != NULL);
+    bool pause_on_bat = (wd_get_option(&state.args, "pause-on-bat") != NULL);
     bool frame_skipped = false;
-    uint64_t last_hidden_check = prev_time;
+    uint64_t last_pause_check = prev_time;
     bool first_draw = true;
+
+    if(pause_on_bat) {
+        wd_init_battery(&state.battery);
+    }
 
     while(true) {
         uint64_t cur_time = SDL_GetTicksNS();
@@ -99,13 +104,14 @@ int main(int argc, char* argv[]) {
             break;
         }
 
-        if(pause_hidden && !first_draw && last_hidden_check < cur_time - 2e8) {
-            if(wd_output_hidden(&state.output)) {
+        if(!first_draw && last_pause_check < cur_time - 2e8) {
+            if((pause_hidden && wd_output_hidden(&state.output)) ||
+                (pause_on_bat && wd_battery_discharging(&state.battery))) {
                 SDL_Delay(200);
                 frame_skipped = true;
                 continue;
             } else {
-                last_hidden_check = cur_time;
+                last_pause_check = cur_time;
             }
         }
 
