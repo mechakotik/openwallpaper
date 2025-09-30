@@ -66,6 +66,7 @@ int main(int argc, char* argv[]) {
     bool pause_hidden = (wd_get_option(&state.args, "pause-hidden") != NULL);
     bool frame_skipped = false;
     uint64_t last_hidden_check = prev_time;
+    bool first_draw = true;
 
     while(true) {
         uint64_t cur_time = SDL_GetTicksNS();
@@ -99,7 +100,7 @@ int main(int argc, char* argv[]) {
             break;
         }
 
-        if(pause_hidden && last_hidden_check < cur_time - 2e8) {
+        if(pause_hidden && !first_draw && last_hidden_check < cur_time - 2e8) {
             if(wd_output_hidden(&state.output)) {
                 SDL_Delay(200);
                 frame_skipped = true;
@@ -137,6 +138,8 @@ int main(int argc, char* argv[]) {
             wd_set_error("SDL_SubmitGPUCommandBuffer failed: %s", SDL_GetError());
             goto handle_error;
         }
+
+        first_draw = false;
     }
 
     wd_free_state(&state);
