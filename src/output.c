@@ -46,7 +46,10 @@ bool wd_init_output(wd_output_state* output, wd_args_state* args) {
     }
 
     SDL_PropertiesID gpu_properties = SDL_CreateProperties();
-    SDL_SetBooleanProperty(gpu_properties, SDL_PROP_GPU_DEVICE_CREATE_PREFERLOWPOWER_BOOLEAN, true);
+
+    bool prefer_dgpu = (wd_get_option(args, "prefer-dgpu") != NULL);
+    SDL_SetBooleanProperty(gpu_properties, SDL_PROP_GPU_DEVICE_CREATE_PREFERLOWPOWER_BOOLEAN, !prefer_dgpu);
+
     SDL_SetBooleanProperty(gpu_properties, SDL_PROP_GPU_DEVICE_CREATE_DEBUGMODE_BOOLEAN, false);
     SDL_SetBooleanProperty(gpu_properties, SDL_PROP_GPU_DEVICE_CREATE_SHADERS_SPIRV_BOOLEAN, true);
     output->gpu = SDL_CreateGPUDeviceWithProperties(gpu_properties);

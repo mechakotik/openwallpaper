@@ -13,11 +13,10 @@ static void print_help() {
     printf("Interactive live wallpaper daemon\n\n");
 
     printf("  --output=<output>\n");
-    printf("  --gpu=<powersave|performance>\n");
     printf("  --fps=<fps>\n");
-    printf("  --pause-hidden=<on|off>\n");
-    printf("  --pause-on-bat=<on|off>\n");
-    printf("  --volume=<0-255>\n");
+    printf("  --prefer-dgpu\n");
+    printf("  --pause-hidden\n");
+    printf("  --pause-on-bat\n");
     printf("  --window\n");
     printf("  --help\n");
 }
