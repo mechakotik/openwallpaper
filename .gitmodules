@@ -1,21 +1,21 @@
 [submodule "external/SDL"]
-	path = external/SDL
+	path = wallpaperd/external/SDL
 	url = https://github.com/libsdl-org/SDL
 [submodule "external/SDL_image"]
-	path = external/SDL_image
+	path = wallpaperd/external/SDL_image
 	url = https://github.com/libsdl-org/SDL_image
 [submodule "external/SDL_mixer"]
-	path = external/SDL_mixer
+	path = wallpaperd/external/SDL_mixer
 	url = https://github.com/libsdl-org/SDL_mixer
 [submodule "external/wasm-micro-runtime"]
-	path = external/wasm-micro-runtime
+	path = wallpaperd/external/wasm-micro-runtime
 	url = https://github.com/bytecodealliance/wasm-micro-runtime
 [submodule "external/SDL_shadercross"]
-	path = external/SDL_shadercross
+	path = wallpaperd/external/SDL_shadercross
 	url = https://github.com/libsdl-org/SDL_shadercross
 [submodule "external/libzip"]
-	path = external/libzip
+	path = wallpaperd/external/libzip
 	url = https://github.com/nih-at/libzip
 [submodule "external/zlib"]
-	path = external/zlib
+	path = wallpaperd/external/zlib
 	url = https://github.com/madler/zlib
