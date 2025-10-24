@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"os/exec"
 	"regexp"
@@ -41,6 +42,9 @@ type samplerComboMeta struct {
 }
 
 func preprocessShader(vertexSource, fragmentSource, includePath string, boundTextures []bool, comboOverrides map[string]int) (PreprocessedShader, error) {
+	vertexSource = renameSymbol(vertexSource, "sample", "sample_")
+	fragmentSource = renameSymbol(fragmentSource, "sample", "sample_")
+
 	vertexUniformDefaults := parseUniformDefaults(vertexSource)
 	fragmentUniformDefaults := parseUniformDefaults(fragmentSource)
 
@@ -52,12 +56,8 @@ func preprocessShader(vertexSource, fragmentSource, includePath string, boundTex
 
 	vertexSamplerCombos := parseSamplerCombos(vertexSource, boundTextures)
 	fragmentSamplerCombos := parseSamplerCombos(fragmentSource, boundTextures)
-	for combo, value := range vertexSamplerCombos {
-		vertexCombos[combo] = value
-	}
-	for combo, value := range fragmentSamplerCombos {
-		fragmentCombos[combo] = value
-	}
+	maps.Copy(vertexCombos, vertexSamplerCombos)
+	maps.Copy(fragmentCombos, fragmentSamplerCombos)
 
 	for combo, value := range comboOverrides {
 		if _, exists := vertexCombos[combo]; exists {
@@ -124,6 +124,15 @@ func preprocessShader(vertexSource, fragmentSource, includePath string, boundTex
 		VertexUniforms:   vertexUniforms,
 		FragmentUniforms: fragmentUniforms,
 	}, nil
+}
+
+func renameSymbol(source string, from string, to string) string {
+	reSymbol := regexp.MustCompile(fmt.Sprintf(`([^a-zA-Z0-9_])(%s)([^a-zA-Z0-9_])`, from))
+	source = reSymbol.ReplaceAllStringFunc(source, func(match string) string {
+		submatches := reSymbol.FindStringSubmatch(match)
+		return submatches[1] + to + submatches[3]
+	})
+	return source
 }
 
 func appendGLSL450Header(source string) string {
