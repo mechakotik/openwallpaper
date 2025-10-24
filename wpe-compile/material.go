@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"maps"
 	"strconv"
-	"strings"
 )
 
 type Material struct {
@@ -44,12 +43,10 @@ func parseMaterialJSON(data []byte) (Material, error) {
 	if len(root.Passes) == 0 {
 		return Material{}, errors.New("material no data")
 	}
-
 	passObj := map[string]json.RawMessage{}
 	if err := json.Unmarshal(root.Passes[0], &passObj); err != nil {
 		return Material{}, err
 	}
-
 	mat := Material{
 		Blending:             "translucent",
 		CullMode:             "nocull",
@@ -59,7 +56,6 @@ func parseMaterialJSON(data []byte) (Material, error) {
 		Combos:               map[string]int{},
 		ConstantShaderValues: map[string][]float32{},
 	}
-
 	if raw, ok := passObj["shader"]; ok && !isJSONNull(raw) {
 		if err := json.Unmarshal(raw, &mat.Shader); err != nil {
 			return Material{}, fmt.Errorf("material shader: %w", err)
@@ -67,12 +63,10 @@ func parseMaterialJSON(data []byte) (Material, error) {
 	} else {
 		return Material{}, errors.New("material no shader")
 	}
-
 	decodeOptionalString(passObj, "blending", &mat.Blending)
 	decodeOptionalString(passObj, "cullmode", &mat.CullMode)
 	decodeOptionalString(passObj, "depthtest", &mat.DepthTest)
 	decodeOptionalString(passObj, "depthwrite", &mat.DepthWrite)
-
 	if raw, ok := passObj["textures"]; ok && !isJSONNull(raw) {
 		var anyArr []json.RawMessage
 		if err := json.Unmarshal(raw, &anyArr); err != nil {
@@ -91,21 +85,19 @@ func parseMaterialJSON(data []byte) (Material, error) {
 			}
 		}
 	}
-
 	if raw, ok := passObj["constantshadervalues"]; ok && !isJSONNull(raw) {
 		var m map[string]json.RawMessage
 		if err := json.Unmarshal(raw, &m); err != nil {
 			return Material{}, fmt.Errorf("constantshadervalues: %w", err)
 		}
 		for k, v := range m {
-			fs, err := parseFloatSlice(v)
+			fs, err := ParseFloat32AnyJSON(v)
 			if err != nil {
 				return Material{}, fmt.Errorf("constantshadervalues[%s]: %w", k, err)
 			}
 			mat.ConstantShaderValues[k] = fs
 		}
 	}
-
 	if raw, ok := passObj["combos"]; ok && !isJSONNull(raw) {
 		var m map[string]json.RawMessage
 		if err := json.Unmarshal(raw, &m); err != nil {
@@ -119,7 +111,6 @@ func parseMaterialJSON(data []byte) (Material, error) {
 			mat.Combos[k] = val
 		}
 	}
-
 	return mat, nil
 }
 
@@ -131,7 +122,6 @@ func ParseMaterialPass(data []byte) (MaterialPass, error) {
 	var p MaterialPass
 	p.Combos = map[string]int{}
 	p.ConstantShaderValues = map[string][]float32{}
-
 	if raw, ok := obj["textures"]; ok && !isJSONNull(raw) {
 		var anyArr []json.RawMessage
 		if err := json.Unmarshal(raw, &anyArr); err != nil {
@@ -150,21 +140,19 @@ func ParseMaterialPass(data []byte) (MaterialPass, error) {
 			}
 		}
 	}
-
 	if raw, ok := obj["constantshadervalues"]; ok && !isJSONNull(raw) {
 		var m map[string]json.RawMessage
 		if err := json.Unmarshal(raw, &m); err != nil {
 			return MaterialPass{}, fmt.Errorf("constantshadervalues: %w", err)
 		}
 		for k, v := range m {
-			fs, err := parseFloatSlice(v)
+			fs, err := ParseFloat32AnyJSON(v)
 			if err != nil {
 				return MaterialPass{}, fmt.Errorf("constantshadervalues[%s]: %w", k, err)
 			}
 			p.ConstantShaderValues[k] = fs
 		}
 	}
-
 	if raw, ok := obj["combos"]; ok && !isJSONNull(raw) {
 		var m map[string]json.RawMessage
 		if err := json.Unmarshal(raw, &m); err != nil {
@@ -178,15 +166,12 @@ func ParseMaterialPass(data []byte) (MaterialPass, error) {
 			p.Combos[k] = val
 		}
 	}
-
 	decodeOptionalString(obj, "target", &p.Target)
-
 	if raw, ok := obj["bind"]; ok && !isJSONNull(raw) {
 		if err := json.Unmarshal(raw, &p.Bind); err != nil {
 			return MaterialPass{}, fmt.Errorf("bind: %w", err)
 		}
 	}
-
 	return p, nil
 }
 
@@ -240,46 +225,4 @@ func parseint(raw json.RawMessage) (int, error) {
 		return int(f), nil
 	}
 	return 0, errors.New("unsupported int format")
-}
-
-func parseFloatSlice(raw json.RawMessage) ([]float32, error) {
-	{
-		var arr []float64
-		if err := json.Unmarshal(raw, &arr); err == nil {
-			out := make([]float32, len(arr))
-			for i, v := range arr {
-				out[i] = float32(v)
-			}
-			return out, nil
-		}
-	}
-
-	{
-		var n float64
-		if err := json.Unmarshal(raw, &n); err == nil {
-			return []float32{float32(n)}, nil
-		}
-	}
-
-	{
-		var s string
-		if err := json.Unmarshal(raw, &s); err == nil {
-			s = strings.TrimSpace(s)
-			if s == "" {
-				return []float32{}, nil
-			}
-			fields := strings.Fields(s)
-			out := make([]float32, 0, len(fields))
-			for _, f := range fields {
-				v, err := strconv.ParseFloat(f, 64)
-				if err != nil {
-					return nil, fmt.Errorf("bad float %q", f)
-				}
-				out = append(out, float32(v))
-			}
-			return out, nil
-		}
-	}
-
-	return nil, errors.New("unsupported float slice format")
 }

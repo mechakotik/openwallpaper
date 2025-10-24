@@ -2,9 +2,7 @@ package main
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
-	"strconv"
 	"strings"
 )
 
@@ -12,23 +10,6 @@ type (
 	Vec2 struct{ X, Y float64 }
 	Vec3 struct{ X, Y, Z float64 }
 )
-
-func parseFloatsFromString(s string) ([]float64, error) {
-	s = strings.TrimSpace(s)
-	if s == "" {
-		return nil, errors.New("empty vector string")
-	}
-	parts := strings.Fields(s)
-	out := make([]float64, 0, len(parts))
-	for _, p := range parts {
-		f, err := strconv.ParseFloat(p, 64)
-		if err != nil {
-			return nil, fmt.Errorf("parse float %q: %w", p, err)
-		}
-		out = append(out, f)
-	}
-	return out, nil
-}
 
 func (v *Vec2) UnmarshalJSON(b []byte) error {
 	var arr []float64
@@ -41,7 +22,7 @@ func (v *Vec2) UnmarshalJSON(b []byte) error {
 	}
 	var s string
 	if err := json.Unmarshal(b, &s); err == nil {
-		vals, err := parseFloatsFromString(s)
+		vals, err := ParseFloat64sFromString(s)
 		if err != nil {
 			return err
 		}
@@ -65,7 +46,7 @@ func (v *Vec3) UnmarshalJSON(b []byte) error {
 	}
 	var s string
 	if err := json.Unmarshal(b, &s); err == nil {
-		vals, err := parseFloatsFromString(s)
+		vals, err := ParseFloat64sFromString(s)
 		if err != nil {
 			return err
 		}
@@ -101,7 +82,6 @@ func (p *Param[T]) UnmarshalJSON(b []byte) error {
 			return nil
 		}
 	}
-
 	var v T
 	if err := json.Unmarshal(b, &v); err != nil {
 		return err
@@ -181,7 +161,7 @@ func (s Scalar) AsString(def string) string {
 
 func (s Scalar) AsVec2() (Vec2, bool) {
 	if s.Kind == ScalarString {
-		vals, err := parseFloatsFromString(s.Str)
+		vals, err := ParseFloat64sFromString(s.Str)
 		if err == nil && len(vals) == 2 {
 			return Vec2{vals[0], vals[1]}, true
 		}
@@ -191,7 +171,7 @@ func (s Scalar) AsVec2() (Vec2, bool) {
 
 func (s Scalar) AsVec3() (Vec3, bool) {
 	if s.Kind == ScalarString {
-		vals, err := parseFloatsFromString(s.Str)
+		vals, err := ParseFloat64sFromString(s.Str)
 		if err == nil && len(vals) == 3 {
 			return Vec3{vals[0], vals[1], vals[2]}, true
 		}
@@ -305,13 +285,51 @@ type General struct {
 }
 
 type EffectPass struct {
-	ID        int                      `json:"id"`
-	Combos    map[string]int           `json:"combos,omitempty"`
-	Constants map[string]ScalarOrParam `json:"constantshadervalues"`
-	Textures  []*string                `json:"textures,omitempty"`
+	ID        int                  `json:"id"`
+	Combos    map[string]int       `json:"combos,omitempty"`
+	Constants map[string][]float32 `json:"constantshadervalues"`
+	Textures  []*string            `json:"textures,omitempty"`
 }
 
-type Effect struct {
+func (p *EffectPass) UnmarshalJSON(b []byte) error {
+	var obj map[string]json.RawMessage
+	if err := json.Unmarshal(b, &obj); err != nil {
+		return err
+	}
+	if raw, ok := obj["id"]; ok {
+		_ = json.Unmarshal(raw, &p.ID)
+	}
+	if raw, ok := obj["combos"]; ok {
+		var m map[string]int
+		if err := json.Unmarshal(raw, &m); err == nil {
+			p.Combos = m
+		}
+	}
+	if raw, ok := obj["textures"]; ok {
+		var arr []*string
+		if err := json.Unmarshal(raw, &arr); err == nil {
+			p.Textures = arr
+		}
+	}
+	if raw, ok := obj["constantshadervalues"]; ok {
+		var m map[string]json.RawMessage
+		if err := json.Unmarshal(raw, &m); err != nil {
+			return err
+		}
+		out := make(map[string][]float32, len(m))
+		for k, v := range m {
+			fs, err := ParseFloat32AnyJSON(v)
+			if err != nil {
+				return fmt.Errorf("constantshadervalues[%s]: %w", k, err)
+			}
+			out[k] = fs
+		}
+		p.Constants = out
+	}
+	return nil
+}
+
+type EffectInstance struct {
 	File    string       `json:"file"`
 	ID      int          `json:"id"`
 	Name    string       `json:"name"`
@@ -343,37 +361,35 @@ func (io *InstanceOverride) UnmarshalJSON(b []byte) error {
 }
 
 type SceneObject struct {
-	ID             int         `json:"id"`
-	Name           string      `json:"name"`
-	Alignment      string      `json:"alignment,omitempty"`
-	Alpha          float64     `json:"alpha,omitempty"`
-	Angles         Vec3        `json:"angles,omitempty"`
-	Brightness     float64     `json:"brightness,omitempty"`
-	Color          Vec3        `json:"color,omitempty"`
-	ColorBlendMode int         `json:"colorBlendMode,omitempty"`
-	CopyBackground bool        `json:"copybackground,omitempty"`
-	Effects        []Effect    `json:"effects,omitempty"`
-	Image          string      `json:"image,omitempty"`
-	LEDSource      bool        `json:"ledsource,omitempty"`
-	LockTransforms bool        `json:"locktransforms,omitempty"`
-	Origin         Vec3        `json:"origin,omitempty"`
-	ParallaxDepth  Vec2        `json:"parallaxDepth,omitempty"`
-	Perspective    bool        `json:"perspective,omitempty"`
-	Scale          Vec3        `json:"scale,omitempty"`
-	Size           *Vec2       `json:"size,omitempty"`
-	Solid          bool        `json:"solid,omitempty"`
-	Visible        Param[bool] `json:"visible,omitempty"`
-
+	ID               int              `json:"id"`
+	Name             string           `json:"name"`
+	Alignment        string           `json:"alignment,omitempty"`
+	Alpha            float64          `json:"alpha,omitempty"`
+	Angles           Vec3             `json:"angles,omitempty"`
+	Brightness       float64          `json:"brightness,omitempty"`
+	Color            Vec3             `json:"color,omitempty"`
+	ColorBlendMode   int              `json:"colorBlendMode,omitempty"`
+	CopyBackground   bool             `json:"copybackground,omitempty"`
+	Effects          []EffectInstance `json:"effects,omitempty"`
+	Image            string           `json:"image,omitempty"`
+	LEDSource        bool             `json:"ledsource,omitempty"`
+	LockTransforms   bool             `json:"locktransforms,omitempty"`
+	Origin           Vec3             `json:"origin,omitempty"`
+	ParallaxDepth    Vec2             `json:"parallaxDepth,omitempty"`
+	Perspective      bool             `json:"perspective,omitempty"`
+	Scale            Vec3             `json:"scale,omitempty"`
+	Size             *Vec2            `json:"size,omitempty"`
+	Solid            bool             `json:"solid,omitempty"`
+	Visible          Param[bool]      `json:"visible,omitempty"`
 	Particle         string           `json:"particle,omitempty"`
 	InstanceOverride InstanceOverride `json:"instanceoverride,omitempty"`
-
-	MaxTime      float64        `json:"maxtime,omitempty"`
-	MinTime      float64        `json:"mintime,omitempty"`
-	MuteInEditor bool           `json:"muteineditor,omitempty"`
-	PlaybackMode string         `json:"playbackmode,omitempty"`
-	Sound        []string       `json:"sound,omitempty"`
-	StartSilent  bool           `json:"startsilent,omitempty"`
-	Volume       NumberOrScript `json:"volume,omitempty"`
+	MaxTime          float64          `json:"maxtime,omitempty"`
+	MinTime          float64          `json:"mintime,omitempty"`
+	MuteInEditor     bool             `json:"muteineditor,omitempty"`
+	PlaybackMode     string           `json:"playbackmode,omitempty"`
+	Sound            []string         `json:"sound,omitempty"`
+	StartSilent      bool             `json:"startsilent,omitempty"`
+	Volume           NumberOrScript   `json:"volume,omitempty"`
 }
 
 type Scene struct {

@@ -14,7 +14,7 @@ type UniformInfo struct {
 	Name      string
 	Type      string
 	ArraySize int
-	Default   []float64
+	Default   []float32
 }
 
 type AttributeInfo struct {
@@ -36,17 +36,29 @@ type comboMeta struct {
 	Default int    `json:"default"`
 }
 
-type uniformMeta struct {
-	Default json.RawMessage `json:"default"`
-	Int     bool            `json:"int"`
+type samplerComboMeta struct {
+	Combo string `json:"combo"`
 }
 
-func preprocessShader(vertexSource, fragmentSource, includePath string, comboOverrides map[string]int) (PreprocessedShader, error) {
+func preprocessShader(vertexSource, fragmentSource, includePath string, boundTextures []bool, comboOverrides map[string]int) (PreprocessedShader, error) {
+	vertexUniformDefaults := parseUniformDefaults(vertexSource)
+	fragmentUniformDefaults := parseUniformDefaults(fragmentSource)
+
 	vertexSource = appendGLSL450Header(vertexSource)
 	fragmentSource = appendGLSL450Header(fragmentSource)
 
 	vertexCombos := parseCombos(vertexSource)
 	fragmentCombos := parseCombos(fragmentSource)
+
+	vertexSamplerCombos := parseSamplerCombos(vertexSource, boundTextures)
+	fragmentSamplerCombos := parseSamplerCombos(fragmentSource, boundTextures)
+	for combo, value := range vertexSamplerCombos {
+		vertexCombos[combo] = value
+	}
+	for combo, value := range fragmentSamplerCombos {
+		fragmentCombos[combo] = value
+	}
+
 	for combo, value := range comboOverrides {
 		if _, exists := vertexCombos[combo]; exists {
 			vertexCombos[combo] = value
@@ -93,6 +105,17 @@ func preprocessShader(vertexSource, fragmentSource, includePath string, comboOve
 	fragmentSource, fragmentUniforms := preprocessUniforms(fragmentSource, 3)
 	fragmentSource = preprocessFragColor(fragmentSource)
 
+	for i := range vertexUniforms {
+		if value, exists := vertexUniformDefaults[vertexUniforms[i].Name]; exists {
+			vertexUniforms[i].Default = value
+		}
+	}
+	for i := range fragmentUniforms {
+		if value, exists := fragmentUniformDefaults[fragmentUniforms[i].Name]; exists {
+			fragmentUniforms[i].Default = value
+		}
+	}
+
 	return PreprocessedShader{
 		VertexGLSL:       vertexSource,
 		FragmentGLSL:     fragmentSource,
@@ -134,6 +157,33 @@ func appendGLSL450Header(source string) string {
 ` + source
 }
 
+func parseUniformDefaults(source string) map[string][]float32 {
+	reUniform := regexp.MustCompile(`uniform\s*([a-z|A-Z|0-9|_]*)\s*([a-z|A-Z|0-9|_]*)\s*;\s*\/\/\s*({.*})`)
+	matches := reUniform.FindAllStringSubmatch(source, -1)
+	defaults := map[string][]float32{}
+	for _, match := range matches {
+		if match[1] == "sampler2D" {
+			continue
+		}
+		type uniformMeta struct {
+			Default json.RawMessage `json:"default"`
+		}
+		var meta uniformMeta
+		err := json.Unmarshal([]byte(match[3]), &meta)
+		if err != nil {
+			fmt.Printf("warning: unable to parse uniform properties JSON for %s: %s\n", match[2], err.Error())
+			continue
+		}
+		value, err := ParseFloat32AnyJSON(meta.Default)
+		if err != nil {
+			fmt.Printf("warning: unable to parse uniform properties JSON for %s: %s\n", match[2], err.Error())
+			continue
+		}
+		defaults[match[2]] = value
+	}
+	return defaults
+}
+
 func parseCombos(source string) map[string]int {
 	combos := make(map[string]int)
 	reCombo := regexp.MustCompile(`//\s*\[COMBO\]\s*({.*})`)
@@ -147,6 +197,25 @@ func parseCombos(source string) map[string]int {
 			continue
 		}
 		combos[combo.Combo] = combo.Default
+	}
+	return combos
+}
+
+func parseSamplerCombos(source string, boundTextures []bool) map[string]int {
+	combos := make(map[string]int)
+	reSamplerCombo := regexp.MustCompile(`uniform\s*sampler2D\s*([a-z|A-Z|0-9|_]*)\s*;\s*//\s*({.*})`)
+	matches := reSamplerCombo.FindAllStringSubmatch(source, -1)
+	for idx, match := range matches {
+		comboJSON := match[2]
+		combo := samplerComboMeta{}
+		err := json.Unmarshal([]byte(comboJSON), &combo)
+		if err != nil {
+			fmt.Printf("warning: unable to parse combo JSON %s: %s\n", comboJSON, err.Error())
+			continue
+		}
+		if combo.Combo != "" && idx < len(boundTextures) && boundTextures[idx] {
+			combos[combo.Combo] = 1
+		}
 	}
 	return combos
 }
@@ -191,10 +260,10 @@ func preprocessVertexAttributes(source string) (string, []AttributeInfo) {
 }
 
 func findAndRemoveVarying(source string) (string, map[string]AttributeInfo) {
-	reUniform := regexp.MustCompile(`varying\s*([a-z|A-Z|0-9|_]*)\s*([a-z|A-Z|0-9|_]*)\s*;`)
+	reVarying := regexp.MustCompile(`varying\s*([a-z|A-Z|0-9|_]*)\s*([a-z|A-Z|0-9|_]*)\s*;`)
 	varying := map[string]AttributeInfo{}
-	source = reUniform.ReplaceAllStringFunc(source, func(match string) string {
-		submatches := reUniform.FindStringSubmatch(match)
+	source = reVarying.ReplaceAllStringFunc(source, func(match string) string {
+		submatches := reVarying.FindStringSubmatch(match)
 		varying[submatches[2]] = AttributeInfo{
 			Name: string(submatches[2]),
 			Type: string(submatches[1]),

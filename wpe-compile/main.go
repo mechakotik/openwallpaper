@@ -33,6 +33,12 @@ type UniformCMapping struct {
 	Alignment  int
 }
 
+type EffectPassMeta struct {
+	Shader    CompiledShader
+	Constants map[string][]float32
+	Textures  []ImportedTexture
+}
+
 var (
 	args struct {
 		Input       string `arg:"positional,required"`
@@ -93,6 +99,10 @@ ow_texture_info texture_info = {
     .format = OW_TEXTURE_RGBA8_UNORM,
 };
 
+ow_id screen_buffers[3];
+
+float time = 0.0f;
+
 `
 
 	initSource += `    ow_begin_copy_pass();
@@ -100,12 +110,29 @@ ow_texture_info texture_info = {
     vertex_quad_buffer = ow_create_buffer(OW_BUFFER_VERTEX, sizeof(vertex_quad));
     ow_update_buffer(vertex_quad_buffer, 0, vertex_quad, sizeof(vertex_quad));
 
+    {
+        uint32_t width, height;
+        ow_get_screen_size(&width, &height);
+
+        ow_texture_info screen_texture_info = {
+            .width = width,
+            .height = height,
+            .format = OW_TEXTURE_RGBA8_UNORM,
+            .render_target = true,
+            .mip_levels = 1,
+        };
+
+        screen_buffers[1] = ow_create_texture(&screen_texture_info);
+        screen_buffers[2] = ow_create_texture(&screen_texture_info);
+    }
 `
+
+	updateSource += "    time += delta;\n"
 
 	glslHeaders = readGLSLHeaders()
 	lastObjectID := -1
 
-	for _, object := range scene.Objects {
+	for objectIdx, object := range scene.Objects {
 		lastObjectID++
 		if object.Image == "" {
 			continue
@@ -142,22 +169,23 @@ ow_texture_info texture_info = {
 			continue
 		}
 
-		shader, err := compileShader(material.Shader, material.Combos)
+		shader, err := compileShader(material.Shader, []bool{}, material.Combos)
 		if err != nil {
 			fmt.Printf("warning: skipping material %s because compiling shader failed: %s\n", materialPath, err)
 			continue
 		}
 
-		headerSource += fmt.Sprintf("ow_id object%d_image_sampler;\n", lastObjectID)
+		{
+			headerSource += fmt.Sprintf("ow_id object%d_image_sampler;\n", lastObjectID)
 
-		initSource += fmt.Sprintf(`
+			initSource += fmt.Sprintf(`
     {
         ow_sampler_info sampler_info = {
             .min_filter = OW_FILTER_LINEAR,
             .mag_filter = OW_FILTER_LINEAR,
             .mip_filter = OW_FILTER_LINEAR,
-            .wrap_x = OW_WRAP_REPEAT,
-            .wrap_y = OW_WRAP_REPEAT,
+            .wrap_x = OW_WRAP_MIRROR,
+            .wrap_y = OW_WRAP_MIRROR,
         };
 
         object%d_image_sampler = ow_create_sampler(&sampler_info);
@@ -165,9 +193,14 @@ ow_texture_info texture_info = {
 
 `, lastObjectID)
 
-		headerSource += fmt.Sprintf("ow_id object%d_image_pipeline;\n", lastObjectID)
+			headerSource += fmt.Sprintf("ow_id object%d_image_pipeline;\n", lastObjectID)
 
-		initSource += fmt.Sprintf(`
+			colorTargetFormat := "OW_TEXTURE_SWAPCHAIN"
+			if len(object.Effects) >= 1 {
+				colorTargetFormat = "OW_TEXTURE_RGBA8_UNORM"
+			}
+
+			initSource += fmt.Sprintf(`
     {
         ow_vertex_binding_info vertex_binding_info = {
             .slot = 0,
@@ -179,6 +212,7 @@ ow_texture_info texture_info = {
             .vertex_bindings_count = 1,
             .vertex_attributes = vertex_attributes,
             .vertex_attributes_count = 2,
+            .color_target_format = %s,
             .vertex_shader = shader%d_vertex,
             .fragment_shader = shader%d_fragment,
             .blend_mode = OW_BLEND_ALPHA,
@@ -188,26 +222,38 @@ ow_texture_info texture_info = {
         object%d_image_pipeline = ow_create_pipeline(&pipeline_info);
     }
 
-`, shader.ID, shader.ID, lastObjectID)
+`, colorTargetFormat, shader.ID, shader.ID, lastObjectID)
 
-		updateSource += fmt.Sprintf(`
+			colorTarget := 0
+			if len(object.Effects) >= 1 {
+				colorTarget = 1
+			}
+
+			clearColor := "true"
+			if colorTarget == 0 && objectIdx != 0 {
+				clearColor = "false"
+			}
+
+			updateSource += fmt.Sprintf(`
     {
         ow_pass_info pass_info = {0};
+		pass_info.color_target = screen_buffers[%d];
+		pass_info.clear_color = %s;
         ow_begin_render_pass(&pass_info);
 
         ow_texture_binding texture_bindings[%d];
-`, len(textures))
+`, colorTarget, clearColor, len(textures))
 
-		for i, texture := range textures {
-			updateSource += fmt.Sprintf(`        texture_bindings[%d] = (ow_texture_binding){
+			for i, texture := range textures {
+				updateSource += fmt.Sprintf(`        texture_bindings[%d] = (ow_texture_binding){
             .slot = %d,
             .texture = texture%d,
             .sampler = object%d_image_sampler,
         };
 `, i, i, texture.ID, lastObjectID)
-		}
+			}
 
-		updateSource += fmt.Sprintf(`
+			updateSource += fmt.Sprintf(`
         ow_bindings_info bindings_info = {
             .vertex_buffers = &vertex_quad_buffer,
             .vertex_buffers_count = 1,
@@ -217,28 +263,39 @@ ow_texture_info texture_info = {
 
 `, len(textures))
 
-		/*updateSource += fmt.Sprintf(`        shader%d_vertex_uniforms_t vertex_uniforms = {0};
-		        shader%d_fragment_uniforms_t fragment_uniforms = {0};
+			updateSource += fmt.Sprintf(`        shader%d_vertex_uniforms_t vertex_uniforms = {0};
+        shader%d_fragment_uniforms_t fragment_uniforms = {0};
 
-		`, shader.ID, shader.ID)*/
+`, shader.ID, shader.ID)
+		}
 
-		updateSource += `shader0_vertex_uniforms_t vertex_uniforms = {
-    .g_ModelViewProjectionMatrix = (glsl_mat4){ .at = {
-        {1, 0, 0, 0},
-        {0, 1, 0, 0},
-        {0, 0, 1, 0},
-        {0, 0, 0, 1},
-    }},
-    .g_Texture0Rotation = (glsl_vec4){.x = 1.0f, .y = 0.0f, .z = 0.0f, .w = 1.0f},
-    .g_Texture0Translation = (glsl_vec2){.x = 0.0f, .y = 0.0f},
-};
+		for _, uniform := range shader.VertexUniforms {
+			if uniform.Name == "g_ModelViewProjectionMatrix" {
+				updateSource += `        vertex_uniforms.g_ModelViewProjectionMatrix = (glsl_mat4){ .at = {
+            {1, 0, 0, 0},
+            {0, 1, 0, 0},
+            {0, 0, 1, 0},
+            {0, 0, 0, 1},
+        }};
 `
+			} else if uniform.Name == "g_Texture0Rotation" {
+				updateSource += "        vertex_uniforms.g_Texture0Rotation = (glsl_vec4){.x = 1.0f, .y = 0.0f, .z = 0.0f, .w = 1.0f};\n"
+			} else {
+				updateSource += fmt.Sprintf("        vertex_uniforms.%s = (glsl_%s){.at = {", uniform.Name, uniform.Type)
+				for _, value := range uniform.Default {
+					updateSource += fmt.Sprintf("%f, ", value)
+				}
+				updateSource += "}};\n"
+			}
+		}
 
-		updateSource += `shader0_fragment_uniforms_t fragment_uniforms = {
-    .g_Brightness = (glsl_float){.x = 1.0f},
-    .g_UserAlpha  = (glsl_float){.x = 1.0f},
-};
-`
+		for _, uniform := range shader.FragmentUniforms {
+			updateSource += fmt.Sprintf("        fragment_uniforms.%s = (glsl_%s){.at = {", uniform.Name, uniform.Type)
+			for _, value := range uniform.Default {
+				updateSource += fmt.Sprintf("%f, ", value)
+			}
+			updateSource += "}};\n"
+		}
 
 		updateSource += fmt.Sprintf(`        ow_push_uniform_data(OW_SHADER_VERTEX, 0, &vertex_uniforms, sizeof(vertex_uniforms));
         ow_push_uniform_data(OW_SHADER_FRAGMENT, 0, &fragment_uniforms, sizeof(fragment_uniforms));
@@ -249,25 +306,240 @@ ow_texture_info texture_info = {
 
 `, lastObjectID)
 
-		/*for _, effect := range object.Effects {
-			for _, pass := range effect.Passes {
+		lastEffectPassID := -1
+		lastColorTarget := 1
+
+		for effectIdx, effectInstance := range object.Effects {
+			ok = true
+			effect, err := parseEffect(pkgMap[effectInstance.File])
+			if err != nil {
+				fmt.Printf("warning: skipping effect %s because parsing effect JSON %s failed: %s\n", effectInstance.Name, effectInstance.File, err)
+				continue
+			}
+
+			allBoundTextures := [][]bool{}
+			for _, pass := range effectInstance.Passes {
+				boundTextures := []bool{}
+				for _, textureName := range pass.Textures {
+					boundTextures = append(boundTextures, textureName != nil)
+				}
+				allBoundTextures = append(allBoundTextures, boundTextures)
+			}
+
+			meta := make([]EffectPassMeta, len(effect.Passes))
+			for idx, pass := range effect.Passes {
+				effectMaterial, err := parseMaterialJSON(pkgMap[pass.Material])
+				if err != nil {
+					fmt.Printf("warning: skipping effect %s because parsing effect material JSON %s failed: %s\n", effectInstance.Name, pass.Material, err)
+					ok = false
+					break
+				}
+				meta[idx].Shader, err = compileShader(effectMaterial.Shader, allBoundTextures[idx], effectMaterial.Combos)
+				if err != nil {
+					fmt.Printf("warning: skipping material %s because compiling effect shader %s failed: %s\n", materialPath, effectMaterial.Shader, err)
+					ok = false
+					break
+				}
+			}
+			if !ok {
+				continue
+			}
+
+			for idx, pass := range effectInstance.Passes {
 				for _, textureName := range pass.Textures {
 					if textureName == nil {
+						meta[idx].Textures = append(meta[idx].Textures, ImportedTexture{ID: -1})
 						continue
 					}
-					err := addTexture(*textureName)
+					texture, err := importTexture(*textureName)
 					if err != nil {
 						fmt.Printf("warning: skipping material %s because loading texture failed: %s\n", materialPath, err)
 						ok = false
 						break
 					}
+					meta[idx].Textures = append(meta[idx].Textures, texture)
 				}
+				for len(meta[idx].Textures) < len(meta[idx].Shader.Samplers) {
+					meta[idx].Textures = append(meta[idx].Textures, ImportedTexture{ID: -1})
+				}
+				meta[idx].Constants = pass.Constants
+			}
+			if !ok {
+				continue
+			}
+
+			for idx, pass := range meta {
+				lastEffectPassID++
+				passPrefix := fmt.Sprintf("object%d_effect_pass%d", lastObjectID, lastEffectPassID)
+				headerSource += fmt.Sprintf("ow_id %s_sampler;\n", passPrefix)
+
+				initSource += fmt.Sprintf(`
+    {
+        ow_sampler_info sampler_info = {
+            .min_filter = OW_FILTER_LINEAR,
+            .mag_filter = OW_FILTER_LINEAR,
+            .mip_filter = OW_FILTER_LINEAR,
+            .wrap_x = OW_WRAP_MIRROR,
+            .wrap_y = OW_WRAP_MIRROR,
+        };
+
+        %s_sampler = ow_create_sampler(&sampler_info);
+    }
+
+`, passPrefix)
+
+				headerSource += fmt.Sprintf("ow_id %s_pipeline;\n", passPrefix)
+
+				colorTargetFormat := "OW_TEXTURE_SWAPCHAIN"
+				if idx != len(meta)-1 || effectIdx != len(object.Effects)-1 {
+					colorTargetFormat = "OW_TEXTURE_RGBA8_UNORM"
+				}
+
+				initSource += fmt.Sprintf(`
+    {
+        ow_vertex_binding_info vertex_binding_info = {
+            .slot = 0,
+            .stride = sizeof(vertex_t),
+        };
+
+        ow_pipeline_info pipeline_info = {
+            .vertex_bindings = &vertex_binding_info,
+            .vertex_bindings_count = 1,
+            .vertex_attributes = vertex_attributes,
+            .vertex_attributes_count = 2,
+            .color_target_format = %s,
+            .vertex_shader = shader%d_vertex,
+            .fragment_shader = shader%d_fragment,
+            .blend_mode = OW_BLEND_ALPHA,
+            .topology = OW_TOPOLOGY_TRIANGLES_STRIP,
+        };
+
+        %s_pipeline = ow_create_pipeline(&pipeline_info);
+    }
+
+`, colorTargetFormat, pass.Shader.ID, pass.Shader.ID, passPrefix)
+
+				colorTarget := 0
+				if idx != len(meta)-1 || effectIdx != len(object.Effects)-1 {
+					if lastColorTarget == 0 {
+						colorTarget = 1
+					} else {
+						colorTarget = 3 - lastColorTarget
+					}
+				}
+
+				clearColor := "true"
+				if colorTarget == 0 && objectIdx != 0 {
+					clearColor = "false"
+				}
+
+				updateSource += fmt.Sprintf(`
+    {
+        ow_pass_info pass_info = {0};
+		pass_info.color_target = screen_buffers[%d];
+		pass_info.clear_color = %s;
+        ow_begin_render_pass(&pass_info);
+
+        ow_texture_binding texture_bindings[%d];
+`, colorTarget, clearColor, len(pass.Textures))
+
+				for i, texture := range pass.Textures {
+					if texture.ID == -1 {
+						updateSource += fmt.Sprintf(`        texture_bindings[%d] = (ow_texture_binding){
+            .slot = %d,
+            .texture = screen_buffers[%d],
+            .sampler = %s_sampler,
+        };
+`, i, i, lastColorTarget, passPrefix)
+					} else {
+						updateSource += fmt.Sprintf(`        texture_bindings[%d] = (ow_texture_binding){
+            .slot = %d,
+            .texture = texture%d,
+            .sampler = %s_sampler,
+        };
+`, i, i, texture.ID, passPrefix)
+					}
+				}
+
+				updateSource += fmt.Sprintf(`
+        ow_bindings_info bindings_info = {
+            .vertex_buffers = &vertex_quad_buffer,
+            .vertex_buffers_count = 1,
+            .texture_bindings = texture_bindings,
+            .texture_bindings_count = %d
+        };
+
+`, len(pass.Textures))
+
+				updateSource += fmt.Sprintf(`        shader%d_vertex_uniforms_t vertex_uniforms = {0};
+        shader%d_fragment_uniforms_t fragment_uniforms = {0};
+
+`, pass.Shader.ID, pass.Shader.ID)
+
+				for _, uniform := range pass.Shader.VertexUniforms {
+					if uniform.Name == "g_ModelViewProjectionMatrix" {
+						updateSource += `        vertex_uniforms.g_ModelViewProjectionMatrix = (glsl_mat4){ .at = {
+            {1, 0, 0, 0},
+            {0, 1, 0, 0},
+            {0, 0, 1, 0},
+            {0, 0, 0, 1},
+        }};
+`
+					} else if uniform.Name == "g_Texture0Rotation" {
+						updateSource += "        vertex_uniforms.g_Texture0Rotation = (glsl_vec4){.x = 1.0f, .y = 0.0f, .z = 0.0f, .w = 1.0f};\n"
+					} else if strings.HasSuffix(uniform.Name, "Resolution") {
+						updateSource += fmt.Sprintf("        vertex_uniforms.%s = (glsl_vec4){.x = 1920, .y = 1080, .z = 1920, .w = 1080};\n", uniform.Name)
+					} else if uniform.Name == "g_Time" {
+						updateSource += "        vertex_uniforms.g_Time = (glsl_float){.x = time};\n"
+					} else {
+						updateSource += fmt.Sprintf("        vertex_uniforms.%s = (glsl_%s){.at = {", uniform.Name, uniform.Type)
+						value := uniform.Default
+						constantName, _ := strings.CutPrefix(uniform.Name, "g_")
+						constantName = strings.ToLower(constantName)
+						if override, exists := pass.Constants[constantName]; exists {
+							value = override
+						}
+						for _, value := range value {
+							updateSource += fmt.Sprintf("%f, ", value)
+						}
+						updateSource += "}};\n"
+					}
+				}
+
+				for _, uniform := range pass.Shader.FragmentUniforms {
+					if uniform.Name == "g_Time" {
+						updateSource += "        fragment_uniforms.g_Time = (glsl_float){.x = time};\n"
+					} else {
+						updateSource += fmt.Sprintf("        fragment_uniforms.%s = (glsl_%s){.at = {", uniform.Name, uniform.Type)
+						value := uniform.Default
+						constantName, _ := strings.CutPrefix(uniform.Name, "g_")
+						constantName = strings.ToLower(constantName)
+						if override, exists := pass.Constants[constantName]; exists {
+							value = override
+						}
+						for _, value := range value {
+							updateSource += fmt.Sprintf("%f, ", value)
+						}
+						updateSource += "}};\n"
+					}
+				}
+
+				updateSource += fmt.Sprintf(`        ow_push_uniform_data(OW_SHADER_VERTEX, 0, &vertex_uniforms, sizeof(vertex_uniforms));
+        ow_push_uniform_data(OW_SHADER_FRAGMENT, 0, &fragment_uniforms, sizeof(fragment_uniforms));
+
+        ow_render_geometry(%s_pipeline, &bindings_info, 0, 4, 1);
+        ow_end_render_pass();
+    }
+
+`, passPrefix)
+
+				lastColorTarget = colorTarget
 			}
 		}
 
 		if !ok {
 			continue
-		}*/
+		}
 	}
 
 	initSource += "    ow_end_copy_pass();\n"
@@ -412,7 +684,7 @@ func readGLSLHeaders() map[string]string {
 	return res
 }
 
-func compileShader(shaderName string, defines map[string]int) (CompiledShader, error) {
+func compileShader(shaderName string, boundTextures []bool, defines map[string]int) (CompiledShader, error) {
 	lastShaderID++
 	vertexShaderPath := "shaders/" + shaderName + ".vert"
 	fragmentShaderPath := "shaders/" + shaderName + ".frag"
@@ -439,7 +711,7 @@ func compileShader(shaderName string, defines map[string]int) (CompiledShader, e
 		return CompiledShader{}, err
 	}
 
-	transformed, err := preprocessShader(string(vertexShaderBytes), string(fragmentShaderBytes), "assets/shaders", defines)
+	transformed, err := preprocessShader(string(vertexShaderBytes), string(fragmentShaderBytes), "assets/shaders", boundTextures, defines)
 	if err != nil {
 		return CompiledShader{}, err
 	}
