@@ -217,11 +217,6 @@ bool hyprland_output_hidden(wlroots_output_state* state) {
 
 bool wd_wlroots_output_hidden(void* data) {
     wlroots_output_state* odata = (wlroots_output_state*)data;
-
-    // TODO: don't use shell here
-    if(system("pgrep \"swaylock|waylock|gtklock|hyprlock\" > /dev/null") == 0) {
-        return true;
-    }
     if(odata->session_type == SESSION_HYPRLAND) {
         return hyprland_output_hidden(odata);
     }
