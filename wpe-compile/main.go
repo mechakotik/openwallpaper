@@ -50,17 +50,24 @@ type CodegenPassData struct {
 	ObjectID          int
 	PassID            int
 	ShaderID          int
-	ColorTarget       int
+	ColorTarget       string
 	ColorTargetFormat string
 	ClearColor        bool
 	TextureBindings   []CodegenTextureBindingData
 	UniformSetupCode  string
 }
 
+type TempBufferParameters struct {
+	Width  int
+	Height int
+	Number int
+}
+
 type CodegenData struct {
-	Textures []ImportedTexture
-	Shaders  []CompiledShader
-	Passes   []CodegenPassData
+	Textures    []ImportedTexture
+	Shaders     []CompiledShader
+	Passes      []CodegenPassData
+	TempBuffers []TempBufferParameters
 }
 
 var (
@@ -140,19 +147,31 @@ func main() {
 			continue
 		}
 
+		tempBuffers := [2]int{}
+		tempBuffers[0] = getTempBuffer(TempBufferParameters{
+			Width:  int(object.Size.X + 0.5),
+			Height: int(object.Size.Y + 0.5),
+			Number: 0,
+		})
+		tempBuffers[1] = getTempBuffer(TempBufferParameters{
+			Width:  int(object.Size.X + 0.5),
+			Height: int(object.Size.Y + 0.5),
+			Number: 1,
+		})
+
 		{
 			colorTargetFormat := "OW_TEXTURE_SWAPCHAIN"
 			if len(object.Effects) >= 1 {
 				colorTargetFormat = "OW_TEXTURE_RGBA8_UNORM"
 			}
 
-			colorTarget := 0
+			colorTarget := "0"
 			if len(object.Effects) >= 1 {
-				colorTarget = 1
+				colorTarget = fmt.Sprintf("temp_buffers[%d]", tempBuffers[0])
 			}
 
 			clearColor := true
-			if colorTarget == 0 && objectIdx != 0 {
+			if colorTarget == "0" && objectIdx != 0 {
 				clearColor = false
 			}
 
@@ -206,7 +225,7 @@ func main() {
 		}
 
 		lastPassID := 0
-		lastColorTarget := 1
+		lastColorTarget := fmt.Sprintf("temp_buffers[%d]", tempBuffers[0])
 
 		for effectIdx, effectInstance := range object.Effects {
 			ok = true
@@ -275,17 +294,17 @@ func main() {
 					colorTargetFormat = "OW_TEXTURE_RGBA8_UNORM"
 				}
 
-				colorTarget := 0
+				colorTarget := "0"
 				if idx != len(meta)-1 || effectIdx != len(object.Effects)-1 {
-					if lastColorTarget == 0 {
-						colorTarget = 1
+					if lastColorTarget == fmt.Sprintf("temp_buffers[%d]", tempBuffers[0]) {
+						colorTarget = fmt.Sprintf("temp_buffers[%d]", tempBuffers[1])
 					} else {
-						colorTarget = 3 - lastColorTarget
+						colorTarget = fmt.Sprintf("temp_buffers[%d]", tempBuffers[0])
 					}
 				}
 
 				clearColor := true
-				if colorTarget == 0 && objectIdx != 0 {
+				if colorTarget == "0" && objectIdx != 0 {
 					clearColor = false
 				}
 
@@ -302,7 +321,7 @@ func main() {
 					if texture.ID == -1 {
 						passData.TextureBindings = append(passData.TextureBindings, CodegenTextureBindingData{
 							Slot:    slot,
-							Texture: fmt.Sprintf("screen_buffers[%d]", lastColorTarget),
+							Texture: lastColorTarget,
 						})
 					} else {
 						passData.TextureBindings = append(passData.TextureBindings, CodegenTextureBindingData{
@@ -484,6 +503,16 @@ func importTexture(textureName string) (ImportedTexture, error) {
 	codegenData.Textures = append(codegenData.Textures, textureMap[textureName])
 
 	return textureMap[textureName], nil
+}
+
+func getTempBuffer(params TempBufferParameters) int {
+	for idx, curParams := range codegenData.TempBuffers {
+		if curParams == params {
+			return idx
+		}
+	}
+	codegenData.TempBuffers = append(codegenData.TempBuffers, params)
+	return len(codegenData.TempBuffers) - 1
 }
 
 func compileShader(shaderName string, boundTextures []bool, defines map[string]int) (CompiledShader, error) {

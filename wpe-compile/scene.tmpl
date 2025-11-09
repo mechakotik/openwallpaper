@@ -25,8 +25,8 @@ ow_vertex_attribute vertex_attributes[2] = {
     { .slot = 0, .location = 1, .type = OW_ATTRIBUTE_FLOAT2, .offset = sizeof(float) * 3 },
 };
 
+ow_id temp_buffers[{{len .TempBuffers}}];
 ow_id vertex_quad_buffer;
-ow_id screen_buffers[3];
 ow_id linear_mirror_sampler;
 
 ow_texture_info texture_info = {
@@ -42,21 +42,19 @@ __attribute__((export_name("init"))) void init() {
     vertex_quad_buffer = ow_create_buffer(OW_BUFFER_VERTEX, sizeof(vertex_quad));
     ow_update_buffer(vertex_quad_buffer, 0, vertex_quad, sizeof(vertex_quad));
 
+{{range $idx, $buffer := .TempBuffers}}
     {
-        uint32_t width, height;
-        ow_get_screen_size(&width, &height);
-
-        ow_texture_info screen_texture_info = {
-            .width = width,
-            .height = height,
+        ow_texture_info temp_texture_info = {
+            .width = {{$buffer.Width}},
+            .height = {{$buffer.Height}},
             .format = OW_TEXTURE_RGBA8_UNORM,
             .render_target = true,
             .mip_levels = 1,
         };
 
-        screen_buffers[1] = ow_create_texture(&screen_texture_info);
-        screen_buffers[2] = ow_create_texture(&screen_texture_info);
+        temp_buffers[{{$idx}}] = ow_create_texture(&temp_texture_info);
     }
+{{end}}
 
     {
         ow_sampler_info sampler_info = {
@@ -127,7 +125,7 @@ typedef struct {{"{"}}{{range $_, $uniform := .FragmentUniforms}}
 
 {{define "pass_update"}}    {{"{"}}
         ow_pass_info pass_info = {0};
-        pass_info.color_target = screen_buffers[{{.ColorTarget}}];
+        pass_info.color_target = {{.ColorTarget}};
         pass_info.clear_color = {{.ClearColor}};
         ow_begin_render_pass(&pass_info);
 
