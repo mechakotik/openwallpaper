@@ -12,10 +12,11 @@ import (
 )
 
 type UniformInfo struct {
-	Name      string
-	Type      string
-	ArraySize int
-	Default   []float32
+	Name         string
+	ConstantName string
+	Type         string
+	ArraySize    int
+	Default      []float32
 }
 
 type AttributeInfo struct {
@@ -45,7 +46,9 @@ func preprocessShader(vertexSource, fragmentSource, includePath string, boundTex
 	vertexSource = renameSymbol(vertexSource, "sample", "sample_")
 	fragmentSource = renameSymbol(fragmentSource, "sample", "sample_")
 
+	vertexUniformConstantNames := parseUniformConstantNames(vertexSource)
 	vertexUniformDefaults := parseUniformDefaults(vertexSource)
+	fragmentUniformConstantNames := parseUniformConstantNames(fragmentSource)
 	fragmentUniformDefaults := parseUniformDefaults(fragmentSource)
 
 	vertexSource = appendGLSL450Header(vertexSource)
@@ -106,11 +109,25 @@ func preprocessShader(vertexSource, fragmentSource, includePath string, boundTex
 	fragmentSource = preprocessFragColor(fragmentSource)
 
 	for i := range vertexUniforms {
+		if constantName, exists := vertexUniformConstantNames[vertexUniforms[i].Name]; exists {
+			vertexUniforms[i].ConstantName = constantName
+		} else {
+			constantName, _ := strings.CutPrefix(vertexUniforms[i].Name, "g_")
+			constantName = strings.ToLower(constantName)
+			vertexUniforms[i].ConstantName = constantName
+		}
 		if value, exists := vertexUniformDefaults[vertexUniforms[i].Name]; exists {
 			vertexUniforms[i].Default = value
 		}
 	}
 	for i := range fragmentUniforms {
+		if constantName, exists := fragmentUniformConstantNames[fragmentUniforms[i].Name]; exists {
+			fragmentUniforms[i].ConstantName = constantName
+		} else {
+			constantName, _ := strings.CutPrefix(fragmentUniforms[i].Name, "g_")
+			constantName = strings.ToLower(constantName)
+			fragmentUniforms[i].ConstantName = constantName
+		}
 		if value, exists := fragmentUniformDefaults[fragmentUniforms[i].Name]; exists {
 			fragmentUniforms[i].Default = value
 		}
@@ -164,6 +181,32 @@ func appendGLSL450Header(source string) string {
 #define lerp mix
 
 ` + source
+}
+
+func parseUniformConstantNames(source string) map[string]string {
+	reUniform := regexp.MustCompile(`uniform\s*([a-z|A-Z|0-9|_]*)\s*([a-z|A-Z|0-9|_]*)\s*;\s*\/\/\s*({.*})`)
+	matches := reUniform.FindAllStringSubmatch(source, -1)
+	constantNames := map[string]string{}
+	for _, match := range matches {
+		if match[1] == "sampler2D" {
+			continue
+		}
+		type uniformMeta struct {
+			ConstantName json.RawMessage `json:"material"`
+		}
+		var meta uniformMeta
+		err := json.Unmarshal([]byte(match[3]), &meta)
+		if err != nil {
+			fmt.Printf("warning: unable to parse uniform properties JSON for %s: %s\n", match[2], err.Error())
+			continue
+		}
+		constantName := string(meta.ConstantName)
+		if constantName != "null" {
+			constantName = strings.Trim(constantName, "\"")
+			constantNames[match[2]] = constantName
+		}
+	}
+	return constantNames
 }
 
 func parseUniformDefaults(source string) map[string][]float32 {

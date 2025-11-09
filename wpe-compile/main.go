@@ -351,9 +351,7 @@ func main() {
 					} else {
 						uniformSetupCode += fmt.Sprintf("        vertex_uniforms.%s = (glsl_%s){.at = {", uniform.Name, uniform.Type)
 						value := uniform.Default
-						constantName, _ := strings.CutPrefix(uniform.Name, "g_")
-						constantName = strings.ToLower(constantName)
-						if override, exists := pass.Constants[constantName]; exists {
+						if override, exists := pass.Constants[uniform.ConstantName]; exists {
 							value = override
 						}
 						for _, value := range value {
@@ -369,9 +367,7 @@ func main() {
 					} else {
 						uniformSetupCode += fmt.Sprintf("        fragment_uniforms.%s = (glsl_%s){.at = {", uniform.Name, uniform.Type)
 						value := uniform.Default
-						constantName, _ := strings.CutPrefix(uniform.Name, "g_")
-						constantName = strings.ToLower(constantName)
-						if override, exists := pass.Constants[constantName]; exists {
+						if override, exists := pass.Constants[uniform.ConstantName]; exists {
 							value = override
 						}
 						for _, value := range value {
