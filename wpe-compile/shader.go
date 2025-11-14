@@ -17,6 +17,7 @@ type UniformInfo struct {
 	Type         string
 	ArraySize    int
 	Default      []float32
+	DefaultSet   bool
 }
 
 type AttributeInfo struct {
@@ -118,6 +119,7 @@ func preprocessShader(vertexSource, fragmentSource, includePath string, boundTex
 		}
 		if value, exists := vertexUniformDefaults[vertexUniforms[i].Name]; exists {
 			vertexUniforms[i].Default = value
+			vertexUniforms[i].DefaultSet = true
 		}
 	}
 	for i := range fragmentUniforms {
@@ -130,6 +132,7 @@ func preprocessShader(vertexSource, fragmentSource, includePath string, boundTex
 		}
 		if value, exists := fragmentUniformDefaults[fragmentUniforms[i].Name]; exists {
 			fragmentUniforms[i].Default = value
+			fragmentUniforms[i].DefaultSet = true
 		}
 	}
 

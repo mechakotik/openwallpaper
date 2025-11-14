@@ -271,24 +271,28 @@ func main() {
 `
 				} else if uniform.Name == "g_Texture0Rotation" {
 					uniformSetupCode += "        vertex_uniforms.g_Texture0Rotation = (glsl_vec4){.x = 1.0f, .y = 0.0f, .z = 0.0f, .w = 1.0f};\n"
-				} else {
+				} else if uniform.DefaultSet {
 					uniformSetupCode += fmt.Sprintf("        vertex_uniforms.%s = (glsl_%s){.at = {", uniform.Name, uniform.Type)
 					for _, value := range uniform.Default {
 						uniformSetupCode += fmt.Sprintf("%f, ", value)
 					}
 					uniformSetupCode += "}};\n"
+				} else {
+					fmt.Printf("warning: unknown uniform %s\n", uniform.Name)
 				}
 			}
 
 			for _, uniform := range shader.FragmentUniforms {
 				if uniform.Name == "g_ParallaxPosition" && transformEnabled {
 					uniformSetupCode += "        fragment_uniforms.g_ParallaxPosition = (glsl_vec2){ .x = matrices.parallax_position_x, .y = matrices.parallax_position_y };\n"
-				} else {
+				} else if uniform.DefaultSet {
 					uniformSetupCode += fmt.Sprintf("        fragment_uniforms.%s = (glsl_%s){.at = {", uniform.Name, uniform.Type)
 					for _, value := range uniform.Default {
 						uniformSetupCode += fmt.Sprintf("%f, ", value)
 					}
 					uniformSetupCode += "}};\n"
+				} else {
+					fmt.Printf("warning: unknown uniform %s\n", uniform.Name)
 				}
 			}
 
@@ -460,7 +464,7 @@ func main() {
 						uniformSetupCode += fmt.Sprintf("        vertex_uniforms.%s = (glsl_vec4){.x = 1920, .y = 1080, .z = 1920, .w = 1080};\n", uniform.Name)
 					} else if uniform.Name == "g_Time" {
 						uniformSetupCode += "        vertex_uniforms.g_Time = (glsl_float){.x = time};\n"
-					} else {
+					} else if uniform.DefaultSet {
 						uniformSetupCode += fmt.Sprintf("        vertex_uniforms.%s = (glsl_%s){.at = {", uniform.Name, uniform.Type)
 						value := uniform.Default
 						if override, exists := pass.Constants[uniform.ConstantName]; exists {
@@ -470,6 +474,8 @@ func main() {
 							uniformSetupCode += fmt.Sprintf("%f, ", value)
 						}
 						uniformSetupCode += "}};\n"
+					} else {
+						fmt.Printf("warning: unknown uniform %s\n", uniform.Name)
 					}
 				}
 
@@ -478,7 +484,7 @@ func main() {
 						uniformSetupCode += "        fragment_uniforms.g_Time = (glsl_float){.x = time};\n"
 					} else if uniform.Name == "g_ParallaxPosition" && transformEnabled {
 						uniformSetupCode += "        fragment_uniforms.g_ParallaxPosition = (glsl_vec2){ .x = matrices.parallax_position_x, .y = matrices.parallax_position_y };\n"
-					} else {
+					} else if uniform.DefaultSet {
 						uniformSetupCode += fmt.Sprintf("        fragment_uniforms.%s = (glsl_%s){.at = {", uniform.Name, uniform.Type)
 						value := uniform.Default
 						if override, exists := pass.Constants[uniform.ConstantName]; exists {
@@ -488,6 +494,8 @@ func main() {
 							uniformSetupCode += fmt.Sprintf("%f, ", value)
 						}
 						uniformSetupCode += "}};\n"
+					} else {
+						fmt.Printf("warning: unknown uniform %s\n", uniform.Name)
 					}
 				}
 
@@ -577,20 +585,8 @@ func importTexture(textureName string) (ImportedTexture, error) {
 	if _, exists := textureMap[textureName]; exists {
 		return textureMap[textureName], nil
 	}
-	if textureName == "_rt_imageLayerComposite_id_a" {
-		return ImportedTexture{ID: -1}, nil
-	}
-	if textureName == "_rt_imageLayerComposite_id_b" {
-		return ImportedTexture{ID: -2}, nil
-	}
 	if textureName == "_rt_FullFrameBuffer" {
-		return ImportedTexture{ID: -3}, nil
-	}
-	if textureName == "_rt_FullCompoBuffer1_fullscreen_id" {
-		return ImportedTexture{ID: -4}, nil
-	}
-	if textureName == "_rt_FullCompoBuffer1_id_id" {
-		return ImportedTexture{ID: -5}, nil
+		return ImportedTexture{ID: -1}, nil
 	}
 
 	texturePath := "materials/" + textureName + ".tex"
