@@ -2,6 +2,7 @@
 
 #include "openwallpaper.h"
 #include "openwallpaper_std140.h"
+#include "scene_utils.h"
 
 {{range $_, $texture := .Textures}}ow_id texture{{$texture.ID}}; // {{$texture.Name}}
 {{end}}
@@ -35,6 +36,9 @@ ow_texture_info texture_info = {
 };
 
 float time = 0.0f;
+float mouse_x = 0.0f;
+float mouse_y = 0.0f;
+int scale_mode = 2;
 
 __attribute__((export_name("init"))) void init() {
     ow_begin_copy_pass();
@@ -78,6 +82,8 @@ __attribute__((export_name("init"))) void init() {
 
 __attribute__((export_name("update"))) void update(float delta) {
     time += delta;
+    mouse_x += delta;
+    mouse_y += delta;
 {{range $_, $pass := .Passes}}
 {{template "pass_update" $pass}}{{end}}
 }
@@ -100,6 +106,30 @@ typedef struct {{"{"}}{{range $_, $uniform := .FragmentUniforms}}
 {{define "shader_init"}}    shader{{.ID}}_vertex = ow_create_shader_from_file("assets/shader{{.ID}}_vertex.spv", OW_SHADER_VERTEX);
     shader{{.ID}}_fragment = ow_create_shader_from_file("assets/shader{{.ID}}_fragment.spv", OW_SHADER_FRAGMENT);
 {{end}}
+
+{{define "transform_setup"}}
+{{if .Enabled}}
+        transform_matrices_t matrices = compute_transform_matrices((transform_parameters_t){
+			.scene_width = {{.SceneWidth}},
+			.scene_height = {{.SceneHeight}},
+			.origin_x = {{.OriginX}},
+			.origin_y = {{.OriginY}},
+			.origin_z = {{.OriginZ}},
+			.size_x = {{.SizeX}},
+			.size_y = {{.SizeY}},
+			.scale_x = {{.ScaleX}},
+			.scale_y = {{.ScaleY}},
+			.scale_z = {{.ScaleZ}},
+			.parallax_depth_x = {{.ParallaxDepthX}},
+			.parallax_depth_y = {{.ParallaxDepthY}},
+			.parallax_enabled = {{.ParallaxEnabled}},
+			.parallax_amount = {{.ParallaxAmount}},
+			.parallax_mouse_influence = {{.ParallaxMouseInfluence}},
+			.scale_mode = scale_mode,
+			.mouse_x = mouse_x,
+			.mouse_y = mouse_y,
+        });
+{{end}}{{end}}
 
 {{define "pass_init"}}    {{"{"}}
         ow_vertex_binding_info vertex_binding_info = {
@@ -146,6 +176,8 @@ typedef struct {{"{"}}{{range $_, $uniform := .FragmentUniforms}}
         shader{{.ShaderID}}_vertex_uniforms_t vertex_uniforms = {0};
         shader{{.ShaderID}}_fragment_uniforms_t fragment_uniforms = {0};
 
+{{template "transform_setup" .Transform}}
+
 {{.UniformSetupCode}}
         ow_push_uniform_data(OW_SHADER_VERTEX, 0, &vertex_uniforms, sizeof(vertex_uniforms));
         ow_push_uniform_data(OW_SHADER_FRAGMENT, 0, &fragment_uniforms, sizeof(fragment_uniforms));
@@ -154,4 +186,3 @@ typedef struct {{"{"}}{{range $_, $uniform := .FragmentUniforms}}
         ow_end_render_pass();
     {{"}"}}
 {{end}}
-

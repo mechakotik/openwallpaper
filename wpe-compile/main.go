@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	_ "embed"
 	"fmt"
 	"os"
 	"os/exec"
@@ -46,6 +47,25 @@ type CodegenTextureBindingData struct {
 	Texture string
 }
 
+type CodegenTransformData struct {
+	Enabled                bool
+	SceneWidth             float32
+	SceneHeight            float32
+	OriginX                float32
+	OriginY                float32
+	OriginZ                float32
+	SizeX                  float32
+	SizeY                  float32
+	ScaleX                 float32
+	ScaleY                 float32
+	ScaleZ                 float32
+	ParallaxDepthX         float32
+	ParallaxDepthY         float32
+	ParallaxEnabled        bool
+	ParallaxAmount         float32
+	ParallaxMouseInfluence float32
+}
+
 type CodegenPassData struct {
 	ObjectID          int
 	PassID            int
@@ -55,6 +75,7 @@ type CodegenPassData struct {
 	ClearColor        bool
 	TextureBindings   []CodegenTextureBindingData
 	UniformSetupCode  string
+	Transform         CodegenTransformData
 }
 
 type TempBufferParameters struct {
@@ -84,6 +105,12 @@ var (
 	lastShaderID = -1
 	codegenData  CodegenData
 )
+
+//go:embed scene.tmpl
+var sceneTemplateCode []uint8
+
+//go:embed scene_utils.h
+var sceneUtilsCode []uint8
 
 func main() {
 	arg.MustParse(&args)
@@ -191,9 +218,50 @@ func main() {
 				})
 			}
 
-			uniformSetupCode := ""
+			transformEnabled := false
 			for _, uniform := range shader.VertexUniforms {
-				if uniform.Name == "g_ModelViewProjectionMatrix" {
+				if uniform.Name == "g_ModelMatrix" || uniform.Name == "g_ViewProjectionMatrix" || uniform.Name == "g_ModelViewProjectionMatrix" {
+					transformEnabled = true
+				}
+			}
+			for _, uniform := range shader.FragmentUniforms {
+				if uniform.Name == "g_ParallaxPosition" {
+					transformEnabled = true
+				}
+			}
+
+			transformEnabled = transformEnabled && (colorTarget == "0")
+			uniformSetupCode := ""
+
+			if transformEnabled {
+				passData.Transform = CodegenTransformData{
+					Enabled:                true,
+					SceneWidth:             float32(scene.General.Ortho.Width),
+					SceneHeight:            float32(scene.General.Ortho.Height),
+					OriginX:                float32(object.Origin.X),
+					OriginY:                float32(object.Origin.Y),
+					OriginZ:                float32(object.Origin.Z),
+					SizeX:                  float32(object.Size.X),
+					SizeY:                  float32(object.Size.Y),
+					ScaleX:                 float32(object.Scale.X),
+					ScaleY:                 float32(object.Scale.Y),
+					ScaleZ:                 float32(object.Scale.Z),
+					ParallaxDepthX:         float32(object.ParallaxDepth.X),
+					ParallaxDepthY:         float32(object.ParallaxDepth.Y),
+					ParallaxEnabled:        scene.General.CameraParallax,
+					ParallaxAmount:         float32(scene.General.CameraParallaxAmount),
+					ParallaxMouseInfluence: float32(scene.General.CameraParallaxMouseInfluence),
+				}
+			}
+
+			for _, uniform := range shader.VertexUniforms {
+				if uniform.Name == "g_ModelMatrix" && transformEnabled {
+					uniformSetupCode += "        vertex_uniforms.g_ModelMatrix = matrices.model;\n"
+				} else if uniform.Name == "g_ViewProjectionMatrix" && transformEnabled {
+					uniformSetupCode += "        vertex_uniforms.g_ViewProjectionMatrix = matrices.view_projection;\n"
+				} else if uniform.Name == "g_ModelViewProjectionMatrix" && transformEnabled {
+					uniformSetupCode += "        vertex_uniforms.g_ModelViewProjectionMatrix = matrices.model_view_projection;\n"
+				} else if uniform.Name == "g_ModelViewProjectionMatrix" {
 					uniformSetupCode += `        vertex_uniforms.g_ModelViewProjectionMatrix = (glsl_mat4){ .at = {
             {1, 0, 0, 0},
             {0, 1, 0, 0},
@@ -213,11 +281,15 @@ func main() {
 			}
 
 			for _, uniform := range shader.FragmentUniforms {
-				uniformSetupCode += fmt.Sprintf("        fragment_uniforms.%s = (glsl_%s){.at = {", uniform.Name, uniform.Type)
-				for _, value := range uniform.Default {
-					uniformSetupCode += fmt.Sprintf("%f, ", value)
+				if uniform.Name == "g_ParallaxPosition" && transformEnabled {
+					uniformSetupCode += "        fragment_uniforms.g_ParallaxPosition = (glsl_vec2){ .x = matrices.parallax_position_x, .y = matrices.parallax_position_y };\n"
+				} else {
+					uniformSetupCode += fmt.Sprintf("        fragment_uniforms.%s = (glsl_%s){.at = {", uniform.Name, uniform.Type)
+					for _, value := range uniform.Default {
+						uniformSetupCode += fmt.Sprintf("%f, ", value)
+					}
+					uniformSetupCode += "}};\n"
 				}
-				uniformSetupCode += "}};\n"
 			}
 
 			passData.UniformSetupCode = uniformSetupCode
@@ -331,10 +403,50 @@ func main() {
 					}
 				}
 
+				transformEnabled := false
+				for _, uniform := range pass.Shader.VertexUniforms {
+					if uniform.Name == "g_ModelMatrix" || uniform.Name == "g_ViewProjectionMatrix" || uniform.Name == "g_ModelViewProjectionMatrix" {
+						transformEnabled = true
+					}
+				}
+				for _, uniform := range pass.Shader.FragmentUniforms {
+					if uniform.Name == "g_ParallaxPosition" {
+						transformEnabled = true
+					}
+				}
+
+				transformEnabled = transformEnabled && (colorTarget == "0")
 				uniformSetupCode := ""
 
+				if transformEnabled {
+					passData.Transform = CodegenTransformData{
+						Enabled:                true,
+						SceneWidth:             float32(scene.General.Ortho.Width),
+						SceneHeight:            float32(scene.General.Ortho.Height),
+						OriginX:                float32(object.Origin.X),
+						OriginY:                float32(object.Origin.Y),
+						OriginZ:                float32(object.Origin.Z),
+						SizeX:                  float32(object.Size.X),
+						SizeY:                  float32(object.Size.Y),
+						ScaleX:                 float32(object.Scale.X),
+						ScaleY:                 float32(object.Scale.Y),
+						ScaleZ:                 float32(object.Scale.Z),
+						ParallaxDepthX:         float32(object.ParallaxDepth.X),
+						ParallaxDepthY:         float32(object.ParallaxDepth.Y),
+						ParallaxEnabled:        scene.General.CameraParallax,
+						ParallaxAmount:         float32(scene.General.CameraParallaxAmount),
+						ParallaxMouseInfluence: float32(scene.General.CameraParallaxMouseInfluence),
+					}
+				}
+
 				for _, uniform := range pass.Shader.VertexUniforms {
-					if uniform.Name == "g_ModelViewProjectionMatrix" {
+					if uniform.Name == "g_ModelMatrix" && transformEnabled {
+						uniformSetupCode += "        vertex_uniforms.g_ModelMatrix = matrices.model;\n"
+					} else if uniform.Name == "g_ViewProjectionMatrix" && transformEnabled {
+						uniformSetupCode += "        vertex_uniforms.g_ViewProjectionMatrix = matrices.view_projection;\n"
+					} else if uniform.Name == "g_ModelViewProjectionMatrix" && transformEnabled {
+						uniformSetupCode += "        vertex_uniforms.g_ModelViewProjectionMatrix = matrices.model_view_projection;\n"
+					} else if uniform.Name == "g_ModelViewProjectionMatrix" {
 						uniformSetupCode += `        vertex_uniforms.g_ModelViewProjectionMatrix = (glsl_mat4){ .at = {
             {1, 0, 0, 0},
             {0, 1, 0, 0},
@@ -364,6 +476,8 @@ func main() {
 				for _, uniform := range pass.Shader.FragmentUniforms {
 					if uniform.Name == "g_Time" {
 						uniformSetupCode += "        fragment_uniforms.g_Time = (glsl_float){.x = time};\n"
+					} else if uniform.Name == "g_ParallaxPosition" && transformEnabled {
+						uniformSetupCode += "        fragment_uniforms.g_ParallaxPosition = (glsl_vec2){ .x = matrices.parallax_position_x, .y = matrices.parallax_position_y };\n"
 					} else {
 						uniformSetupCode += fmt.Sprintf("        fragment_uniforms.%s = (glsl_%s){.at = {", uniform.Name, uniform.Type)
 						value := uniform.Default
@@ -388,7 +502,7 @@ func main() {
 		}
 	}
 
-	sceneTemplate, err := template.ParseFiles("scene.tmpl")
+	sceneTemplate, err := template.New("scene.tmpl").Parse(string(sceneTemplateCode))
 	if err != nil {
 		panic("parsing scene template failed: " + err.Error())
 	}
@@ -414,6 +528,10 @@ func main() {
 	err = os.WriteFile(tempDir+"/scene.c", sceneSource, 0644)
 	if err != nil {
 		panic("write scene.c failed: " + err.Error())
+	}
+	err = os.WriteFile(tempDir+"/scene_utils.h", sceneUtilsCode, 0644)
+	if err != nil {
+		panic("write scene_utils.h failed" + err.Error())
 	}
 
 	logBytes, err := exec.Command("/opt/wasi-sdk/bin/clang", tempDir+"/scene.c", "-o", tempDir+"/scene.wasm", "-I../include", "-Wl,--allow-undefined").CombinedOutput()
