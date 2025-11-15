@@ -55,28 +55,23 @@ func preprocessShader(vertexSource, fragmentSource, includePath string, boundTex
 	vertexSource = appendGLSL450Header(vertexSource)
 	fragmentSource = appendGLSL450Header(fragmentSource)
 
-	vertexCombos := parseCombos(vertexSource)
-	fragmentCombos := parseCombos(fragmentSource)
-
-	vertexSamplerCombos := parseSamplerCombos(vertexSource, boundTextures)
-	fragmentSamplerCombos := parseSamplerCombos(fragmentSource, boundTextures)
-	maps.Copy(vertexCombos, vertexSamplerCombos)
-	maps.Copy(fragmentCombos, fragmentSamplerCombos)
+	combos := map[string]int{}
+	maps.Copy(combos, parseCombos(vertexSource))
+	maps.Copy(combos, parseCombos(fragmentSource))
+	maps.Copy(combos, parseSamplerCombos(vertexSource, boundTextures))
+	maps.Copy(combos, parseSamplerCombos(fragmentSource, boundTextures))
 
 	for combo, value := range comboOverrides {
-		if _, exists := vertexCombos[combo]; exists {
-			vertexCombos[combo] = value
-		}
-		if _, exists := fragmentCombos[combo]; exists {
-			fragmentCombos[combo] = value
+		if _, exists := combos[combo]; exists {
+			combos[combo] = value
 		}
 	}
 
-	vertexSource, err := runGLSLCPreprocessor(vertexSource, includePath, vertexCombos)
+	vertexSource, err := runGLSLCPreprocessor(vertexSource, includePath, combos)
 	if err != nil {
 		return PreprocessedShader{}, err
 	}
-	fragmentSource, err = runGLSLCPreprocessor(fragmentSource, includePath, fragmentCombos)
+	fragmentSource, err = runGLSLCPreprocessor(fragmentSource, includePath, combos)
 	if err != nil {
 		return PreprocessedShader{}, err
 	}
