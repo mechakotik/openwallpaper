@@ -428,6 +428,10 @@ func generateUniformSetupCode(structName string, uniforms []UniformInfo, constan
 			code += "        " + structName + ".g_Time = (glsl_float){.x = time};\n"
 		} else if uniform.Name == "g_ParallaxPosition" {
 			code += "        " + structName + ".g_ParallaxPosition = (glsl_vec2){ .x = matrices.parallax_position_x, .y = matrices.parallax_position_y };\n"
+		} else if uniform.Name == "g_Screen" {
+			code += "        " + structName + ".g_Screen = (glsl_vec3){.at = {screen_width, screen_height, (float)screen_width / (float)screen_height}};\n"
+		} else if uniform.Name == "g_EffectTextureProjectionMatrix" || uniform.Name == "g_EffectTextureProjectionMatrixInverse" {
+			code += "        " + structName + "." + uniform.Name + " = mat4_identity();\n"
 		} else if uniform.DefaultSet {
 			code += fmt.Sprintf("        %s.%s = (glsl_%s){.at = {", structName, uniform.Name, uniform.Type)
 			value := uniform.Default

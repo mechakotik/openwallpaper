@@ -81,6 +81,9 @@ __attribute__((export_name("init"))) void init() {
 }
 
 __attribute__((export_name("update"))) void update(float delta) {
+    uint32_t screen_width, screen_height;
+    ow_get_screen_size(&screen_width, &screen_height);
+
     time += delta;
 {{range $_, $pass := .Passes}}
 {{template "pass_update" $pass}}{{end}}
