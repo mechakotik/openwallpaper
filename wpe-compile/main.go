@@ -73,6 +73,7 @@ type CodegenPassData struct {
 	ColorTarget       string
 	ColorTargetFormat string
 	ClearColor        bool
+	BlendMode         string
 	TextureBindings   []CodegenTextureBindingData
 	UniformSetupCode  string
 	Transform         CodegenTransformData
@@ -174,6 +175,7 @@ func main() {
 		}
 		codegenData.Passes[lastIdx].ColorTarget = "0"
 		codegenData.Passes[lastIdx].ColorTargetFormat = "OW_TEXTURE_SWAPCHAIN"
+		codegenData.Passes[lastIdx].BlendMode = "OW_BLEND_ALPHA"
 		codegenData.Passes[lastIdx].Transform.Enabled = true
 	}
 
@@ -277,6 +279,7 @@ func processObjectInit(object SceneObject, tempBuffers *[2]int) (CodegenPassData
 		ColorTarget:       fmt.Sprintf("temp_buffers[%d]", tempBuffers[0]),
 		ColorTargetFormat: "OW_TEXTURE_RGBA8_UNORM",
 		ClearColor:        true,
+		BlendMode:         "OW_BLEND_NONE",
 	}
 
 	for slot, texture := range textures {
@@ -367,6 +370,7 @@ func processEffect(object SceneObject, effectInstance EffectInstance, tempBuffer
 			ColorTargetFormat: "OW_TEXTURE_RGBA8_UNORM",
 			ColorTarget:       fmt.Sprintf("temp_buffers[%d]", tempBuffers[1]),
 			ClearColor:        true,
+			BlendMode:         "OW_BLEND_NONE",
 		}
 
 		for slot, texture := range pass.Textures {

@@ -152,7 +152,7 @@ typedef struct {{"{"}}{{range $_, $uniform := .FragmentUniforms}}
             .color_target_format = {{.ColorTargetFormat}},
             .vertex_shader = shader{{.ShaderID}}_vertex,
             .fragment_shader = shader{{.ShaderID}}_fragment,
-            .blend_mode = OW_BLEND_ALPHA,
+            .blend_mode = {{.BlendMode}},
             .topology = OW_TOPOLOGY_TRIANGLES_STRIP,
         };
 
