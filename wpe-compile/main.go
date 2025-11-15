@@ -102,6 +102,8 @@ var (
 	scene        *Scene
 	outputMap    = map[string][]byte{}
 	textureMap   = map[string]ImportedTexture{}
+	lastObjectID = -1
+	lastPassID   = 0
 	lastShaderID = -1
 	codegenData  CodegenData
 )
@@ -129,48 +131,9 @@ func main() {
 		panic("parse scene.json failed: " + err.Error())
 	}
 
-	lastObjectID := -1
-
-	for objectIdx, object := range scene.Objects {
-		lastObjectID++
-		if object.Image == "" {
-			continue
-		}
-		materialPath := replaceByRegex(object.Image, "models/(.*)", "materials/$1")
-		materialBytes, err := getAssetBytes(materialPath)
-		if err != nil {
-			fmt.Printf("warning: skipping material %s because loading material file failed: %s\n", materialPath, err)
-			continue
-		}
-
-		material, err := parseMaterialJSON(materialBytes)
-		if err != nil {
-			fmt.Printf("warning: skipping material %s because parsing material JSON failed: %s\n", materialPath, err)
-			continue
-		}
-
-		ok := true
-		textures := []ImportedTexture{}
-		for _, textureName := range material.Textures {
-			texture, err := importTexture(textureName)
-			if err != nil {
-				fmt.Printf("warning: skipping material %s because loading texture failed: %s\n", materialPath, err)
-				ok = false
-				break
-			}
-			if texture.ID < 0 {
-				continue
-			}
-			textures = append(textures, texture)
-		}
-
-		if !ok || len(textures) == 0 {
-			continue
-		}
-
-		shader, err := compileShader(material.Shader, []bool{}, material.Combos)
-		if err != nil {
-			fmt.Printf("warning: skipping material %s because compiling shader failed: %s\n", materialPath, err)
+	screenCleared := false
+	for _, object := range scene.Objects {
+		if object.Image == "" || object.Size == nil {
 			continue
 		}
 
@@ -186,328 +149,32 @@ func main() {
 			Number: 1,
 		})
 
-		{
-			colorTargetFormat := "OW_TEXTURE_SWAPCHAIN"
-			if len(object.Effects) >= 1 {
-				colorTargetFormat = "OW_TEXTURE_RGBA8_UNORM"
-			}
-
-			colorTarget := "0"
-			if len(object.Effects) >= 1 {
-				colorTarget = fmt.Sprintf("temp_buffers[%d]", tempBuffers[0])
-			}
-
-			clearColor := true
-			if colorTarget == "0" && objectIdx != 0 {
-				clearColor = false
-			}
-
-			passData := CodegenPassData{
-				ObjectID:          lastObjectID,
-				PassID:            0,
-				ShaderID:          shader.ID,
-				ColorTarget:       colorTarget,
-				ColorTargetFormat: colorTargetFormat,
-				ClearColor:        clearColor,
-			}
-
-			for slot, texture := range textures {
-				passData.TextureBindings = append(passData.TextureBindings, CodegenTextureBindingData{
-					Slot:    slot,
-					Texture: fmt.Sprintf("texture%d", texture.ID),
-				})
-			}
-
-			transformEnabled := false
-			for _, uniform := range shader.VertexUniforms {
-				if uniform.Name == "g_ModelMatrix" || uniform.Name == "g_ViewProjectionMatrix" || uniform.Name == "g_ModelViewProjectionMatrix" {
-					transformEnabled = true
-				}
-			}
-			for _, uniform := range shader.FragmentUniforms {
-				if uniform.Name == "g_ParallaxPosition" {
-					transformEnabled = true
-				}
-			}
-
-			transformEnabled = transformEnabled && (colorTarget == "0")
-			uniformSetupCode := ""
-
-			if transformEnabled {
-				passData.Transform = CodegenTransformData{
-					Enabled:                true,
-					SceneWidth:             float32(scene.General.Ortho.Width),
-					SceneHeight:            float32(scene.General.Ortho.Height),
-					OriginX:                float32(object.Origin.X),
-					OriginY:                float32(object.Origin.Y),
-					OriginZ:                float32(object.Origin.Z),
-					SizeX:                  float32(object.Size.X),
-					SizeY:                  float32(object.Size.Y),
-					ScaleX:                 float32(object.Scale.X),
-					ScaleY:                 float32(object.Scale.Y),
-					ScaleZ:                 float32(object.Scale.Z),
-					ParallaxDepthX:         float32(object.ParallaxDepth.X),
-					ParallaxDepthY:         float32(object.ParallaxDepth.Y),
-					ParallaxEnabled:        scene.General.CameraParallax,
-					ParallaxAmount:         float32(scene.General.CameraParallaxAmount),
-					ParallaxMouseInfluence: float32(scene.General.CameraParallaxMouseInfluence),
-				}
-			}
-
-			for _, uniform := range shader.VertexUniforms {
-				if uniform.Name == "g_ModelMatrix" && transformEnabled {
-					uniformSetupCode += "        vertex_uniforms.g_ModelMatrix = matrices.model;\n"
-				} else if uniform.Name == "g_ViewProjectionMatrix" && transformEnabled {
-					uniformSetupCode += "        vertex_uniforms.g_ViewProjectionMatrix = matrices.view_projection;\n"
-				} else if uniform.Name == "g_ModelViewProjectionMatrix" && transformEnabled {
-					uniformSetupCode += "        vertex_uniforms.g_ModelViewProjectionMatrix = matrices.model_view_projection;\n"
-				} else if uniform.Name == "g_ModelViewProjectionMatrix" {
-					uniformSetupCode += `        vertex_uniforms.g_ModelViewProjectionMatrix = (glsl_mat4){ .at = {
-            {1, 0, 0, 0},
-            {0, 1, 0, 0},
-            {0, 0, 1, 0},
-            {0, 0, 0, 1},
-        }};
-`
-				} else if uniform.Name == "g_Texture0Rotation" {
-					uniformSetupCode += "        vertex_uniforms.g_Texture0Rotation = (glsl_vec4){.x = 1.0f, .y = 0.0f, .z = 0.0f, .w = 1.0f};\n"
-				} else if uniform.DefaultSet {
-					uniformSetupCode += fmt.Sprintf("        vertex_uniforms.%s = (glsl_%s){.at = {", uniform.Name, uniform.Type)
-					for _, value := range uniform.Default {
-						uniformSetupCode += fmt.Sprintf("%f, ", value)
-					}
-					uniformSetupCode += "}};\n"
-				} else {
-					fmt.Printf("warning: unknown uniform %s\n", uniform.Name)
-				}
-			}
-
-			for _, uniform := range shader.FragmentUniforms {
-				if uniform.Name == "g_ParallaxPosition" && transformEnabled {
-					uniformSetupCode += "        fragment_uniforms.g_ParallaxPosition = (glsl_vec2){ .x = matrices.parallax_position_x, .y = matrices.parallax_position_y };\n"
-				} else if uniform.DefaultSet {
-					uniformSetupCode += fmt.Sprintf("        fragment_uniforms.%s = (glsl_%s){.at = {", uniform.Name, uniform.Type)
-					for _, value := range uniform.Default {
-						uniformSetupCode += fmt.Sprintf("%f, ", value)
-					}
-					uniformSetupCode += "}};\n"
-				} else {
-					fmt.Printf("warning: unknown uniform %s\n", uniform.Name)
-				}
-			}
-
-			passData.UniformSetupCode = uniformSetupCode
-			codegenData.Passes = append(codegenData.Passes, passData)
-		}
-
-		lastPassID := 0
-		lastColorTarget := fmt.Sprintf("temp_buffers[%d]", tempBuffers[0])
-
-		for effectIdx, effectInstance := range object.Effects {
-			ok = true
-			effect, err := parseEffect(pkgMap[effectInstance.File])
-			if err != nil {
-				fmt.Printf("warning: skipping effect %s because parsing effect JSON %s failed: %s\n", effectInstance.Name, effectInstance.File, err)
-				continue
-			}
-
-			allBoundTextures := [][]bool{}
-			for _, pass := range effectInstance.Passes {
-				boundTextures := []bool{}
-				for _, textureName := range pass.Textures {
-					boundTextures = append(boundTextures, textureName != nil)
-				}
-				allBoundTextures = append(allBoundTextures, boundTextures)
-			}
-
-			meta := make([]EffectPassMeta, len(effect.Passes))
-			for idx, pass := range effect.Passes {
-				effectMaterial, err := parseMaterialJSON(pkgMap[pass.Material])
-				if err != nil {
-					fmt.Printf("warning: skipping effect %s because parsing effect material JSON %s failed: %s\n", effectInstance.Name, pass.Material, err)
-					ok = false
-					break
-				}
-				meta[idx].Shader, err = compileShader(effectMaterial.Shader, allBoundTextures[idx], effectMaterial.Combos)
-				if err != nil {
-					fmt.Printf("warning: skipping material %s because compiling effect shader %s failed: %s\n", materialPath, effectMaterial.Shader, err)
-					ok = false
-					break
-				}
-			}
-			if !ok {
-				continue
-			}
-
-			for idx, pass := range effectInstance.Passes {
-				for _, textureName := range pass.Textures {
-					if textureName == nil {
-						meta[idx].Textures = append(meta[idx].Textures, ImportedTexture{ID: -1})
-						continue
-					}
-					texture, err := importTexture(*textureName)
-					if err != nil {
-						fmt.Printf("warning: skipping material %s because loading texture failed: %s\n", materialPath, err)
-						ok = false
-						break
-					}
-					meta[idx].Textures = append(meta[idx].Textures, texture)
-				}
-				for len(meta[idx].Textures) < len(meta[idx].Shader.Samplers) {
-					meta[idx].Textures = append(meta[idx].Textures, ImportedTexture{ID: -1})
-				}
-				meta[idx].Constants = pass.Constants
-			}
-			if !ok {
-				continue
-			}
-
-			for idx, pass := range meta {
-				lastPassID++
-
-				colorTargetFormat := "OW_TEXTURE_SWAPCHAIN"
-				if idx != len(meta)-1 || effectIdx != len(object.Effects)-1 {
-					colorTargetFormat = "OW_TEXTURE_RGBA8_UNORM"
-				}
-
-				colorTarget := "0"
-				if idx != len(meta)-1 || effectIdx != len(object.Effects)-1 {
-					if lastColorTarget == fmt.Sprintf("temp_buffers[%d]", tempBuffers[0]) {
-						colorTarget = fmt.Sprintf("temp_buffers[%d]", tempBuffers[1])
-					} else {
-						colorTarget = fmt.Sprintf("temp_buffers[%d]", tempBuffers[0])
-					}
-				}
-
-				clearColor := true
-				if colorTarget == "0" && objectIdx != 0 {
-					clearColor = false
-				}
-
-				passData := CodegenPassData{
-					ObjectID:          lastObjectID,
-					PassID:            lastPassID,
-					ShaderID:          pass.Shader.ID,
-					ColorTargetFormat: colorTargetFormat,
-					ColorTarget:       colorTarget,
-					ClearColor:        clearColor,
-				}
-
-				for slot, texture := range pass.Textures {
-					if texture.ID == -1 {
-						passData.TextureBindings = append(passData.TextureBindings, CodegenTextureBindingData{
-							Slot:    slot,
-							Texture: lastColorTarget,
-						})
-					} else {
-						passData.TextureBindings = append(passData.TextureBindings, CodegenTextureBindingData{
-							Slot:    slot,
-							Texture: fmt.Sprintf("texture%d", texture.ID),
-						})
-					}
-				}
-
-				transformEnabled := false
-				for _, uniform := range pass.Shader.VertexUniforms {
-					if uniform.Name == "g_ModelMatrix" || uniform.Name == "g_ViewProjectionMatrix" || uniform.Name == "g_ModelViewProjectionMatrix" {
-						transformEnabled = true
-					}
-				}
-				for _, uniform := range pass.Shader.FragmentUniforms {
-					if uniform.Name == "g_ParallaxPosition" {
-						transformEnabled = true
-					}
-				}
-
-				transformEnabled = transformEnabled && (colorTarget == "0")
-				uniformSetupCode := ""
-
-				if transformEnabled {
-					passData.Transform = CodegenTransformData{
-						Enabled:                true,
-						SceneWidth:             float32(scene.General.Ortho.Width),
-						SceneHeight:            float32(scene.General.Ortho.Height),
-						OriginX:                float32(object.Origin.X),
-						OriginY:                float32(object.Origin.Y),
-						OriginZ:                float32(object.Origin.Z),
-						SizeX:                  float32(object.Size.X),
-						SizeY:                  float32(object.Size.Y),
-						ScaleX:                 float32(object.Scale.X),
-						ScaleY:                 float32(object.Scale.Y),
-						ScaleZ:                 float32(object.Scale.Z),
-						ParallaxDepthX:         float32(object.ParallaxDepth.X),
-						ParallaxDepthY:         float32(object.ParallaxDepth.Y),
-						ParallaxEnabled:        scene.General.CameraParallax,
-						ParallaxAmount:         float32(scene.General.CameraParallaxAmount),
-						ParallaxMouseInfluence: float32(scene.General.CameraParallaxMouseInfluence),
-					}
-				}
-
-				for _, uniform := range pass.Shader.VertexUniforms {
-					if uniform.Name == "g_ModelMatrix" && transformEnabled {
-						uniformSetupCode += "        vertex_uniforms.g_ModelMatrix = matrices.model;\n"
-					} else if uniform.Name == "g_ViewProjectionMatrix" && transformEnabled {
-						uniformSetupCode += "        vertex_uniforms.g_ViewProjectionMatrix = matrices.view_projection;\n"
-					} else if uniform.Name == "g_ModelViewProjectionMatrix" && transformEnabled {
-						uniformSetupCode += "        vertex_uniforms.g_ModelViewProjectionMatrix = matrices.model_view_projection;\n"
-					} else if uniform.Name == "g_ModelViewProjectionMatrix" {
-						uniformSetupCode += `        vertex_uniforms.g_ModelViewProjectionMatrix = (glsl_mat4){ .at = {
-            {1, 0, 0, 0},
-            {0, 1, 0, 0},
-            {0, 0, 1, 0},
-            {0, 0, 0, 1},
-        }};
-`
-					} else if uniform.Name == "g_Texture0Rotation" {
-						uniformSetupCode += "        vertex_uniforms.g_Texture0Rotation = (glsl_vec4){.x = 1.0f, .y = 0.0f, .z = 0.0f, .w = 1.0f};\n"
-					} else if strings.HasSuffix(uniform.Name, "Resolution") {
-						uniformSetupCode += fmt.Sprintf("        vertex_uniforms.%s = (glsl_vec4){.x = 1920, .y = 1080, .z = 1920, .w = 1080};\n", uniform.Name)
-					} else if uniform.Name == "g_Time" {
-						uniformSetupCode += "        vertex_uniforms.g_Time = (glsl_float){.x = time};\n"
-					} else if uniform.DefaultSet {
-						uniformSetupCode += fmt.Sprintf("        vertex_uniforms.%s = (glsl_%s){.at = {", uniform.Name, uniform.Type)
-						value := uniform.Default
-						if override, exists := pass.Constants[uniform.ConstantName]; exists {
-							value = override
-						}
-						for _, value := range value {
-							uniformSetupCode += fmt.Sprintf("%f, ", value)
-						}
-						uniformSetupCode += "}};\n"
-					} else {
-						fmt.Printf("warning: unknown uniform %s\n", uniform.Name)
-					}
-				}
-
-				for _, uniform := range pass.Shader.FragmentUniforms {
-					if uniform.Name == "g_Time" {
-						uniformSetupCode += "        fragment_uniforms.g_Time = (glsl_float){.x = time};\n"
-					} else if uniform.Name == "g_ParallaxPosition" && transformEnabled {
-						uniformSetupCode += "        fragment_uniforms.g_ParallaxPosition = (glsl_vec2){ .x = matrices.parallax_position_x, .y = matrices.parallax_position_y };\n"
-					} else if uniform.DefaultSet {
-						uniformSetupCode += fmt.Sprintf("        fragment_uniforms.%s = (glsl_%s){.at = {", uniform.Name, uniform.Type)
-						value := uniform.Default
-						if override, exists := pass.Constants[uniform.ConstantName]; exists {
-							value = override
-						}
-						for _, value := range value {
-							uniformSetupCode += fmt.Sprintf("%f, ", value)
-						}
-						uniformSetupCode += "}};\n"
-					} else {
-						fmt.Printf("warning: unknown uniform %s\n", uniform.Name)
-					}
-				}
-
-				passData.UniformSetupCode = uniformSetupCode
-				codegenData.Passes = append(codegenData.Passes, passData)
-				lastColorTarget = colorTarget
-			}
-		}
-
-		if !ok {
+		initialPass, err := processObjectInit(object, &tempBuffers)
+		if err != nil {
+			fmt.Printf("warning: skipping object %s because processing initial passes failed: %s\n", object.Name, err)
 			continue
 		}
+		codegenData.Passes = append(codegenData.Passes, initialPass)
+
+		for _, effectInstance := range object.Effects {
+			passes, err := processEffect(object, effectInstance, &tempBuffers)
+			if err != nil {
+				fmt.Printf("warning: skipping object %s effect %s because processing effect failed: %s\n", object.Name, effectInstance.Name, err)
+				continue
+			}
+			codegenData.Passes = append(codegenData.Passes, passes...)
+		}
+
+		lastIdx := len(codegenData.Passes) - 1
+		if !screenCleared {
+			codegenData.Passes[lastIdx].ClearColor = true
+			screenCleared = true
+		} else {
+			codegenData.Passes[lastIdx].ClearColor = false
+		}
+		codegenData.Passes[lastIdx].ColorTarget = "0"
+		codegenData.Passes[lastIdx].ColorTargetFormat = "OW_TEXTURE_SWAPCHAIN"
+		codegenData.Passes[lastIdx].Transform.Enabled = true
 	}
 
 	sceneTemplate, err := template.New("scene.tmpl").Parse(string(sceneTemplateCode))
@@ -568,6 +235,214 @@ func main() {
 	if err != nil {
 		println("warning: failed to remove temp dir: " + err.Error())
 	}
+}
+
+func processObjectInit(object SceneObject, tempBuffers *[2]int) (CodegenPassData, error) {
+	lastObjectID++
+	lastPassID = 0
+
+	materialPath := replaceByRegex(object.Image, "models/(.*)", "materials/$1")
+	materialBytes, err := getAssetBytes(materialPath)
+	if err != nil {
+		return CodegenPassData{}, fmt.Errorf("loading material file %s failed: %s", materialPath, err)
+	}
+
+	material, err := parseMaterialJSON(materialBytes)
+	if err != nil {
+		return CodegenPassData{}, fmt.Errorf("parsing material JSON %s failed: %s", materialPath, err)
+	}
+
+	textures := []ImportedTexture{}
+	for _, textureName := range material.Textures {
+		texture, err := importTexture(textureName)
+		if err != nil {
+			return CodegenPassData{}, fmt.Errorf("loading texture %s failed: %s", textureName, err)
+		}
+		if texture.ID < 0 {
+			continue
+		}
+		textures = append(textures, texture)
+	}
+
+	shader, err := compileShader(material.Shader, []bool{}, material.Combos)
+	if err != nil {
+		fmt.Printf("warning: skipping material %s because compiling shader failed: %s\n", materialPath, err)
+		return CodegenPassData{}, fmt.Errorf("compiling shader %s failed: %s", material.Shader, err)
+	}
+
+	passData := CodegenPassData{
+		ObjectID:          lastObjectID,
+		PassID:            0,
+		ShaderID:          shader.ID,
+		ColorTarget:       fmt.Sprintf("temp_buffers[%d]", tempBuffers[0]),
+		ColorTargetFormat: "OW_TEXTURE_RGBA8_UNORM",
+		ClearColor:        true,
+	}
+
+	for slot, texture := range textures {
+		passData.TextureBindings = append(passData.TextureBindings, CodegenTextureBindingData{
+			Slot:    slot,
+			Texture: fmt.Sprintf("texture%d", texture.ID),
+		})
+	}
+
+	passData.Transform = CodegenTransformData{
+		Enabled:                false,
+		SceneWidth:             float32(scene.General.Ortho.Width),
+		SceneHeight:            float32(scene.General.Ortho.Height),
+		OriginX:                float32(object.Origin.X),
+		OriginY:                float32(object.Origin.Y),
+		OriginZ:                float32(object.Origin.Z),
+		SizeX:                  float32(object.Size.X),
+		SizeY:                  float32(object.Size.Y),
+		ScaleX:                 float32(object.Scale.X),
+		ScaleY:                 float32(object.Scale.Y),
+		ScaleZ:                 float32(object.Scale.Z),
+		ParallaxDepthX:         float32(object.ParallaxDepth.X),
+		ParallaxDepthY:         float32(object.ParallaxDepth.Y),
+		ParallaxEnabled:        scene.General.CameraParallax,
+		ParallaxAmount:         float32(scene.General.CameraParallaxAmount),
+		ParallaxMouseInfluence: float32(scene.General.CameraParallaxMouseInfluence),
+	}
+
+	passData.UniformSetupCode = generateUniformSetupCode("vertex_uniforms", shader.VertexUniforms, map[string][]float32{})
+	passData.UniformSetupCode += generateUniformSetupCode("fragment_uniforms", shader.FragmentUniforms, map[string][]float32{})
+	return passData, nil
+}
+
+func processEffect(object SceneObject, effectInstance EffectInstance, tempBuffers *[2]int) ([]CodegenPassData, error) {
+	effect, err := parseEffect(pkgMap[effectInstance.File])
+	if err != nil {
+		return []CodegenPassData{}, fmt.Errorf("parsing effect JSON %s failed: %s", effectInstance.File, err)
+	}
+
+	allBoundTextures := [][]bool{}
+	for _, pass := range effectInstance.Passes {
+		boundTextures := []bool{}
+		for _, textureName := range pass.Textures {
+			boundTextures = append(boundTextures, textureName != nil)
+		}
+		allBoundTextures = append(allBoundTextures, boundTextures)
+	}
+
+	meta := make([]EffectPassMeta, len(effect.Passes))
+	for idx, pass := range effect.Passes {
+		effectMaterial, err := parseMaterialJSON(pkgMap[pass.Material])
+		if err != nil {
+			return []CodegenPassData{}, fmt.Errorf("parsing effect material JSON %s failed: %s", pass.Material, err)
+		}
+		meta[idx].Shader, err = compileShader(effectMaterial.Shader, allBoundTextures[idx], effectMaterial.Combos)
+		if err != nil {
+			return []CodegenPassData{}, fmt.Errorf("compiling effect shader %s failed: %s", effectMaterial.Shader, err)
+		}
+	}
+
+	for idx, pass := range effectInstance.Passes {
+		for _, textureName := range pass.Textures {
+			if textureName == nil {
+				meta[idx].Textures = append(meta[idx].Textures, ImportedTexture{ID: -1})
+				continue
+			}
+			texture, err := importTexture(*textureName)
+			if err != nil {
+				return []CodegenPassData{}, fmt.Errorf("loading texture %s failed: %s", *textureName, err)
+			}
+			meta[idx].Textures = append(meta[idx].Textures, texture)
+		}
+		for len(meta[idx].Textures) < len(meta[idx].Shader.Samplers) {
+			meta[idx].Textures = append(meta[idx].Textures, ImportedTexture{ID: -1})
+		}
+		meta[idx].Constants = pass.Constants
+	}
+
+	passes := []CodegenPassData{}
+
+	for _, pass := range meta {
+		lastPassID++
+
+		passData := CodegenPassData{
+			ObjectID:          lastObjectID,
+			PassID:            lastPassID,
+			ShaderID:          pass.Shader.ID,
+			ColorTargetFormat: "OW_TEXTURE_RGBA8_UNORM",
+			ColorTarget:       fmt.Sprintf("temp_buffers[%d]", tempBuffers[1]),
+			ClearColor:        true,
+		}
+
+		for slot, texture := range pass.Textures {
+			if texture.ID == -1 {
+				passData.TextureBindings = append(passData.TextureBindings, CodegenTextureBindingData{
+					Slot:    slot,
+					Texture: fmt.Sprintf("temp_buffers[%d]", tempBuffers[0]),
+				})
+			} else {
+				passData.TextureBindings = append(passData.TextureBindings, CodegenTextureBindingData{
+					Slot:    slot,
+					Texture: fmt.Sprintf("texture%d", texture.ID),
+				})
+			}
+		}
+
+		passData.Transform = CodegenTransformData{
+			Enabled:                false,
+			SceneWidth:             float32(scene.General.Ortho.Width),
+			SceneHeight:            float32(scene.General.Ortho.Height),
+			OriginX:                float32(object.Origin.X),
+			OriginY:                float32(object.Origin.Y),
+			OriginZ:                float32(object.Origin.Z),
+			SizeX:                  float32(object.Size.X),
+			SizeY:                  float32(object.Size.Y),
+			ScaleX:                 float32(object.Scale.X),
+			ScaleY:                 float32(object.Scale.Y),
+			ScaleZ:                 float32(object.Scale.Z),
+			ParallaxDepthX:         float32(object.ParallaxDepth.X),
+			ParallaxDepthY:         float32(object.ParallaxDepth.Y),
+			ParallaxEnabled:        scene.General.CameraParallax,
+			ParallaxAmount:         float32(scene.General.CameraParallaxAmount),
+			ParallaxMouseInfluence: float32(scene.General.CameraParallaxMouseInfluence),
+		}
+
+		passData.UniformSetupCode = generateUniformSetupCode("vertex_uniforms", pass.Shader.VertexUniforms, pass.Constants)
+		passData.UniformSetupCode += generateUniformSetupCode("fragment_uniforms", pass.Shader.FragmentUniforms, pass.Constants)
+		passes = append(passes, passData)
+		tempBuffers[0], tempBuffers[1] = tempBuffers[1], tempBuffers[0]
+	}
+
+	return passes, nil
+}
+
+func generateUniformSetupCode(structName string, uniforms []UniformInfo, constants map[string][]float32) string {
+	code := ""
+	for _, uniform := range uniforms {
+		if uniform.Name == "g_ModelMatrix" {
+			code += "        " + structName + ".g_ModelMatrix = matrices.model;\n"
+		} else if uniform.Name == "g_ViewProjectionMatrix" {
+			code += "        " + structName + ".g_ViewProjectionMatrix = matrices.view_projection;\n"
+		} else if uniform.Name == "g_ModelViewProjectionMatrix" {
+			code += "        " + structName + ".g_ModelViewProjectionMatrix = matrices.model_view_projection;\n"
+		} else if uniform.Name == "g_Texture0Rotation" {
+			code += "        " + structName + ".g_Texture0Rotation = (glsl_vec4){.x = 1.0f, .y = 0.0f, .z = 0.0f, .w = 1.0f};\n"
+		} else if strings.HasSuffix(uniform.Name, "Resolution") {
+			code += fmt.Sprintf("        %s.%s = (glsl_vec4){.x = 1920, .y = 1080, .z = 1920, .w = 1080};\n", structName, uniform.Name)
+		} else if uniform.Name == "g_Time" {
+			code += "        " + structName + ".g_Time = (glsl_float){.x = time};\n"
+		} else if uniform.Name == "g_ParallaxPosition" {
+			code += "        " + structName + ".g_ParallaxPosition = (glsl_vec2){ .x = matrices.parallax_position_x, .y = matrices.parallax_position_y };\n"
+		} else if uniform.DefaultSet {
+			code += fmt.Sprintf("        %s.%s = (glsl_%s){.at = {", structName, uniform.Name, uniform.Type)
+			value := uniform.Default
+			if override, exists := constants[uniform.ConstantName]; exists {
+				value = override
+			}
+			for _, value := range value {
+				code += fmt.Sprintf("%f, ", value)
+			}
+			code += "}};\n"
+		} else {
+			fmt.Printf("warning: unknown uniform %s\n", uniform.Name)
+		}
+	}
+	return code
 }
 
 func getAssetBytes(path string) ([]byte, error) {

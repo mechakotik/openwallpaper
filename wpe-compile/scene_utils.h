@@ -39,7 +39,7 @@ typedef struct {
     float parallax_position_y;
 } transform_matrices_t;
 
-static glsl_mat4 mat4_identity(void) {
+static glsl_mat4 mat4_identity() {
     glsl_mat4 res;
     res.at[0][0] = 1.0f;
     res.at[0][1] = 0.0f;
@@ -73,13 +73,18 @@ static glsl_mat4 mat4_multiply(glsl_mat4 a, glsl_mat4 b) {
     return res;
 }
 
-static transform_matrices_t compute_transform_matrices(transform_parameters_t params) {
+static transform_matrices_t default_transform_matrices() {
     transform_matrices_t res;
     res.model = mat4_identity();
     res.view_projection = mat4_identity();
     res.model_view_projection = mat4_identity();
     res.parallax_position_x = 0.5f;
     res.parallax_position_y = 0.5f;
+    return res;
+}
+
+static transform_matrices_t compute_transform_matrices(transform_parameters_t params) {
+    transform_matrices_t res = default_transform_matrices();
 
     uint32_t screen_width = 0;
     uint32_t screen_height = 0;

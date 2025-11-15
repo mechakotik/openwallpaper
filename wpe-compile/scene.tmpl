@@ -82,8 +82,6 @@ __attribute__((export_name("init"))) void init() {
 
 __attribute__((export_name("update"))) void update(float delta) {
     time += delta;
-    mouse_x += delta;
-    mouse_y += delta;
 {{range $_, $pass := .Passes}}
 {{template "pass_update" $pass}}{{end}}
 }
@@ -129,6 +127,8 @@ typedef struct {{"{"}}{{range $_, $uniform := .FragmentUniforms}}
 			.mouse_x = mouse_x,
 			.mouse_y = mouse_y,
         });
+{{else}}
+        transform_matrices_t matrices = default_transform_matrices();
 {{end}}{{end}}
 
 {{define "pass_init"}}    {{"{"}}
