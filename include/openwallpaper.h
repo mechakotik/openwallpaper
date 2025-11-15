@@ -109,6 +109,14 @@ typedef enum {
     OW_CULL_BACK,
 } ow_cull_mode;
 
+enum {
+    OW_BUTTON_LEFT = (1 << 0),
+    OW_BUTTON_RIGHT = (1 << 1),
+    OW_BUTTON_MIDDLE = (1 << 2),
+    OW_BUTTON_X1 = (1 << 3),
+    OW_BUTTON_X2 = (1 << 4),
+};
+
 /**
  * A structure specifying render pass parameters.
  */
@@ -268,6 +276,8 @@ extern void ow_render_geometry(ow_id pipeline, const ow_bindings_info* bindings,
     uint32_t vertex_count, uint32_t instance_count);
 extern void ow_render_geometry_indexed(ow_id pipeline, const ow_bindings_info* bindings, uint32_t index_offset,
     uint32_t index_count, uint32_t vertex_offset, uint32_t instance_count);
+
+extern uint32_t ow_get_mouse_state(float* x, float* y);
 
 extern void ow_free(ow_id id);
 
