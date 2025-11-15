@@ -28,6 +28,7 @@ static NativeSymbol native_symbols[] = {
     {"ow_push_uniform_data", ow_push_uniform_data, "(iiii)"},
     {"ow_render_geometry", ow_render_geometry, "(iiiii)"},
     {"ow_render_geometry_indexed", ow_render_geometry_indexed, "(iiiiii)"},
+    {"ow_get_mouse_state", ow_get_mouse_state, "(ii)i"},
     {"ow_free", ow_free, "(i)"},
 };
 

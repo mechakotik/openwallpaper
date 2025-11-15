@@ -104,6 +104,14 @@ typedef enum {
     OW_CULL_BACK,
 } ow_cull_mode;
 
+enum {
+    OW_BUTTON_LEFT = (1 << 0),
+    OW_BUTTON_RIGHT = (1 << 1),
+    OW_BUTTON_MIDDLE = (1 << 2),
+    OW_BUTTON_X1 = (1 << 3),
+    OW_BUTTON_X2 = (1 << 4),
+};
+
 typedef struct {
     uint32_t color_target;
     uint32_t clear_color;
@@ -212,6 +220,8 @@ void ow_render_geometry(wasm_exec_env_t exec_env, uint32_t pipeline, uint32_t bi
     uint32_t vertex_count, uint32_t instance_count);
 void ow_render_geometry_indexed(wasm_exec_env_t exec_env, uint32_t pipeline, uint32_t bindings_ptr,
     uint32_t index_offset, uint32_t index_count, uint32_t vertex_offset, uint32_t instance_count);
+
+uint32_t ow_get_mouse_state(wasm_exec_env_t exec_env, uint32_t x_ptr, uint32_t y_ptr);
 
 void ow_free(wasm_exec_env_t exec_env, uint32_t id);
 

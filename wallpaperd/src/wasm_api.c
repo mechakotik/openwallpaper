@@ -887,6 +887,32 @@ void ow_render_geometry_indexed(wasm_exec_env_t exec_env, uint32_t pipeline, uin
     free(sdl_texture_bindings);
 }
 
+uint32_t ow_get_mouse_state(wasm_exec_env_t exec_env, uint32_t x_ptr, uint32_t y_ptr) {
+    wasm_module_inst_t instance = wasm_runtime_get_module_inst(exec_env);
+    float* x_ptr_real = wasm_runtime_addr_app_to_native(instance, x_ptr);
+    float* y_ptr_real = wasm_runtime_addr_app_to_native(instance, y_ptr);
+
+    SDL_MouseButtonFlags sdl_flags = SDL_GetMouseState(x_ptr_real, y_ptr_real);
+    uint32_t flags = 0;
+    if((sdl_flags & SDL_BUTTON_LEFT) != 0) {
+        flags |= OW_BUTTON_LEFT;
+    }
+    if((sdl_flags & SDL_BUTTON_RIGHT) != 0) {
+        flags |= OW_BUTTON_RIGHT;
+    }
+    if((sdl_flags & SDL_BUTTON_MIDDLE) != 0) {
+        flags |= OW_BUTTON_MIDDLE;
+    }
+    if((sdl_flags & SDL_BUTTON_X1) != 0) {
+        flags |= OW_BUTTON_X1;
+    }
+    if((sdl_flags & SDL_BUTTON_X2) != 0) {
+        flags |= OW_BUTTON_X2;
+    }
+
+    return flags;
+}
+
 void ow_free(wasm_exec_env_t exec_env, uint32_t id) {
     if(id == 0) {
         return;
