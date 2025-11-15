@@ -621,11 +621,11 @@ func decompressDXT(w, h int, data []byte, f dxtFlags) []byte {
 			case dxt1:
 				decompressBlockColor(tmp, data, src, true)
 			case dxt3:
+				decompressBlockColor(tmp, data, src+8, false)
 				decompressBlockAlphaDxt3(tmp, data, src)
-				decompressBlockColor(tmp, data, src+8, false)
 			case dxt5:
-				decompressBlockAlphaDxt5(tmp, data, src)
 				decompressBlockColor(tmp, data, src+8, false)
+				decompressBlockAlphaDxt5(tmp, data, src)
 			}
 			off := 0
 			for py := range 4 {
