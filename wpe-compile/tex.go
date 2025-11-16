@@ -523,10 +523,10 @@ func rg88FromBytes(pix []byte, w, h int) (image.Image, error) {
 		r := pix[i*2+0]
 		g := pix[i*2+1]
 		base := i * 4
-		img.Pix[base+0] = g
+		img.Pix[base+0] = r
 		img.Pix[base+1] = g
 		img.Pix[base+2] = g
-		img.Pix[base+3] = r
+		img.Pix[base+3] = g
 	}
 	return img, nil
 }
