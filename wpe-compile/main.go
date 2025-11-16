@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"regexp"
+	"strconv"
 	"strings"
 	"text/template"
 
@@ -26,6 +27,8 @@ type ImportedTexture struct {
 	Name        string
 	Width       int
 	Height      int
+	MapWidth    int
+	MapHeight   int
 	PixelFormat string
 }
 
@@ -282,11 +285,13 @@ func processObjectInit(object SceneObject, tempBuffers *[2]int) (CodegenPassData
 		BlendMode:         "OW_BLEND_NONE",
 	}
 
+	resolutions := [][4]float32{}
 	for slot, texture := range textures {
 		passData.TextureBindings = append(passData.TextureBindings, CodegenTextureBindingData{
 			Slot:    slot,
 			Texture: fmt.Sprintf("texture%d", texture.ID),
 		})
+		resolutions = append(resolutions, [4]float32{float32(texture.Width), float32(texture.Height), float32(texture.MapWidth), float32(texture.MapHeight)})
 	}
 
 	passData.Transform = CodegenTransformData{
@@ -308,8 +313,8 @@ func processObjectInit(object SceneObject, tempBuffers *[2]int) (CodegenPassData
 		ParallaxMouseInfluence: float32(scene.General.CameraParallaxMouseInfluence),
 	}
 
-	passData.UniformSetupCode = generateUniformSetupCode("vertex_uniforms", shader.VertexUniforms, map[string][]float32{})
-	passData.UniformSetupCode += generateUniformSetupCode("fragment_uniforms", shader.FragmentUniforms, map[string][]float32{})
+	passData.UniformSetupCode = generateUniformSetupCode("vertex_uniforms", shader.VertexUniforms, map[string][]float32{}, resolutions)
+	passData.UniformSetupCode += generateUniformSetupCode("fragment_uniforms", shader.FragmentUniforms, map[string][]float32{}, resolutions)
 	return passData, nil
 }
 
@@ -373,17 +378,20 @@ func processEffect(object SceneObject, effectInstance EffectInstance, tempBuffer
 			BlendMode:         "OW_BLEND_NONE",
 		}
 
+		resolutions := [][4]float32{}
 		for slot, texture := range pass.Textures {
 			if texture.ID == -1 {
 				passData.TextureBindings = append(passData.TextureBindings, CodegenTextureBindingData{
 					Slot:    slot,
 					Texture: fmt.Sprintf("temp_buffers[%d]", tempBuffers[0]),
 				})
+				resolutions = append(resolutions, [4]float32{float32(scene.General.Ortho.Width), float32(scene.General.Ortho.Height), float32(scene.General.Ortho.Width), float32(scene.General.Ortho.Height)})
 			} else {
 				passData.TextureBindings = append(passData.TextureBindings, CodegenTextureBindingData{
 					Slot:    slot,
 					Texture: fmt.Sprintf("texture%d", texture.ID),
 				})
+				resolutions = append(resolutions, [4]float32{float32(texture.Width), float32(texture.Height), float32(texture.MapWidth), float32(texture.MapHeight)})
 			}
 		}
 
@@ -406,8 +414,8 @@ func processEffect(object SceneObject, effectInstance EffectInstance, tempBuffer
 			ParallaxMouseInfluence: float32(scene.General.CameraParallaxMouseInfluence),
 		}
 
-		passData.UniformSetupCode = generateUniformSetupCode("vertex_uniforms", pass.Shader.VertexUniforms, pass.Constants)
-		passData.UniformSetupCode += generateUniformSetupCode("fragment_uniforms", pass.Shader.FragmentUniforms, pass.Constants)
+		passData.UniformSetupCode = generateUniformSetupCode("vertex_uniforms", pass.Shader.VertexUniforms, pass.Constants, resolutions)
+		passData.UniformSetupCode += generateUniformSetupCode("fragment_uniforms", pass.Shader.FragmentUniforms, pass.Constants, resolutions)
 		passes = append(passes, passData)
 		tempBuffers[0], tempBuffers[1] = tempBuffers[1], tempBuffers[0]
 	}
@@ -415,7 +423,7 @@ func processEffect(object SceneObject, effectInstance EffectInstance, tempBuffer
 	return passes, nil
 }
 
-func generateUniformSetupCode(structName string, uniforms []UniformInfo, constants map[string][]float32) string {
+func generateUniformSetupCode(structName string, uniforms []UniformInfo, constants map[string][]float32, resolutions [][4]float32) string {
 	code := ""
 	for _, uniform := range uniforms {
 		if uniform.Name == "g_ModelMatrix" {
@@ -426,8 +434,11 @@ func generateUniformSetupCode(structName string, uniforms []UniformInfo, constan
 			code += "        " + structName + ".g_ModelViewProjectionMatrix = matrices.model_view_projection;\n"
 		} else if uniform.Name == "g_Texture0Rotation" {
 			code += "        " + structName + ".g_Texture0Rotation = (glsl_vec4){.x = 1.0f, .y = 0.0f, .z = 0.0f, .w = 1.0f};\n"
-		} else if strings.HasSuffix(uniform.Name, "Resolution") {
-			code += fmt.Sprintf("        %s.%s = (glsl_vec4){.x = 1920, .y = 1080, .z = 1920, .w = 1080};\n", structName, uniform.Name)
+		} else if strings.HasPrefix(uniform.Name, "g_Texture") && strings.HasSuffix(uniform.Name, "Resolution") {
+			idxString, _ := strings.CutPrefix(uniform.Name, "g_Texture")
+			idxString, _ = strings.CutSuffix(idxString, "Resolution")
+			idx, _ := strconv.Atoi(idxString)
+			code += fmt.Sprintf("        %s.%s = (glsl_vec4){.x = %f, .y = %f, .z = %f, .w = %f};\n", structName, uniform.Name, resolutions[idx][0], resolutions[idx][1], resolutions[idx][2], resolutions[idx][3])
 		} else if uniform.Name == "g_Time" {
 			code += "        " + structName + ".g_Time = (glsl_float){.x = time};\n"
 		} else if uniform.Name == "g_ParallaxPosition" {
@@ -489,6 +500,8 @@ func importTexture(textureName string) (ImportedTexture, error) {
 		Name:        textureName,
 		Width:       converted.Width,
 		Height:      converted.Height,
+		MapWidth:    converted.MapWidth,
+		MapHeight:   converted.MapHeight,
 		PixelFormat: converted.PixelFormat,
 	}
 

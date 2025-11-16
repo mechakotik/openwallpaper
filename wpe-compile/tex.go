@@ -131,6 +131,8 @@ type WebPResult struct {
 	Data        []byte
 	Width       int
 	Height      int
+	MapWidth    int
+	MapHeight   int
 	PixelFormat string
 }
 
@@ -159,11 +161,20 @@ func texToWEBP(texBytes []byte) (WebPResult, error) {
 	w := srcImg.Bounds().Dx()
 	h := srcImg.Bounds().Dy()
 	pf := pixelFormatOf(srcImg)
+	mapWidth := int(t.Header.TextureW)
+	mapHeight := int(t.Header.TextureH)
 	var buf bytes.Buffer
 	if err := webp.Encode(&buf, srcImg, &webp.Options{Lossless: true}); err != nil {
 		return WebPResult{}, fmt.Errorf("webp encode: %w", err)
 	}
-	return WebPResult{Data: buf.Bytes(), Width: w, Height: h, PixelFormat: pf}, nil
+	return WebPResult{
+		Data:        buf.Bytes(),
+		Width:       w,
+		Height:      h,
+		MapWidth:    mapWidth,
+		MapHeight:   mapHeight,
+		PixelFormat: pf,
+	}, nil
 }
 
 func readTEX(r *bytes.Reader) (*tex, error) {
