@@ -432,13 +432,17 @@ func generateUniformSetupCode(structName string, uniforms []UniformInfo, constan
 			code += "        " + structName + ".g_ViewProjectionMatrix = matrices.view_projection;\n"
 		} else if uniform.Name == "g_ModelViewProjectionMatrix" {
 			code += "        " + structName + ".g_ModelViewProjectionMatrix = matrices.model_view_projection;\n"
-		} else if uniform.Name == "g_Texture0Rotation" {
+		} else if strings.HasPrefix(uniform.Name, "g_Texture") && strings.HasSuffix(uniform.Name, "Rotation") {
 			code += "        " + structName + ".g_Texture0Rotation = (glsl_vec4){.x = 1.0f, .y = 0.0f, .z = 0.0f, .w = 1.0f};\n"
+		} else if strings.HasPrefix(uniform.Name, "g_Texture") && strings.HasSuffix(uniform.Name, "Translation") {
+			// TODO:
 		} else if strings.HasPrefix(uniform.Name, "g_Texture") && strings.HasSuffix(uniform.Name, "Resolution") {
 			idxString, _ := strings.CutPrefix(uniform.Name, "g_Texture")
 			idxString, _ = strings.CutSuffix(idxString, "Resolution")
 			idx, _ := strconv.Atoi(idxString)
-			code += fmt.Sprintf("        %s.%s = (glsl_vec4){.x = %f, .y = %f, .z = %f, .w = %f};\n", structName, uniform.Name, resolutions[idx][0], resolutions[idx][1], resolutions[idx][2], resolutions[idx][3])
+			if idx < len(resolutions) {
+				code += fmt.Sprintf("        %s.%s = (glsl_vec4){.x = %f, .y = %f, .z = %f, .w = %f};\n", structName, uniform.Name, resolutions[idx][0], resolutions[idx][1], resolutions[idx][2], resolutions[idx][3])
+			}
 		} else if uniform.Name == "g_Time" {
 			code += "        " + structName + ".g_Time = (glsl_float){.x = time};\n"
 		} else if uniform.Name == "g_ParallaxPosition" {
@@ -447,6 +451,8 @@ func generateUniformSetupCode(structName string, uniforms []UniformInfo, constan
 			code += "        " + structName + ".g_Screen = (glsl_vec3){.at = {screen_width, screen_height, (float)screen_width / (float)screen_height}};\n"
 		} else if uniform.Name == "g_EffectTextureProjectionMatrix" || uniform.Name == "g_EffectTextureProjectionMatrixInverse" {
 			code += "        " + structName + "." + uniform.Name + " = mat4_identity();\n"
+		} else if uniform.Name == "g_EyePosition" {
+			code += "        " + structName + ".g_EyePosition = (glsl_vec3){.at = {0, 0, 0}};\n"
 		} else if uniform.DefaultSet {
 			code += fmt.Sprintf("        %s.%s = (glsl_%s){.at = {", structName, uniform.Name, uniform.Type)
 			value := uniform.Default

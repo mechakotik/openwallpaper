@@ -47,6 +47,9 @@ func preprocessShader(vertexSource, fragmentSource, includePath string, boundTex
 	vertexSource = renameSymbol(vertexSource, "sample", "sample_")
 	fragmentSource = renameSymbol(fragmentSource, "sample", "sample_")
 
+	vertexSource = removeRequireDirectives(vertexSource)
+	fragmentSource = removeRequireDirectives(fragmentSource)
+
 	vertexUniformConstantNames := parseUniformConstantNames(vertexSource)
 	vertexUniformDefaults := parseUniformDefaults(vertexSource)
 	fragmentUniformConstantNames := parseUniformConstantNames(fragmentSource)
@@ -148,6 +151,11 @@ func renameSymbol(source string, from string, to string) string {
 		return submatches[1] + to + submatches[3]
 	})
 	return source
+}
+
+func removeRequireDirectives(source string) string {
+	reRequire := regexp.MustCompile(`#require.*\n`)
+	return reRequire.ReplaceAllString(source, "")
 }
 
 func appendGLSL450Header(source string) string {

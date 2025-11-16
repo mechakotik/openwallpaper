@@ -59,9 +59,6 @@ func parseEffect(jsonBytes []byte) (*Effect, error) {
 	if err := json.Unmarshal(jsonBytes, &r); err != nil {
 		return nil, fmt.Errorf("invalid JSON: %w", err)
 	}
-	if r.Version <= 0 {
-		return nil, errors.New("missing or invalid 'version'")
-	}
 	if len(r.Passes) == 0 {
 		return nil, errors.New("missing 'passes'")
 	}
