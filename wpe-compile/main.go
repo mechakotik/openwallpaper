@@ -23,13 +23,12 @@ type CompiledShader struct {
 }
 
 type ImportedTexture struct {
-	ID          int
-	Name        string
-	Width       int
-	Height      int
-	MapWidth    int
-	MapHeight   int
-	PixelFormat string
+	ID            int
+	Name          string
+	Width         int
+	Height        int
+	ClampUV       bool
+	Interpolation bool
 }
 
 type UniformCMapping struct {
@@ -48,6 +47,7 @@ type EffectPassMeta struct {
 type CodegenTextureBindingData struct {
 	Slot    int
 	Texture string
+	Sampler string
 }
 
 type CodegenTransformData struct {
@@ -290,8 +290,9 @@ func processObjectInit(object SceneObject, tempBuffers *[2]int) (CodegenPassData
 		passData.TextureBindings = append(passData.TextureBindings, CodegenTextureBindingData{
 			Slot:    slot,
 			Texture: fmt.Sprintf("texture%d", texture.ID),
+			Sampler: getTextureSampler(texture),
 		})
-		resolutions = append(resolutions, [4]float32{float32(texture.Width), float32(texture.Height), float32(texture.MapWidth), float32(texture.MapHeight)})
+		resolutions = append(resolutions, [4]float32{float32(texture.Width), float32(texture.Height), float32(texture.Width), float32(texture.Height)})
 	}
 
 	passData.Transform = CodegenTransformData{
@@ -384,14 +385,16 @@ func processEffect(object SceneObject, effectInstance EffectInstance, tempBuffer
 				passData.TextureBindings = append(passData.TextureBindings, CodegenTextureBindingData{
 					Slot:    slot,
 					Texture: fmt.Sprintf("temp_buffers[%d]", tempBuffers[0]),
+					Sampler: "linear_clamp_sampler",
 				})
 				resolutions = append(resolutions, [4]float32{float32(scene.General.Ortho.Width), float32(scene.General.Ortho.Height), float32(scene.General.Ortho.Width), float32(scene.General.Ortho.Height)})
 			} else {
 				passData.TextureBindings = append(passData.TextureBindings, CodegenTextureBindingData{
 					Slot:    slot,
 					Texture: fmt.Sprintf("texture%d", texture.ID),
+					Sampler: getTextureSampler(texture),
 				})
-				resolutions = append(resolutions, [4]float32{float32(texture.Width), float32(texture.Height), float32(texture.MapWidth), float32(texture.MapHeight)})
+				resolutions = append(resolutions, [4]float32{float32(texture.Width), float32(texture.Height), float32(texture.Width), float32(texture.Height)})
 			}
 		}
 
@@ -496,25 +499,40 @@ func importTexture(textureName string) (ImportedTexture, error) {
 		return ImportedTexture{}, err
 	}
 
-	converted, err := texToWEBP(textureBytes)
+	converted, err := texToWebp(textureBytes)
 	if err != nil {
 		return ImportedTexture{}, err
 	}
 
 	textureMap[textureName] = ImportedTexture{
-		ID:          len(textureMap),
-		Name:        textureName,
-		Width:       converted.Width,
-		Height:      converted.Height,
-		MapWidth:    converted.MapWidth,
-		MapHeight:   converted.MapHeight,
-		PixelFormat: converted.PixelFormat,
+		ID:            len(textureMap),
+		Name:          textureName,
+		Width:         converted.Width,
+		Height:        converted.Height,
+		ClampUV:       converted.ClampUV,
+		Interpolation: converted.Interpolation,
 	}
 
 	outputMap[fmt.Sprintf("assets/texture%d.webp", textureMap[textureName].ID)] = converted.Data
 	codegenData.Textures = append(codegenData.Textures, textureMap[textureName])
 
 	return textureMap[textureName], nil
+}
+
+func getTextureSampler(texture ImportedTexture) string {
+	if texture.Interpolation {
+		if texture.ClampUV {
+			return "linear_clamp_sampler"
+		} else {
+			return "linear_repeat_sampler"
+		}
+	} else {
+		if texture.ClampUV {
+			return "nearest_clamp_sampler"
+		} else {
+			return "nearest_repeat_sampler"
+		}
+	}
 }
 
 func getTempBuffer(params TempBufferParameters) int {

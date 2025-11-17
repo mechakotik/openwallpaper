@@ -28,7 +28,11 @@ ow_vertex_attribute vertex_attributes[2] = {
 
 ow_id temp_buffers[{{len .TempBuffers}}];
 ow_id vertex_quad_buffer;
-ow_id linear_mirror_sampler;
+
+ow_id linear_clamp_sampler;
+ow_id linear_repeat_sampler;
+ow_id nearest_clamp_sampler;
+ow_id nearest_repeat_sampler;
 
 ow_texture_info texture_info = {
     .mip_levels = 1,
@@ -65,11 +69,47 @@ __attribute__((export_name("init"))) void init() {
             .min_filter = OW_FILTER_LINEAR,
             .mag_filter = OW_FILTER_LINEAR,
             .mip_filter = OW_FILTER_LINEAR,
-            .wrap_x = OW_WRAP_MIRROR,
-            .wrap_y = OW_WRAP_MIRROR,
+            .wrap_x = OW_WRAP_CLAMP,
+            .wrap_y = OW_WRAP_CLAMP,
         };
 
-        linear_mirror_sampler = ow_create_sampler(&sampler_info);
+        linear_clamp_sampler = ow_create_sampler(&sampler_info);
+    }
+
+    {
+        ow_sampler_info sampler_info = {
+            .min_filter = OW_FILTER_LINEAR,
+            .mag_filter = OW_FILTER_LINEAR,
+            .mip_filter = OW_FILTER_LINEAR,
+            .wrap_x = OW_WRAP_REPEAT,
+            .wrap_y = OW_WRAP_REPEAT,
+        };
+
+        linear_repeat_sampler = ow_create_sampler(&sampler_info);
+    }
+
+    {
+        ow_sampler_info sampler_info = {
+            .min_filter = OW_FILTER_NEAREST,
+            .mag_filter = OW_FILTER_NEAREST,
+            .mip_filter = OW_FILTER_NEAREST,
+            .wrap_x = OW_WRAP_CLAMP,
+            .wrap_y = OW_WRAP_CLAMP,
+        };
+
+        nearest_clamp_sampler = ow_create_sampler(&sampler_info);
+    }
+
+    {
+        ow_sampler_info sampler_info = {
+            .min_filter = OW_FILTER_NEAREST,
+            .mag_filter = OW_FILTER_NEAREST,
+            .mip_filter = OW_FILTER_NEAREST,
+            .wrap_x = OW_WRAP_REPEAT,
+            .wrap_y = OW_WRAP_REPEAT,
+        };
+
+        nearest_repeat_sampler = ow_create_sampler(&sampler_info);
     }
 
 {{range $_, $texture := .Textures}}    texture{{$texture.ID}} = ow_create_texture_from_png("assets/texture{{$texture.ID}}.webp", &texture_info);
@@ -170,7 +210,7 @@ typedef struct {{"{"}}{{range $_, $uniform := .FragmentUniforms}}
         {{range $_, $binding := .TextureBindings}}texture_bindings[{{$binding.Slot}}] = (ow_texture_binding){
             .slot = {{$binding.Slot}},
             .texture = {{$binding.Texture}},
-            .sampler = linear_mirror_sampler,
+            .sampler = {{$binding.Sampler}},
         };
 {{end}}
         ow_bindings_info bindings_info = {

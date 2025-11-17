@@ -7,743 +7,563 @@ import (
 	"fmt"
 	"image"
 	"image/draw"
-	"image/gif"
-	"image/jpeg"
-	"image/png"
-	"io"
+	_ "image/gif"
+	_ "image/jpeg"
+	_ "image/png"
+	"strconv"
 
 	"github.com/chai2010/webp"
-	"github.com/dblezek/tga"
 	"github.com/pierrec/lz4/v4"
-	"golang.org/x/image/bmp"
-	"golang.org/x/image/tiff"
 )
+
+type WebpResult struct {
+	Data          []byte
+	Width         int
+	Height        int
+	ClampUV       bool
+	Interpolation bool
+}
+
+func texToWebp(texBytes []byte) (WebpResult, error) {
+	reader := bytes.NewReader(texBytes)
+
+	magic1, err := readCString(reader, 16)
+	if err != nil {
+		return WebpResult{}, fmt.Errorf("read TEX magic1 failed: %w", err)
+	}
+	if magic1 != "TEXV0005" {
+		return WebpResult{}, fmt.Errorf("unsupported TEX magic1: %q", magic1)
+	}
+
+	magic2, err := readCString(reader, 16)
+	if err != nil {
+		return WebpResult{}, fmt.Errorf("read TEX magic2 failed: %w", err)
+	}
+	if magic2 != "TEXI0001" {
+		return WebpResult{}, fmt.Errorf("unsupported TEX magic2: %q", magic2)
+	}
+
+	header, err := readTexHeader(reader)
+	if err != nil {
+		return WebpResult{}, fmt.Errorf("read TEX header failed: %w", err)
+	}
+
+	containerMagic, err := readCString(reader, 16)
+	if err != nil {
+		return WebpResult{}, fmt.Errorf("read TEXB magic failed: %w", err)
+	}
+
+	imageCount, err := readInt32(reader)
+	if err != nil {
+		return WebpResult{}, fmt.Errorf("read imageCount failed: %w", err)
+	}
+	if imageCount <= 0 {
+		return WebpResult{}, errors.New("tex file has no images")
+	}
+
+	imageFormat, containerVersion, err := readImageContainerHeader(reader, containerMagic)
+	if err != nil {
+		return WebpResult{}, fmt.Errorf("read image container header failed: %w", err)
+	}
+
+	if header.Flags&texFlagIsVideoTexture != 0 || imageFormat == freeImageMp4 {
+		return WebpResult{}, errors.New("video textures (MP4) are not supported by texToWebp")
+	}
+
+	mipmapCount, err := readInt32(reader)
+	if err != nil {
+		return WebpResult{}, fmt.Errorf("read mipmapCount failed: %w", err)
+	}
+	if mipmapCount <= 0 {
+		return WebpResult{}, errors.New("first image has no mipmaps")
+	}
+
+	firstMipmap, err := readMipmap(reader, containerVersion)
+	if err != nil {
+		return WebpResult{}, fmt.Errorf("read first mipmap failed: %w", err)
+	}
+
+	rgbaPixels, effectiveWidth, effectiveHeight, err := decodeMipmapToRGBA(firstMipmap, header, header.Format, imageFormat)
+	if err != nil {
+		return WebpResult{}, fmt.Errorf("decode mipmap failed: %w", err)
+	}
+
+	webpBytes, err := encodeRGBAtoWebP(rgbaPixels, effectiveWidth, effectiveHeight)
+	if err != nil {
+		return WebpResult{}, fmt.Errorf("encode webp failed: %w", err)
+	}
+
+	result := WebpResult{
+		Data:          webpBytes,
+		Width:         firstMipmap.Width,
+		Height:        firstMipmap.Height,
+		ClampUV:       header.Flags&texFlagClampUVs != 0,
+		Interpolation: header.Flags&texFlagNoInterpolation == 0,
+	}
+
+	return result, nil
+}
 
 type texFormat int32
 
 const (
-	texRGBA8888 texFormat = 0
-	texDXT5     texFormat = 4
-	texDXT3     texFormat = 6
-	texDXT1     texFormat = 7
-	texRG88     texFormat = 8
-	texR8       texFormat = 9
+	texFormatRGBA8888 texFormat = 0
+	texFormatDXT5     texFormat = 4
+	texFormatDXT3     texFormat = 6
+	texFormatDXT1     texFormat = 7
+	texFormatRG88     texFormat = 8
+	texFormatR8       texFormat = 9
 )
 
 type texFlags uint32
 
 const (
-	flagNoInterp texFlags = 1
-	flagClampUVs texFlags = 2
-	flagIsGif    texFlags = 4
-	flagIsVideo  texFlags = 32
+	texFlagNoInterpolation texFlags = 1 << 0
+	texFlagClampUVs        texFlags = 1 << 1
+	texFlagIsGif           texFlags = 1 << 2
+	texFlagIsVideoTexture  texFlags = 1 << 5
+)
+
+type texHeader struct {
+	Format        texFormat
+	Flags         texFlags
+	TextureWidth  int
+	TextureHeight int
+	ImageWidth    int
+	ImageHeight   int
+	UnkInt0       uint32
+}
+
+type texImageContainerVersion int
+
+const (
+	texContainerV1 texImageContainerVersion = 1
+	texContainerV2 texImageContainerVersion = 2
+	texContainerV3 texImageContainerVersion = 3
+	texContainerV4 texImageContainerVersion = 4
 )
 
 type freeImageFormat int32
 
 const (
-	fifUNKNOWN freeImageFormat = -1
-	fifBMP     freeImageFormat = 0
-	fifICO     freeImageFormat = 1
-	fifJPEG    freeImageFormat = 2
-	fifJNG     freeImageFormat = 3
-	fifKOALA   freeImageFormat = 4
-	fifLBM     freeImageFormat = 5
-	fifMNG     freeImageFormat = 6
-	fifPBM     freeImageFormat = 7
-	fifPBMRAW  freeImageFormat = 8
-	fifPCD     freeImageFormat = 9
-	fifPCX     freeImageFormat = 10
-	fifPGM     freeImageFormat = 11
-	fifPGMRAW  freeImageFormat = 12
-	fifPNG     freeImageFormat = 13
-	fifPPM     freeImageFormat = 14
-	fifPPMRAW  freeImageFormat = 15
-	fifRAS     freeImageFormat = 16
-	fifTARGA   freeImageFormat = 17
-	fifTIFF    freeImageFormat = 18
-	fifWBMP    freeImageFormat = 19
-	fifPSD     freeImageFormat = 20
-	fifCUT     freeImageFormat = 21
-	fifXBM     freeImageFormat = 22
-	fifXPM     freeImageFormat = 23
-	fifDDS     freeImageFormat = 24
-	fifGIF     freeImageFormat = 25
-	fifHDR     freeImageFormat = 26
-	fifFAXG3   freeImageFormat = 27
-	fifSGI     freeImageFormat = 28
-	fifEXR     freeImageFormat = 29
-	fifJ2K     freeImageFormat = 30
-	fifJP2     freeImageFormat = 31
-	fifPFM     freeImageFormat = 32
-	fifPICT    freeImageFormat = 33
-	fifRAW     freeImageFormat = 34
-	fifMP4     freeImageFormat = 35
+	freeImageUnknown freeImageFormat = -1
+	freeImageMp4     freeImageFormat = 35
 )
 
-type texHeader struct {
-	Format   texFormat
-	Flags    texFlags
-	TextureW int32
-	TextureH int32
-	ImageW   int32
-	ImageH   int32
-	UnkInt0  uint32
+type texMipmap struct {
+	Width            int
+	Height           int
+	IsLZ4Compressed  bool
+	DecompressedSize int
+	Data             []byte
 }
 
-type mipmap struct {
-	W, H    int32
-	LZ4     bool
-	DecSize int32
-	Data    []byte
-}
+func readTexHeader(r *bytes.Reader) (texHeader, error) {
+	var header texHeader
 
-type imageContainer struct {
-	Magic       string
-	Version     int
-	ImageFormat freeImageFormat
-	Images      [][]mipmap
-}
-
-type frameInfo struct {
-	ImageID   int32
-	Frametime float32
-	X, Y      float32
-	Width     float32
-	WidthY    float32
-	HeightX   float32
-	Height    float32
-}
-
-type frameInfoContainer struct {
-	Magic  string
-	W, H   int32
-	Frames []frameInfo
-}
-
-type tex struct {
-	Header texHeader
-	IC     imageContainer
-	FIC    *frameInfoContainer
-}
-
-type WebPResult struct {
-	Data        []byte
-	Width       int
-	Height      int
-	MapWidth    int
-	MapHeight   int
-	PixelFormat string
-}
-
-func texToWEBP(texBytes []byte) (WebPResult, error) {
-	r := bytes.NewReader(texBytes)
-	t, err := readTEX(r)
+	format, err := readInt32(r)
 	if err != nil {
-		return WebPResult{}, err
+		return header, err
 	}
-	if (t.Header.Flags & flagIsVideo) != 0 {
-		return WebPResult{}, errors.New("video TEX is not supported")
-	}
-	if (t.Header.Flags & flagIsGif) != 0 {
-		return WebPResult{}, errors.New("animated TEX is not supported")
-	}
-	if len(t.IC.Images) == 0 || len(t.IC.Images[0]) == 0 {
-		return WebPResult{}, errors.New("empty TEX")
-	}
-	srcImg, err := decodeMipmapToImage(t.Header, t.IC, t.IC.Images[0][0])
+	flags, err := readUint32(r)
 	if err != nil {
-		return WebPResult{}, err
+		return header, err
 	}
-	if srcImg.Bounds().Dx() != int(t.Header.ImageW) || srcImg.Bounds().Dy() != int(t.Header.ImageH) {
-		srcImg = crop(srcImg, image.Rect(0, 0, int(t.Header.ImageW), int(t.Header.ImageH)))
+	textureWidth, err := readInt32(r)
+	if err != nil {
+		return header, err
 	}
-	w := srcImg.Bounds().Dx()
-	h := srcImg.Bounds().Dy()
-	pf := pixelFormatOf(srcImg)
-	mapWidth := int(t.Header.TextureW)
-	mapHeight := int(t.Header.TextureH)
-	var buf bytes.Buffer
-	if err := webp.Encode(&buf, srcImg, &webp.Options{Lossless: true}); err != nil {
-		return WebPResult{}, fmt.Errorf("webp encode: %w", err)
+	textureHeight, err := readInt32(r)
+	if err != nil {
+		return header, err
 	}
-	return WebPResult{
-		Data:        buf.Bytes(),
-		Width:       w,
-		Height:      h,
-		MapWidth:    mapWidth,
-		MapHeight:   mapHeight,
-		PixelFormat: pf,
+	imageWidth, err := readInt32(r)
+	if err != nil {
+		return header, err
+	}
+	imageHeight, err := readInt32(r)
+	if err != nil {
+		return header, err
+	}
+	unk, err := readUint32(r)
+	if err != nil {
+		return header, err
+	}
+
+	header.Format = texFormat(format)
+	header.Flags = texFlags(flags)
+	header.TextureWidth = int(textureWidth)
+	header.TextureHeight = int(textureHeight)
+	header.ImageWidth = int(imageWidth)
+	header.ImageHeight = int(imageHeight)
+	header.UnkInt0 = unk
+
+	return header, nil
+}
+
+func readImageContainerHeader(r *bytes.Reader, magic string) (freeImageFormat, texImageContainerVersion, error) {
+	imageFormat := freeImageUnknown
+
+	switch magic {
+	case "TEXB0001", "TEXB0002":
+	case "TEXB0003":
+		formatRaw, err := readInt32(r)
+		if err != nil {
+			return freeImageUnknown, 0, err
+		}
+		imageFormat = freeImageFormat(formatRaw)
+	case "TEXB0004":
+		formatRaw, err := readInt32(r)
+		if err != nil {
+			return freeImageUnknown, 0, err
+		}
+		isVideoMp4Int, err := readInt32(r)
+		if err != nil {
+			return freeImageUnknown, 0, err
+		}
+		imageFormat = freeImageFormat(formatRaw)
+		if imageFormat == freeImageUnknown && isVideoMp4Int == 1 {
+			imageFormat = freeImageMp4
+		}
+	default:
+		return freeImageUnknown, 0, fmt.Errorf("unknown TEXB magic: %q", magic)
+	}
+
+	versionNumber, err := strconv.Atoi(magic[4:])
+	if err != nil {
+		return freeImageUnknown, 0, fmt.Errorf("invalid TEXB version in magic %q: %w", magic, err)
+	}
+	containerVersion := texImageContainerVersion(versionNumber)
+
+	if containerVersion == texContainerV4 && imageFormat != freeImageMp4 {
+		containerVersion = texContainerV3
+	}
+
+	return imageFormat, containerVersion, nil
+}
+
+func readMipmap(r *bytes.Reader, version texImageContainerVersion) (texMipmap, error) {
+	switch version {
+	case texContainerV1:
+		return readMipmapV1(r)
+	case texContainerV2, texContainerV3:
+		return readMipmapV2V3(r)
+	case texContainerV4:
+		return readMipmapV4(r)
+	default:
+		return texMipmap{}, fmt.Errorf("unsupported image container version: %d", version)
+	}
+}
+
+func readMipmapV1(r *bytes.Reader) (texMipmap, error) {
+	width, err := readInt32(r)
+	if err != nil {
+		return texMipmap{}, err
+	}
+	height, err := readInt32(r)
+	if err != nil {
+		return texMipmap{}, err
+	}
+	size, err := readInt32(r)
+	if err != nil {
+		return texMipmap{}, err
+	}
+	if size < 0 {
+		return texMipmap{}, fmt.Errorf("negative mipmap size v1: %d", size)
+	}
+
+	data, err := readBytes(r, int(size))
+	if err != nil {
+		return texMipmap{}, err
+	}
+
+	return texMipmap{
+		Width:            int(width),
+		Height:           int(height),
+		IsLZ4Compressed:  false,
+		DecompressedSize: 0,
+		Data:             data,
 	}, nil
 }
 
-func readTEX(r *bytes.Reader) (*tex, error) {
-	m1, err := readNString(r, 16)
-	if err != nil || m1 != "TEXV0005" {
-		return nil, fmt.Errorf("invalid TEXV magic: %q", m1)
-	}
-	m2, err := readNString(r, 16)
-	if err != nil || m2 != "TEXI0001" {
-		return nil, fmt.Errorf("invalid TEXI magic: %q", m2)
-	}
-	var h texHeader
-	if err := readHeader(r, &h); err != nil {
-		return nil, err
-	}
-	ic, err := readImageContainer(r, h.Format)
+func readMipmapV2V3(r *bytes.Reader) (texMipmap, error) {
+	width, err := readInt32(r)
 	if err != nil {
-		return nil, err
+		return texMipmap{}, err
 	}
-	var fic *frameInfoContainer
-	if (h.Flags & flagIsGif) != 0 {
-		f, err := readFrameInfoContainer(r)
-		if err != nil {
-			return nil, err
-		}
-		fic = &f
-	}
-	return &tex{Header: h, IC: ic, FIC: fic}, nil
-}
-
-func readHeader(r io.Reader, h *texHeader) error {
-	var tmp [7]int32
-	if err := binary.Read(r, binary.LittleEndian, &tmp); err != nil {
-		return err
-	}
-	h.Format = texFormat(tmp[0])
-	h.Flags = texFlags(tmp[1])
-	h.TextureW, h.TextureH = tmp[2], tmp[3]
-	h.ImageW, h.ImageH = tmp[4], tmp[5]
-	if err := binary.Read(r, binary.LittleEndian, &h.UnkInt0); err != nil {
-		return err
-	}
-	return nil
-}
-
-func readImageContainer(r *bytes.Reader, _ texFormat) (imageContainer, error) {
-	magic, err := readNString(r, 16)
+	height, err := readInt32(r)
 	if err != nil {
-		return imageContainer{}, err
+		return texMipmap{}, err
 	}
-	var count int32
-	if err := binary.Read(r, binary.LittleEndian, &count); err != nil {
-		return imageContainer{}, err
-	}
-	ic := imageContainer{Magic: "TEXB" + magic, Version: mustAtoi(magic)}
-	switch ic.Magic {
-	case "TEXB0001", "TEXB0002":
-		ic.ImageFormat = fifUNKNOWN
-	case "TEXB0003":
-		var f int32
-		if err := binary.Read(r, binary.LittleEndian, &f); err != nil {
-			return ic, err
-		}
-		ic.ImageFormat = freeImageFormat(f)
-	case "TEXB0004":
-		var f, isMp4 int32
-		if err := binary.Read(r, binary.LittleEndian, &f); err != nil {
-			return ic, err
-		}
-		if err := binary.Read(r, binary.LittleEndian, &isMp4); err != nil {
-			return ic, err
-		}
-		if freeImageFormat(f) == fifUNKNOWN && isMp4 == 1 {
-			ic.ImageFormat = fifMP4
-		} else {
-			ic.ImageFormat = freeImageFormat(f)
-		}
-	default:
-		return ic, fmt.Errorf("unsupported TEXB: %s", ic.Magic)
-	}
-	if ic.Version == 4 && ic.ImageFormat != fifMP4 {
-		ic.Version = 3
-	}
-	ic.Images = make([][]mipmap, count)
-	for i := 0; i < int(count); i++ {
-		mc, err := readMipmaps(r, ic.Version)
-		if err != nil {
-			return ic, err
-		}
-		ic.Images[i] = mc
-	}
-	return ic, nil
-}
-
-func readMipmaps(r *bytes.Reader, ver int) ([]mipmap, error) {
-	var mipCount int32
-	if err := binary.Read(r, binary.LittleEndian, &mipCount); err != nil {
-		return nil, err
-	}
-	mips := make([]mipmap, mipCount)
-	for i := range mips {
-		switch ver {
-		case 1:
-			var w, h, sz int32
-			if err := binary.Read(r, binary.LittleEndian, &w); err != nil {
-				return nil, err
-			}
-			if err := binary.Read(r, binary.LittleEndian, &h); err != nil {
-				return nil, err
-			}
-			if err := binary.Read(r, binary.LittleEndian, &sz); err != nil {
-				return nil, err
-			}
-			data := make([]byte, sz)
-			if _, err := io.ReadFull(r, data); err != nil {
-				return nil, err
-			}
-			mips[i] = mipmap{W: w, H: h, Data: data}
-		case 2, 3:
-			var w, h, lz4Flag, dec, sz int32
-			if err := binary.Read(r, binary.LittleEndian, &w); err != nil {
-				return nil, err
-			}
-			if err := binary.Read(r, binary.LittleEndian, &h); err != nil {
-				return nil, err
-			}
-			if err := binary.Read(r, binary.LittleEndian, &lz4Flag); err != nil {
-				return nil, err
-			}
-			if err := binary.Read(r, binary.LittleEndian, &dec); err != nil {
-				return nil, err
-			}
-			if err := binary.Read(r, binary.LittleEndian, &sz); err != nil {
-				return nil, err
-			}
-			data := make([]byte, sz)
-			if _, err := io.ReadFull(r, data); err != nil {
-				return nil, err
-			}
-			mips[i] = mipmap{W: w, H: h, LZ4: lz4Flag == 1, DecSize: dec, Data: data}
-		case 4:
-			var p1, p2 int32
-			if err := binary.Read(r, binary.LittleEndian, &p1); err != nil {
-				return nil, err
-			}
-			if err := binary.Read(r, binary.LittleEndian, &p2); err != nil {
-				return nil, err
-			}
-			if _, err := readNString(r, -1); err != nil {
-				return nil, err
-			}
-			var p3 int32
-			if err := binary.Read(r, binary.LittleEndian, &p3); err != nil {
-				return nil, err
-			}
-			var w, h, lz4Flag, dec, sz int32
-			if err := binary.Read(r, binary.LittleEndian, &w); err != nil {
-				return nil, err
-			}
-			if err := binary.Read(r, binary.LittleEndian, &h); err != nil {
-				return nil, err
-			}
-			if err := binary.Read(r, binary.LittleEndian, &lz4Flag); err != nil {
-				return nil, err
-			}
-			if err := binary.Read(r, binary.LittleEndian, &dec); err != nil {
-				return nil, err
-			}
-			if err := binary.Read(r, binary.LittleEndian, &sz); err != nil {
-				return nil, err
-			}
-			data := make([]byte, sz)
-			if _, err := io.ReadFull(r, data); err != nil {
-				return nil, err
-			}
-			mips[i] = mipmap{W: w, H: h, LZ4: lz4Flag == 1, DecSize: dec, Data: data}
-		default:
-			return nil, fmt.Errorf("unsupported container version: %d", ver)
-		}
-	}
-	return mips, nil
-}
-
-func readFrameInfoContainer(r *bytes.Reader) (frameInfoContainer, error) {
-	magic, err := readNString(r, 16)
+	lz4Flag, err := readInt32(r)
 	if err != nil {
-		return frameInfoContainer{}, err
+		return texMipmap{}, err
 	}
-	var n int32
-	if err := binary.Read(r, binary.LittleEndian, &n); err != nil {
-		return frameInfoContainer{}, err
+	decompressedSize, err := readInt32(r)
+	if err != nil {
+		return texMipmap{}, err
 	}
-	fic := frameInfoContainer{Magic: magic}
-	switch magic {
-	case "TEXS0001":
-		fic.Frames = make([]frameInfo, n)
-		for i := 0; i < int(n); i++ {
-			var im int32
-			var ft float32
-			var xi, yi, wi, wyi, hxi, hi int32
-			binary.Read(r, binary.LittleEndian, &im)
-			binary.Read(r, binary.LittleEndian, &ft)
-			binary.Read(r, binary.LittleEndian, &xi)
-			binary.Read(r, binary.LittleEndian, &yi)
-			binary.Read(r, binary.LittleEndian, &wi)
-			binary.Read(r, binary.LittleEndian, &wyi)
-			binary.Read(r, binary.LittleEndian, &hxi)
-			binary.Read(r, binary.LittleEndian, &hi)
-			fic.Frames[i] = frameInfo{
-				ImageID: im, Frametime: ft,
-				X: float32(xi), Y: float32(yi),
-				Width: float32(wi), WidthY: float32(wyi),
-				HeightX: float32(hxi), Height: float32(hi),
-			}
-		}
-	case "TEXS0002":
-		fic.Frames = make([]frameInfo, n)
-		for i := 0; i < int(n); i++ {
-			var f frameInfo
-			binary.Read(r, binary.LittleEndian, &f.ImageID)
-			binary.Read(r, binary.LittleEndian, &f.Frametime)
-			binary.Read(r, binary.LittleEndian, &f.X)
-			binary.Read(r, binary.LittleEndian, &f.Y)
-			binary.Read(r, binary.LittleEndian, &f.Width)
-			binary.Read(r, binary.LittleEndian, &f.WidthY)
-			binary.Read(r, binary.LittleEndian, &f.HeightX)
-			binary.Read(r, binary.LittleEndian, &f.Height)
-			fic.Frames[i] = f
-		}
-	case "TEXS0003":
-		binary.Read(r, binary.LittleEndian, &fic.W)
-		binary.Read(r, binary.LittleEndian, &fic.H)
-		fic.Frames = make([]frameInfo, n)
-		for i := 0; i < int(n); i++ {
-			var f frameInfo
-			binary.Read(r, binary.LittleEndian, &f.ImageID)
-			binary.Read(r, binary.LittleEndian, &f.Frametime)
-			binary.Read(r, binary.LittleEndian, &f.X)
-			binary.Read(r, binary.LittleEndian, &f.Y)
-			binary.Read(r, binary.LittleEndian, &f.Width)
-			binary.Read(r, binary.LittleEndian, &f.WidthY)
-			binary.Read(r, binary.LittleEndian, &f.HeightX)
-			binary.Read(r, binary.LittleEndian, &f.Height)
-			fic.Frames[i] = f
-		}
-	default:
-		return fic, fmt.Errorf("unknown TEXS: %s", magic)
+	size, err := readInt32(r)
+	if err != nil {
+		return texMipmap{}, err
 	}
-	if fic.W == 0 || fic.H == 0 {
-		if len(fic.Frames) > 0 {
-			fic.W = int32(absf(nonzero(fic.Frames[0].Width, fic.Frames[0].HeightX)))
-			fic.H = int32(absf(nonzero(fic.Frames[0].Height, fic.Frames[0].WidthY)))
-		}
+	if size < 0 {
+		return texMipmap{}, fmt.Errorf("negative mipmap size v2/v3: %d", size)
 	}
-	return fic, nil
+
+	data, err := readBytes(r, int(size))
+	if err != nil {
+		return texMipmap{}, err
+	}
+
+	return texMipmap{
+		Width:            int(width),
+		Height:           int(height),
+		IsLZ4Compressed:  lz4Flag == 1,
+		DecompressedSize: int(decompressedSize),
+		Data:             data,
+	}, nil
 }
 
-func decodeMipmapToImage(h texHeader, ic imageContainer, m mipmap) (image.Image, error) {
-	if ic.ImageFormat != fifUNKNOWN && ic.ImageFormat != fifMP4 {
-		img, err := decodeEmbeddedImage(ic.ImageFormat, m.Data)
+func readMipmapV4(r *bytes.Reader) (texMipmap, error) {
+	param1, err := readInt32(r)
+	if err != nil {
+		return texMipmap{}, err
+	}
+	if param1 != 1 {
+		return texMipmap{}, fmt.Errorf("unexpected param1 in mipmap v4: %d", param1)
+	}
+	param2, err := readInt32(r)
+	if err != nil {
+		return texMipmap{}, err
+	}
+	if param2 != 2 {
+		return texMipmap{}, fmt.Errorf("unexpected param2 in mipmap v4: %d", param2)
+	}
+
+	_, err = readCString(r, 0)
+	if err != nil {
+		return texMipmap{}, fmt.Errorf("read v4 condition json failed: %w", err)
+	}
+
+	param3, err := readInt32(r)
+	if err != nil {
+		return texMipmap{}, err
+	}
+	if param3 != 1 {
+		return texMipmap{}, fmt.Errorf("unexpected param3 in mipmap v4: %d", param3)
+	}
+
+	width, err := readInt32(r)
+	if err != nil {
+		return texMipmap{}, err
+	}
+	height, err := readInt32(r)
+	if err != nil {
+		return texMipmap{}, err
+	}
+	lz4Flag, err := readInt32(r)
+	if err != nil {
+		return texMipmap{}, err
+	}
+	decompressedSize, err := readInt32(r)
+	if err != nil {
+		return texMipmap{}, err
+	}
+	size, err := readInt32(r)
+	if err != nil {
+		return texMipmap{}, err
+	}
+	if size < 0 {
+		return texMipmap{}, fmt.Errorf("negative mipmap size v4: %d", size)
+	}
+
+	data, err := readBytes(r, int(size))
+	if err != nil {
+		return texMipmap{}, err
+	}
+
+	return texMipmap{
+		Width:            int(width),
+		Height:           int(height),
+		IsLZ4Compressed:  lz4Flag == 1,
+		DecompressedSize: int(decompressedSize),
+		Data:             data,
+	}, nil
+}
+
+func decodeMipmapToRGBA(mipmap texMipmap, header texHeader, format texFormat, imageFormat freeImageFormat) ([]byte, int, int, error) {
+	data := mipmap.Data
+
+	if mipmap.IsLZ4Compressed {
+		if mipmap.DecompressedSize <= 0 {
+			return nil, 0, 0, errors.New("lz4 compressed mipmap without decompressed size")
+		}
+		decompressed, err := lz4DecompressBlock(data, mipmap.DecompressedSize)
 		if err != nil {
-			return nil, err
+			return nil, 0, 0, err
 		}
-		return img, nil
+		data = decompressed
 	}
-	data := m.Data
-	if m.LZ4 {
-		dst := make([]byte, m.DecSize)
-		if _, err := lz4.UncompressBlock(m.Data, dst); err != nil {
-			return nil, fmt.Errorf("lz4: %w", err)
+
+	if imageFormat != freeImageUnknown && imageFormat != freeImageMp4 {
+		img, _, err := image.Decode(bytes.NewReader(data))
+		if err != nil {
+			return nil, 0, 0, fmt.Errorf("decode embedded image failed: %w", err)
 		}
-		data = dst
+		return imageToRGBA(img, header.ImageWidth, header.ImageHeight)
 	}
-	switch h.Format {
-	case texRGBA8888:
-		return rgbaFromBytes(data, int(m.W), int(m.H))
-	case texR8:
-		return r8FromBytes(data, int(m.W), int(m.H))
-	case texRG88:
-		return rg88FromBytes(data, int(m.W), int(m.H))
-	case texDXT1:
-		rgba := decompressDXT(int(m.W), int(m.H), data, dxt1)
-		return rgbaFromBytes(rgba, int(m.W), int(m.H))
-	case texDXT3:
-		rgba := decompressDXT(int(m.W), int(m.H), data, dxt3)
-		return rgbaFromBytes(rgba, int(m.W), int(m.H))
-	case texDXT5:
-		rgba := decompressDXT(int(m.W), int(m.H), data, dxt5)
-		return rgbaFromBytes(rgba, int(m.W), int(m.H))
+
+	switch format {
+	case texFormatDXT1:
+		rgba := decompressDXT(mipmap.Width, mipmap.Height, data, dxtFlagDXT1)
+		return cropRGBA(rgba, mipmap.Width, mipmap.Height, header.ImageWidth, header.ImageHeight)
+	case texFormatDXT3:
+		rgba := decompressDXT(mipmap.Width, mipmap.Height, data, dxtFlagDXT3)
+		return cropRGBA(rgba, mipmap.Width, mipmap.Height, header.ImageWidth, header.ImageHeight)
+	case texFormatDXT5:
+		rgba := decompressDXT(mipmap.Width, mipmap.Height, data, dxtFlagDXT5)
+		return cropRGBA(rgba, mipmap.Width, mipmap.Height, header.ImageWidth, header.ImageHeight)
+	case texFormatRGBA8888:
+		if len(data) < mipmap.Width*mipmap.Height*4 {
+			return nil, 0, 0, fmt.Errorf("rgba8888 data too short: %d", len(data))
+		}
+		return cropRGBA(data, mipmap.Width, mipmap.Height, header.ImageWidth, header.ImageHeight)
+	case texFormatR8:
+		rgba := expandR8ToRGBA(data, mipmap.Width, mipmap.Height)
+		return cropRGBA(rgba, mipmap.Width, mipmap.Height, header.ImageWidth, header.ImageHeight)
+	case texFormatRG88:
+		rgba := expandRG88ToRGBA(data, mipmap.Width, mipmap.Height)
+		return cropRGBA(rgba, mipmap.Width, mipmap.Height, header.ImageWidth, header.ImageHeight)
 	default:
-		return nil, fmt.Errorf("unsupported texFormat: %d", h.Format)
+		return nil, 0, 0, fmt.Errorf("unsupported tex format: %d", format)
 	}
 }
 
-func decodeEmbeddedImage(f freeImageFormat, b []byte) (image.Image, error) {
-	br := bytes.NewReader(b)
-	switch f {
-	case fifPNG:
-		return png.Decode(br)
-	case fifJPEG:
-		return jpeg.Decode(br)
-	case fifGIF:
-		return gif.Decode(br)
-	case fifBMP:
-		return bmp.Decode(br)
-	case fifTIFF:
-		return tiff.Decode(br)
-	case fifTARGA:
-		return tga.Decode(br)
-	default:
-		return nil, fmt.Errorf("embedded format %d is not supported by the pure Go decoder", f)
+func imageToRGBA(img image.Image, targetWidth, targetHeight int) ([]byte, int, int, error) {
+	bounds := img.Bounds()
+	width := bounds.Dx()
+	height := bounds.Dy()
+
+	if targetWidth <= 0 || targetWidth > width {
+		targetWidth = width
 	}
+	if targetHeight <= 0 || targetHeight > height {
+		targetHeight = height
+	}
+
+	dstRect := image.Rect(0, 0, targetWidth, targetHeight)
+	rgbaImage := image.NewRGBA(dstRect)
+	draw.Draw(rgbaImage, dstRect, img, bounds.Min, draw.Src)
+
+	return rgbaImage.Pix, targetWidth, targetHeight, nil
 }
 
-func rgbaFromBytes(pix []byte, w, h int) (image.Image, error) {
-	if len(pix) != w*h*4 {
-		return nil, fmt.Errorf("RGBA size mismatch: %d != %d", len(pix), w*h*4)
+func cropRGBA(src []byte, srcWidth, srcHeight, mapWidth, mapHeight int) ([]byte, int, int, error) {
+	if srcWidth <= 0 || srcHeight <= 0 {
+		return nil, 0, 0, errors.New("invalid source size for crop")
 	}
-	img := image.NewRGBA(image.Rect(0, 0, w, h))
-	copy(img.Pix, pix)
-	return img, nil
+	if mapWidth <= 0 || mapHeight <= 0 {
+		return src, srcWidth, srcHeight, nil
+	}
+	if mapWidth > srcWidth {
+		mapWidth = srcWidth
+	}
+	if mapHeight > srcHeight {
+		mapHeight = srcHeight
+	}
+
+	if mapWidth == srcWidth && mapHeight == srcHeight {
+		return src, srcWidth, srcHeight, nil
+	}
+
+	dst := make([]byte, mapWidth*mapHeight*4)
+	srcStride := srcWidth * 4
+	dstStride := mapWidth * 4
+
+	for y := 0; y < mapHeight; y++ {
+		srcStart := y * srcStride
+		dstStart := y * dstStride
+		copy(dst[dstStart:dstStart+dstStride], src[srcStart:srcStart+dstStride])
+	}
+
+	return dst, mapWidth, mapHeight, nil
 }
 
-func r8FromBytes(pix []byte, w, h int) (image.Image, error) {
-	if len(pix) != w*h {
-		return nil, fmt.Errorf("R8 size mismatch: %d != %d", len(pix), w*h)
-	}
-	img := image.NewRGBA(image.Rect(0, 0, w, h))
-	for i := 0; i < w*h; i++ {
-		v := pix[i]
+func expandR8ToRGBA(src []byte, width, height int) []byte {
+	pixelCount := width * height
+	dst := make([]byte, pixelCount*4)
+	for i := range pixelCount {
+		value := src[i]
 		base := i * 4
-		img.Pix[base+0] = v
-		img.Pix[base+1] = v
-		img.Pix[base+2] = v
-		img.Pix[base+3] = 255
+		dst[base+0] = value
+		dst[base+1] = value
+		dst[base+2] = value
+		dst[base+3] = value
 	}
-	return img, nil
-}
-
-func rg88FromBytes(pix []byte, w, h int) (image.Image, error) {
-	if len(pix) != w*h*2 {
-		return nil, fmt.Errorf("RG88 size mismatch: %d != %d", len(pix), w*h*2)
-	}
-	img := image.NewRGBA(image.Rect(0, 0, w, h))
-	for i := 0; i < w*h; i++ {
-		r := pix[i*2+0]
-		g := pix[i*2+1]
-		base := i * 4
-		img.Pix[base+0] = r
-		img.Pix[base+1] = g
-		img.Pix[base+2] = g
-		img.Pix[base+3] = g
-	}
-	return img, nil
-}
-
-func crop(src image.Image, r image.Rectangle) image.Image {
-	r = r.Intersect(src.Bounds())
-	dst := image.NewRGBA(image.Rect(0, 0, r.Dx(), r.Dy()))
-	draw.Draw(dst, dst.Bounds(), src, r.Min, draw.Src)
 	return dst
 }
 
-func rotate90(img image.Image, deg int) image.Image {
-	deg = ((deg % 360) + 360) % 360
-	b := img.Bounds()
-	switch deg {
-	case 0:
-		return crop(img, b)
-	case 90:
-		dst := image.NewRGBA(image.Rect(0, 0, b.Dy(), b.Dx()))
-		for y := b.Min.Y; y < b.Max.Y; y++ {
-			for x := b.Min.X; x < b.Max.X; x++ {
-				c := img.At(x, y)
-				dst.Set(b.Max.Y-1-y, x-b.Min.X, c)
-			}
-		}
-		return dst
-	case 180:
-		dst := image.NewRGBA(image.Rect(0, 0, b.Dx(), b.Dy()))
-		for y := b.Min.Y; y < b.Max.Y; y++ {
-			for x := b.Min.X; x < b.Max.X; x++ {
-				c := img.At(x, y)
-				dst.Set(b.Max.X-1-x, b.Max.Y-1-y, c)
-			}
-		}
-		return dst
-	case 270:
-		dst := image.NewRGBA(image.Rect(0, 0, b.Dy(), b.Dx()))
-		for y := b.Min.Y; y < b.Max.Y; y++ {
-			for x := b.Min.X; x < b.Max.X; x++ {
-				c := img.At(x, y)
-				dst.Set(y-b.Min.Y, b.Max.X-1-x, c)
-			}
-		}
-		return dst
-	default:
-		return crop(img, b)
+func expandRG88ToRGBA(src []byte, width, height int) []byte {
+	pixelCount := width * height
+	dst := make([]byte, pixelCount*4)
+
+	srcIndex := 0
+	for i := range pixelCount {
+		r := src[srcIndex]
+		g := src[srcIndex+1]
+		srcIndex += 2
+
+		base := i * 4
+		dst[base+0] = r
+		dst[base+1] = g
+		dst[base+2] = g
+		dst[base+3] = g
 	}
+	return dst
 }
 
-func rotationFromSigns(ws, hs float32) int {
-	switch {
-	case ws > 0 && hs > 0:
-		return 0
-	case ws < 0 && hs > 0:
-		return 270
-	case ws < 0 && hs < 0:
-		return 180
-	case ws > 0 && hs < 0:
-		return 90
-	default:
-		return 0
+func encodeRGBAtoWebP(rgba []byte, width, height int) ([]byte, error) {
+	if width <= 0 || height <= 0 {
+		return nil, errors.New("invalid size for webp encode")
 	}
+	if len(rgba) < width*height*4 {
+		return nil, fmt.Errorf("rgba buffer too short: have %d, need %d", len(rgba), width*height*4)
+	}
+
+	img := &image.RGBA{
+		Pix:    rgba,
+		Stride: width * 4,
+		Rect:   image.Rect(0, 0, width, height),
+	}
+
+	var buffer bytes.Buffer
+	if err := webp.Encode(&buffer, img, &webp.Options{Lossless: true}); err != nil {
+		return nil, err
+	}
+	return buffer.Bytes(), nil
 }
 
-func nonzero(a, b float32) float32 {
-	if a != 0 {
-		return a
+func readUint32(r *bytes.Reader) (uint32, error) {
+	var value uint32
+	if err := binary.Read(r, binary.LittleEndian, &value); err != nil {
+		return 0, err
 	}
-	return b
+	return value, nil
 }
 
-func absf(v float32) float32 {
-	if v < 0 {
-		return -v
+func readBytes(r *bytes.Reader, size int) ([]byte, error) {
+	if size < 0 {
+		return nil, fmt.Errorf("negative size: %d", size)
 	}
-	return v
+	data := make([]byte, size)
+	if _, err := r.Read(data); err != nil {
+		return nil, err
+	}
+	return data, nil
 }
 
-type dxtFlags int
-
-const (
-	dxt1 dxtFlags = iota + 1
-	dxt3
-	dxt5
-)
-
-func decompressDXT(w, h int, data []byte, f dxtFlags) []byte {
-	rgba := make([]byte, w*h*4)
-	var blockSize int
-	if f == dxt1 {
-		blockSize = 8
-	} else {
-		blockSize = 16
-	}
-	src := 0
-	tmp := make([]byte, 16*4)
-	for by := 0; by < h; by += 4 {
-		for bx := 0; bx < w; bx += 4 {
-			if src >= len(data) {
-				break
-			}
-			switch f {
-			case dxt1:
-				decompressBlockColor(tmp, data, src, true)
-			case dxt3:
-				decompressBlockColor(tmp, data, src+8, false)
-				decompressBlockAlphaDxt3(tmp, data, src)
-			case dxt5:
-				decompressBlockColor(tmp, data, src+8, false)
-				decompressBlockAlphaDxt5(tmp, data, src)
-			}
-			off := 0
-			for py := range 4 {
-				for px := range 4 {
-					x := bx + px
-					y := by + py
-					if x < w && y < h {
-						dst := 4 * (y*w + x)
-						copy(rgba[dst:dst+4], tmp[off:off+4])
-					}
-					off += 4
-				}
-			}
-			src += blockSize
-		}
-	}
-	return rgba
-}
-
-func decompressBlockAlphaDxt3(dst, src []byte, si int) {
-	for i := range 8 {
-		quant := src[si+i]
-		lo := quant & 0x0F
-		hi := (quant & 0xF0) >> 4
-		dst[8*i+3] = lo | (lo << 4)
-		dst[8*i+7] = hi | (hi << 4)
-	}
-}
-
-func decompressBlockAlphaDxt5(dst, src []byte, si int) {
-	a0 := src[si+0]
-	a1 := src[si+1]
-	var codes [8]byte
-	codes[0], codes[1] = a0, a1
-	if a0 <= a1 {
-		for i := 1; i < 5; i++ {
-			codes[1+i] = byte(((5-i)*int(a0) + i*int(a1)) / 5)
-		}
-		codes[6], codes[7] = 0, 255
-	} else {
-		for i := 1; i < 7; i++ {
-			codes[i+1] = byte(((7-i)*int(a0) + i*int(a1)) / 7)
-		}
-	}
-	var idx [16]byte
-	sp := si + 2
-	for k := range 2 {
-		val := int(src[sp]) | int(src[sp+1])<<8 | int(src[sp+2])<<16
-		sp += 3
-		for j := range 8 {
-			idx[k*8+j] = byte((val >> (3 * j)) & 0x7)
-		}
-	}
-	for i := range 16 {
-		dst[4*i+3] = codes[idx[i]]
-	}
-}
-
-func decompressBlockColor(dst, src []byte, si int, isDXT1 bool) {
-	codes := make([]byte, 16)
-	a := unpack565(src, si+0, codes[0:4])
-	b := unpack565(src, si+2, codes[4:8])
-	for i := range 3 {
-		c := codes[i]
-		d := codes[4+i]
-		if isDXT1 && a <= b {
-			codes[8+i] = byte((int(c) + int(d)) / 2)
-			codes[12+i] = 0
-		} else {
-			codes[8+i] = byte((2*int(c) + int(d)) / 3)
-			codes[12+i] = byte((int(c) + 2*int(d)) / 3)
-		}
-	}
-	codes[8+3] = 255
-	if isDXT1 && a <= b {
-		codes[12+3] = 0
-	} else {
-		codes[12+3] = 255
-	}
-	indices := make([]byte, 16)
-	for i := range 4 {
-		packed := src[si+4+i]
-		indices[i*4+0] = packed & 0x03
-		indices[i*4+1] = (packed >> 2) & 0x03
-		indices[i*4+2] = (packed >> 4) & 0x03
-		indices[i*4+3] = (packed >> 6) & 0x03
-	}
-	for i := range 16 {
-		o := 4 * indices[i]
-		copy(dst[4*i:4*i+3], codes[o:o+3])
-		dst[4*i+3] = codes[o+3]
-	}
-}
-
-func unpack565(src []byte, off int, out []byte) int {
-	val := int(src[off]) | int(src[off+1])<<8
-	red := byte((val >> 11) & 0x1F)
-	green := byte((val >> 5) & 0x3F)
-	blue := byte(val & 0x1F)
-	out[0] = (red << 3) | (red >> 2)
-	out[1] = (green << 2) | (green >> 4)
-	out[2] = (blue << 3) | (blue >> 2)
-	out[3] = 255
-	return val
-}
-
-func readNString(r *bytes.Reader, max int) (string, error) {
+func readCString(r *bytes.Reader, maxLen int) (string, error) {
 	var buf []byte
 	for {
 		b, err := r.ReadByte()
@@ -754,63 +574,189 @@ func readNString(r *bytes.Reader, max int) (string, error) {
 			break
 		}
 		buf = append(buf, b)
-		if max > 0 && len(buf) >= max {
+		if maxLen > 0 && len(buf) >= maxLen {
 			break
 		}
 	}
 	return string(buf), nil
 }
 
-func mustAtoi(s string) int {
-	x := 0
-	for _, c := range s {
-		if c >= '0' && c <= '9' {
-			x = x*10 + int(c-'0')
-		}
+func lz4DecompressBlock(src []byte, decompressedSize int) ([]byte, error) {
+	dst := make([]byte, decompressedSize)
+	n, err := lz4.UncompressBlock(src, dst)
+	if err != nil {
+		return nil, fmt.Errorf("lz4 uncompress failed: %w", err)
 	}
-	return x
+	if n != decompressedSize {
+		return nil, fmt.Errorf("lz4 uncompress: expected %d bytes, got %d", decompressedSize, n)
+	}
+	return dst, nil
 }
 
-func pixelFormatOf(img image.Image) string {
-	switch im := img.(type) {
-	case *image.RGBA:
-		return "RGBA8888"
-	case *image.NRGBA:
-		return "NRGBA8888"
-	case *image.RGBA64:
-		return "RGBA64"
-	case *image.NRGBA64:
-		return "NRGBA64"
-	case *image.Gray:
-		return "GRAY8"
-	case *image.Gray16:
-		return "GRAY16"
-	case *image.CMYK:
-		return "CMYK"
-	case *image.YCbCr:
-		var sr string
-		switch im.SubsampleRatio {
-		case image.YCbCrSubsampleRatio444:
-			sr = "4:4:4"
-		case image.YCbCrSubsampleRatio422:
-			sr = "4:2:2"
-		case image.YCbCrSubsampleRatio420:
-			sr = "4:2:0"
-		case image.YCbCrSubsampleRatio440:
-			sr = "4:4:0"
-		case image.YCbCrSubsampleRatio411:
-			sr = "4:1:1"
-		default:
-			sr = "unknown"
-		}
-		return "YCbCr " + sr
-	case *image.Paletted:
-		return "PAL8"
-	case *image.Alpha:
-		return "ALPHA8"
-	case *image.Alpha16:
-		return "ALPHA16"
-	default:
-		return fmt.Sprintf("%T", img)
+type dxtFlags int
+
+const (
+	dxtFlagDXT1 dxtFlags = 1 << 0
+	dxtFlagDXT3 dxtFlags = 1 << 1
+	dxtFlagDXT5 dxtFlags = 1 << 2
+)
+
+func decompressDXT(width, height int, data []byte, flags dxtFlags) []byte {
+	rgba := make([]byte, width*height*4)
+	sourceBlockPos := 0
+	bytesPerBlock := 16
+	if flags&dxtFlagDXT1 != 0 {
+		bytesPerBlock = 8
 	}
+	targetRGBA := make([]byte, 16*4)
+
+	for blockY := 0; blockY < height; blockY += 4 {
+		for blockX := 0; blockX < width; blockX += 4 {
+			if sourceBlockPos >= len(data) {
+				continue
+			}
+			decompressDXTBlock(targetRGBA, data, sourceBlockPos, flags)
+			sourceBlockPos += bytesPerBlock
+
+			targetPixelPos := 0
+			for py := range 4 {
+				for px := range 4 {
+					x := blockX + px
+					y := blockY + py
+					if x < width && y < height {
+						dstIndex := 4 * (width*y + x)
+						copy(rgba[dstIndex:dstIndex+4], targetRGBA[targetPixelPos:targetPixelPos+4])
+					}
+					targetPixelPos += 4
+				}
+			}
+		}
+	}
+
+	return rgba
+}
+
+func decompressDXTBlock(rgba, block []byte, blockIndex int, flags dxtFlags) {
+	colorBlockIndex := blockIndex
+	if flags&(dxtFlagDXT3|dxtFlagDXT5) != 0 {
+		colorBlockIndex += 8
+	}
+
+	decompressDXTColor(rgba, block, colorBlockIndex, flags&dxtFlagDXT1 != 0)
+	if flags&dxtFlagDXT3 != 0 {
+		decompressDXTAlphaDxt3(rgba, block, blockIndex)
+	} else if flags&dxtFlagDXT5 != 0 {
+		decompressDXTAlphaDxt5(rgba, block, blockIndex)
+	}
+}
+
+func decompressDXTAlphaDxt3(rgba, block []byte, blockIndex int) {
+	for i := range 8 {
+		quant := block[blockIndex+i]
+		lo := quant & 0x0F
+		hi := quant & 0xF0
+		rgba[8*i+3] = lo | (lo << 4)
+		rgba[8*i+7] = hi | (hi >> 4)
+	}
+}
+
+func decompressDXTAlphaDxt5(rgba, block []byte, blockIndex int) {
+	alpha0 := block[blockIndex+0]
+	alpha1 := block[blockIndex+1]
+
+	var codes [8]byte
+	codes[0] = alpha0
+	codes[1] = alpha1
+
+	if alpha0 <= alpha1 {
+		for i := 1; i < 5; i++ {
+			codes[1+i] = byte(((5-int32(i))*int32(alpha0) + int32(i)*int32(alpha1)) / 5)
+		}
+		codes[6] = 0
+		codes[7] = 255
+	} else {
+		for i := 1; i < 7; i++ {
+			codes[i+1] = byte(((7-int32(i))*int32(alpha0) + int32(i)*int32(alpha1)) / 7)
+		}
+	}
+
+	var indices [16]byte
+	blockSrcPos := 2
+	indicesPos := 0
+
+	for range 2 {
+		value := 0
+		for j := range 3 {
+			b := int(block[blockIndex+blockSrcPos])
+			blockSrcPos++
+			value |= b << (8 * j)
+		}
+		for j := range 8 {
+			index := (value >> (3 * j)) & 0x07
+			indices[indicesPos] = byte(index)
+			indicesPos++
+		}
+	}
+
+	for i := range 16 {
+		rgba[4*i+3] = codes[indices[i]]
+	}
+}
+
+func decompressDXTColor(rgba, block []byte, blockIndex int, isDXT1 bool) {
+	var codes [16]byte
+
+	a := unpack565(block, blockIndex+0, codes[0:])
+	b := unpack565(block, blockIndex+2, codes[4:])
+
+	for i := range 3 {
+		c := int(codes[i])
+		d := int(codes[4+i])
+		if isDXT1 && a <= b {
+			codes[8+i] = byte((c + d) / 2)
+			codes[12+i] = 0
+		} else {
+			codes[8+i] = byte((2*c + d) / 3)
+			codes[12+i] = byte((c + 2*d) / 3)
+		}
+	}
+
+	codes[8+3] = 255
+	if isDXT1 && a <= b {
+		codes[12+3] = 0
+	} else {
+		codes[12+3] = 255
+	}
+
+	var indices [16]byte
+	for row := range 4 {
+		packed := block[blockIndex+4+row]
+		indices[row*4+0] = packed & 0x3
+		indices[row*4+1] = (packed >> 2) & 0x3
+		indices[row*4+2] = (packed >> 4) & 0x3
+		indices[row*4+3] = (packed >> 6) & 0x3
+	}
+
+	for i := range 16 {
+		offset := int(indices[i]) * 4
+		dst := 4 * i
+		rgba[dst+0] = codes[offset+0]
+		rgba[dst+1] = codes[offset+1]
+		rgba[dst+2] = codes[offset+2]
+		rgba[dst+3] = codes[offset+3]
+	}
+}
+
+func unpack565(block []byte, offset int, color []byte) int {
+	value := int(block[offset]) | (int(block[offset+1]) << 8)
+	red := byte((value >> 11) & 0x1F)
+	green := byte((value >> 5) & 0x3F)
+	blue := byte(value & 0x1F)
+
+	color[0] = (red << 3) | (red >> 2)
+	color[1] = (green << 2) | (green >> 4)
+	color[2] = (blue << 3) | (blue >> 2)
+	color[3] = 255
+
+	return value
 }
