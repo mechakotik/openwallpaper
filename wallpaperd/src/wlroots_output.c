@@ -171,6 +171,7 @@ bool wd_wlroots_output_init(void** data) {
         return false;
     }
 
+    SDL_ShowWindow(odata->window);
     SDL_EnableScreenSaver();
 
     if(strcmp(getenv("XDG_CURRENT_DESKTOP"), "Hyprland") == 0) {
