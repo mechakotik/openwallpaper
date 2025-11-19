@@ -326,7 +326,7 @@ func preprocessVertexAttributes(source string) (string, []AttributeInfo) {
 }
 
 func findAndRemoveVarying(source string) (string, map[string]AttributeInfo) {
-	reVarying := regexp.MustCompile(`varying\s*([a-z|A-Z|0-9|_]*)\s*([a-z|A-Z|0-9|_]*)\s*;`)
+	reVarying := regexp.MustCompile(`varying\s+([a-z|A-Z|0-9|_]*)\s+([a-z|A-Z|0-9|_|\[|\]|\s]*)\s*;`)
 	varying := map[string]AttributeInfo{}
 	source = reVarying.ReplaceAllStringFunc(source, func(match string) string {
 		submatches := reVarying.FindStringSubmatch(match)
