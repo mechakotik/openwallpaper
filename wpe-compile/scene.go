@@ -3,417 +3,343 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"strings"
 )
 
-type (
-	Vec2 struct{ X, Y float64 }
-	Vec3 struct{ X, Y, Z float64 }
-)
-
-func (v *Vec2) UnmarshalJSON(b []byte) error {
-	var arr []float64
-	if err := json.Unmarshal(b, &arr); err == nil {
-		if len(arr) != 2 {
-			return fmt.Errorf("vec2: expected 2 items, got %d", len(arr))
-		}
-		v.X, v.Y = arr[0], arr[1]
-		return nil
-	}
-	var s string
-	if err := json.Unmarshal(b, &s); err == nil {
-		vals, err := ParseFloat64sFromString(s)
-		if err != nil {
-			return err
-		}
-		if len(vals) != 2 {
-			return fmt.Errorf("vec2: expected 2 numbers in string, got %d", len(vals))
-		}
-		v.X, v.Y = vals[0], vals[1]
-		return nil
-	}
-	return fmt.Errorf("vec2: unsupported json: %s", string(b))
+type OrthogonalProjection struct {
+	Width  int
+	Height int
+	Auto   bool
 }
 
-func (v *Vec3) UnmarshalJSON(b []byte) error {
-	var arr []float64
-	if err := json.Unmarshal(b, &arr); err == nil {
-		if len(arr) != 3 {
-			return fmt.Errorf("vec3: expected 3 items, got %d", len(arr))
-		}
-		v.X, v.Y, v.Z = arr[0], arr[1], arr[2]
-		return nil
-	}
-	var s string
-	if err := json.Unmarshal(b, &s); err == nil {
-		vals, err := ParseFloat64sFromString(s)
-		if err != nil {
-			return err
-		}
-		if len(vals) != 3 {
-			return fmt.Errorf("vec3: expected 3 numbers in string, got %d", len(vals))
-		}
-		v.X, v.Y, v.Z = vals[0], vals[1], vals[2]
-		return nil
-	}
-	return fmt.Errorf("vec3: unsupported json: %s", string(b))
+type SceneCamera struct {
+	Center Vector3
+	Eye    Vector3
+	Up     Vector3
 }
 
-type Param[T any] struct {
-	User    string
-	Value   T
-	IsParam bool
+type SceneGeneral struct {
+	ClearColor             Vector3
+	Parallax               bool
+	ParallaxAmount         float32
+	ParallaxDelay          float32
+	ParallaxMouseInfluence float32
+	Orthographic           bool
+	Ortho                  OrthogonalProjection
+	Zoom                   float32
+	Fov                    float32
+	NearZ                  float32
+	FarZ                   float32
+	AmbientColor           Vector3
+	SkyLightColor          Vector3
 }
 
-func (p *Param[T]) UnmarshalJSON(b []byte) error {
-	if len(b) > 0 && b[0] == '{' {
-		var tmp struct {
-			User  string          `json:"user"`
-			Value json.RawMessage `json:"value"`
-		}
-		if err := json.Unmarshal(b, &tmp); err == nil && tmp.User != "" {
-			var v T
-			if err := json.Unmarshal(tmp.Value, &v); err != nil {
-				return fmt.Errorf("param.value: %w", err)
-			}
-			p.User = tmp.User
-			p.Value = v
-			p.IsParam = true
-			return nil
-		}
-	}
-	var v T
-	if err := json.Unmarshal(b, &v); err != nil {
-		return err
-	}
-	p.Value = v
-	p.IsParam = false
-	return nil
-}
-
-type ScalarKind int
-
-const (
-	ScalarInvalid ScalarKind = iota
-	ScalarNumber
-	ScalarString
-	ScalarBool
-)
-
-type Scalar struct {
-	Kind  ScalarKind
-	Num   float64
-	Str   string
-	Bool  bool
-	Valid bool
-}
-
-func (s *Scalar) UnmarshalJSON(b []byte) error {
-	b = []byte(strings.TrimSpace(string(b)))
-	if string(b) == "null" {
-		*s = Scalar{}
-		return nil
-	}
-	if len(b) > 0 && b[0] == '"' {
-		var v string
-		if err := json.Unmarshal(b, &v); err != nil {
-			return err
-		}
-		s.Kind, s.Str, s.Valid = ScalarString, v, true
-		return nil
-	}
-	if string(b) == "true" || string(b) == "false" {
-		var v bool
-		if err := json.Unmarshal(b, &v); err != nil {
-			return err
-		}
-		s.Kind, s.Bool, s.Valid = ScalarBool, v, true
-		return nil
-	}
-	var f float64
-	if err := json.Unmarshal(b, &f); err == nil {
-		s.Kind, s.Num, s.Valid = ScalarNumber, f, true
-		return nil
-	}
-	return fmt.Errorf("scalar: unsupported %s", string(b))
-}
-
-func (s Scalar) AsFloat(def float64) float64 {
-	if s.Kind == ScalarNumber {
-		return s.Num
-	}
-	return def
-}
-
-func (s Scalar) AsBool(def bool) bool {
-	if s.Kind == ScalarBool {
-		return s.Bool
-	}
-	return def
-}
-
-func (s Scalar) AsString(def string) string {
-	if s.Kind == ScalarString {
-		return s.Str
-	}
-	return def
-}
-
-func (s Scalar) AsVec2() (Vec2, bool) {
-	if s.Kind == ScalarString {
-		vals, err := ParseFloat64sFromString(s.Str)
-		if err == nil && len(vals) == 2 {
-			return Vec2{vals[0], vals[1]}, true
-		}
-	}
-	return Vec2{}, false
-}
-
-func (s Scalar) AsVec3() (Vec3, bool) {
-	if s.Kind == ScalarString {
-		vals, err := ParseFloat64sFromString(s.Str)
-		if err == nil && len(vals) == 3 {
-			return Vec3{vals[0], vals[1], vals[2]}, true
-		}
-	}
-	return Vec3{}, false
-}
-
-type ScalarOrParam struct {
-	IsParam bool
-	User    string
-	Scalar  Scalar
-}
-
-func (sp *ScalarOrParam) UnmarshalJSON(b []byte) error {
-	if len(b) > 0 && b[0] == '{' {
-		var tmp struct {
-			User  string          `json:"user"`
-			Value json.RawMessage `json:"value"`
-		}
-		if err := json.Unmarshal(b, &tmp); err == nil && tmp.User != "" {
-			var s Scalar
-			if err := json.Unmarshal(tmp.Value, &s); err != nil {
-				return fmt.Errorf("scalarOrParam.value: %w", err)
-			}
-			sp.IsParam = true
-			sp.User = tmp.User
-			sp.Scalar = s
-			return nil
-		}
-	}
-	var s Scalar
-	if err := json.Unmarshal(b, &s); err != nil {
-		return err
-	}
-	sp.IsParam = false
-	sp.Scalar = s
-	return nil
-}
-
-type ScriptedNumber struct {
-	Script           string                   `json:"script"`
-	ScriptProperties map[string]ScalarOrParam `json:"scriptproperties"`
-	Value            float64                  `json:"value"`
-}
-
-type NumberOrScript struct {
-	HasScript bool
-	Number    float64
-	Script    *ScriptedNumber
-}
-
-func (ns *NumberOrScript) UnmarshalJSON(b []byte) error {
-	var f float64
-	if err := json.Unmarshal(b, &f); err == nil {
-		ns.HasScript = false
-		ns.Number = f
-		return nil
-	}
-	if len(b) > 0 && b[0] == '{' {
-		var tmp ScriptedNumber
-		if err := json.Unmarshal(b, &tmp); err != nil {
-			return err
-		}
-		ns.HasScript = true
-		ns.Script = &tmp
-		return nil
-	}
-	return fmt.Errorf("NumberOrScript: unsupported %s", string(b))
-}
-
-type Camera struct {
-	Center Vec3 `json:"center"`
-	Eye    Vec3 `json:"eye"`
-	Up     Vec3 `json:"up"`
-}
-
-type OrthoProjection struct {
-	Width  int `json:"width"`
-	Height int `json:"height"`
-}
-
-type General struct {
-	AmbientColor                 Vec3            `json:"ambientcolor"`
-	Bloom                        Param[bool]     `json:"bloom"`
-	BloomHDRFeather              float64         `json:"bloomhdrfeather"`
-	BloomHDRIterations           int             `json:"bloomhdriterations"`
-	BloomHDRScatter              float64         `json:"bloomhdrscatter"`
-	BloomHDRStrength             float64         `json:"bloomhdrstrength"`
-	BloomHDRThreshold            float64         `json:"bloomhdrthreshold"`
-	BloomStrength                Param[float64]  `json:"bloomstrength"`
-	BloomThreshold               Param[float64]  `json:"bloomthreshold"`
-	CameraFade                   bool            `json:"camerafade"`
-	CameraParallax               bool            `json:"cameraparallax"`
-	CameraParallaxAmount         float64         `json:"cameraparallaxamount"`
-	CameraParallaxDelay          float64         `json:"cameraparallaxdelay"`
-	CameraParallaxMouseInfluence float64         `json:"cameraparallaxmouseinfluence"`
-	CameraPreview                bool            `json:"camerapreview"`
-	CameraShake                  Param[bool]     `json:"camerashake"`
-	CameraShakeAmplitude         float64         `json:"camerashakeamplitude"`
-	CameraShakeRoughness         float64         `json:"camerashakeroughness"`
-	CameraShakeSpeed             Param[float64]  `json:"camerashakespeed"`
-	ClearColor                   Vec3            `json:"clearcolor"`
-	ClearEnabled                 bool            `json:"clearenabled"`
-	FarZ                         float64         `json:"farz"`
-	FOV                          float64         `json:"fov"`
-	HDR                          bool            `json:"hdr"`
-	NearZ                        float64         `json:"nearz"`
-	Ortho                        OrthoProjection `json:"orthogonalprojection"`
-	SkyLightColor                Vec3            `json:"skylightcolor"`
-	Zoom                         NumberOrScript  `json:"zoom"`
-}
-
-type EffectPass struct {
-	ID        int                  `json:"id"`
-	Combos    map[string]int       `json:"combos,omitempty"`
-	Constants map[string][]float32 `json:"constantshadervalues"`
-	Textures  []*string            `json:"textures,omitempty"`
-}
-
-func (p *EffectPass) UnmarshalJSON(b []byte) error {
-	var obj map[string]json.RawMessage
-	if err := json.Unmarshal(b, &obj); err != nil {
-		return err
-	}
-	if raw, ok := obj["id"]; ok {
-		_ = json.Unmarshal(raw, &p.ID)
-	}
-	if raw, ok := obj["combos"]; ok {
-		var m map[string]int
-		if err := json.Unmarshal(raw, &m); err == nil {
-			p.Combos = m
-		}
-	}
-	if raw, ok := obj["textures"]; ok {
-		var arr []*string
-		if err := json.Unmarshal(raw, &arr); err == nil {
-			p.Textures = arr
-		}
-	}
-	if raw, ok := obj["constantshadervalues"]; ok {
-		var m map[string]json.RawMessage
-		if err := json.Unmarshal(raw, &m); err != nil {
-			return err
-		}
-		out := make(map[string][]float32, len(m))
-		for k, v := range m {
-			fs, err := ParseFloat32AnyJSON(v)
-			if err != nil {
-				return fmt.Errorf("constantshadervalues[%s]: %w", k, err)
-			}
-			out[k] = fs
-		}
-		p.Constants = out
-	}
-	return nil
-}
-
-type EffectInstance struct {
-	File    string       `json:"file"`
-	ID      int          `json:"id"`
-	Name    string       `json:"name"`
-	Passes  []EffectPass `json:"passes"`
-	Visible Param[bool]  `json:"visible"`
-}
-
-type InstanceOverride map[string]ScalarOrParam
-
-func (io *InstanceOverride) UnmarshalJSON(b []byte) error {
-	if string(b) == "null" {
-		*io = nil
-		return nil
-	}
-	var m map[string]json.RawMessage
-	if err := json.Unmarshal(b, &m); err != nil {
-		return err
-	}
-	res := make(map[string]ScalarOrParam, len(m))
-	for k, raw := range m {
-		var v ScalarOrParam
-		if err := json.Unmarshal(raw, &v); err != nil {
-			return fmt.Errorf("instanceoverride[%s]: %w", k, err)
-		}
-		res[k] = v
-	}
-	*io = res
-	return nil
-}
-
-type SceneObject struct {
-	ID               int              `json:"id"`
-	Name             string           `json:"name"`
-	Alignment        string           `json:"alignment,omitempty"`
-	Alpha            float64          `json:"alpha,omitempty"`
-	Angles           Vec3             `json:"angles,omitempty"`
-	Brightness       float64          `json:"brightness,omitempty"`
-	Color            Vec3             `json:"color,omitempty"`
-	ColorBlendMode   int              `json:"colorBlendMode,omitempty"`
-	CopyBackground   bool             `json:"copybackground,omitempty"`
-	Effects          []EffectInstance `json:"effects,omitempty"`
-	Image            string           `json:"image,omitempty"`
-	LEDSource        bool             `json:"ledsource,omitempty"`
-	LockTransforms   bool             `json:"locktransforms,omitempty"`
-	Origin           Vec3             `json:"origin,omitempty"`
-	ParallaxDepth    Vec2             `json:"parallaxDepth,omitempty"`
-	Perspective      bool             `json:"perspective,omitempty"`
-	Scale            Vec3             `json:"scale,omitempty"`
-	Size             *Vec2            `json:"size,omitempty"`
-	Solid            bool             `json:"solid,omitempty"`
-	Visible          Param[bool]      `json:"visible,omitempty"`
-	Particle         string           `json:"particle,omitempty"`
-	InstanceOverride InstanceOverride `json:"instanceoverride,omitempty"`
-	MaxTime          float64          `json:"maxtime,omitempty"`
-	MinTime          float64          `json:"mintime,omitempty"`
-	MuteInEditor     bool             `json:"muteineditor,omitempty"`
-	PlaybackMode     string           `json:"playbackmode,omitempty"`
-	Sound            []string         `json:"sound,omitempty"`
-	StartSilent      bool             `json:"startsilent,omitempty"`
-	Volume           NumberOrScript   `json:"volume,omitempty"`
-}
+type SceneObject any
 
 type Scene struct {
-	Version int           `json:"version"`
-	Camera  Camera        `json:"camera"`
-	General General       `json:"general"`
-	Objects []SceneObject `json:"objects"`
+	Objects []SceneObject
+	Camera  SceneCamera
+	General SceneGeneral
+	Version int
 }
 
-func parseSceneJSON(src string) (*Scene, error) {
-	var sc Scene
-	if err := json.Unmarshal([]byte(src), &sc); err != nil {
-		return nil, err
+func parseOrthogonalProjection(raw json.RawMessage) (OrthogonalProjection, error) {
+	var projection OrthogonalProjection
+	if bytesFromRawNullAware(raw) == nil {
+		return projection, nil
 	}
-	return &sc, nil
-}
-
-func valueOrDefault(p Param[float64], def float64) float64 {
-	if p.Value == 0 && !p.IsParam {
-		return def
+	var object map[string]json.RawMessage
+	err := json.Unmarshal(raw, &object)
+	if err != nil {
+		return projection, fmt.Errorf("cannot parse orthogonal projection: %w", err)
 	}
-	return p.Value
+	if autoRaw, exists := getOptionalField(object, "auto"); exists {
+		value, parseErr := parseBoolFromRaw(autoRaw)
+		if parseErr != nil {
+			return projection, fmt.Errorf("cannot parse orthogonal auto flag: %w", parseErr)
+		}
+		projection.Auto = value
+	} else {
+		widthRaw, err := getRequiredField(object, "width")
+		if err != nil {
+			return projection, err
+		}
+		heightRaw, err := getRequiredField(object, "height")
+		if err != nil {
+			return projection, err
+		}
+		width, err := parseIntFromRaw(widthRaw)
+		if err != nil {
+			return projection, fmt.Errorf("cannot parse orthogonal width: %w", err)
+		}
+		height, err := parseIntFromRaw(heightRaw)
+		if err != nil {
+			return projection, fmt.Errorf("cannot parse orthogonal height: %w", err)
+		}
+		projection.Width = width
+		projection.Height = height
+	}
+	return projection, nil
 }
 
-func boolOrDefault(p Param[bool], def bool) bool {
-	return p.Value || (def && !p.IsParam)
+func parseSceneCamera(raw json.RawMessage) (SceneCamera, error) {
+	var camera SceneCamera
+	var object map[string]json.RawMessage
+	err := json.Unmarshal(raw, &object)
+	if err != nil {
+		return camera, fmt.Errorf("cannot parse camera: %w", err)
+	}
+	centerRaw, err := getRequiredField(object, "center")
+	if err != nil {
+		return camera, err
+	}
+	eyeRaw, err := getRequiredField(object, "eye")
+	if err != nil {
+		return camera, err
+	}
+	upRaw, err := getRequiredField(object, "up")
+	if err != nil {
+		return camera, err
+	}
+
+	center, err := parseVector3FromRaw(centerRaw, camera.Center)
+	if err != nil {
+		return camera, fmt.Errorf("cannot parse camera center: %w", err)
+	}
+	eye, err := parseVector3FromRaw(eyeRaw, camera.Eye)
+	if err != nil {
+		return camera, fmt.Errorf("cannot parse camera eye: %w", err)
+	}
+	up, err := parseVector3FromRaw(upRaw, camera.Up)
+	if err != nil {
+		return camera, fmt.Errorf("cannot parse camera up: %w", err)
+	}
+
+	camera.Center = center
+	camera.Eye = eye
+	camera.Up = up
+
+	return camera, nil
+}
+
+func parseSceneGeneral(raw json.RawMessage) (SceneGeneral, error) {
+	var general SceneGeneral
+	general.Ortho.Width = 1920
+	general.Ortho.Height = 1080
+	general.Zoom = 1
+	general.Fov = 50
+	general.NearZ = 0.01
+	general.FarZ = 10000
+	general.AmbientColor = Vector3{0.2, 0.2, 0.2}
+	general.SkyLightColor = Vector3{0.3, 0.3, 0.3}
+
+	var object map[string]json.RawMessage
+	err := json.Unmarshal(raw, &object)
+	if err != nil {
+		return general, fmt.Errorf("cannot parse general block: %w", err)
+	}
+
+	ambientRaw, err := getRequiredField(object, "ambientcolor")
+	if err != nil {
+		return general, err
+	}
+	skylightRaw, err := getRequiredField(object, "skylightcolor")
+	if err != nil {
+		return general, err
+	}
+	clearRaw, err := getRequiredField(object, "clearcolor")
+	if err != nil {
+		return general, err
+	}
+	cameraParallaxRaw, err := getRequiredField(object, "cameraparallax")
+	if err != nil {
+		return general, err
+	}
+	cameraParallaxAmountRaw, err := getRequiredField(object, "cameraparallaxamount")
+	if err != nil {
+		return general, err
+	}
+	cameraParallaxDelayRaw, err := getRequiredField(object, "cameraparallaxdelay")
+	if err != nil {
+		return general, err
+	}
+	cameraParallaxMouseRaw, err := getRequiredField(object, "cameraparallaxmouseinfluence")
+	if err != nil {
+		return general, err
+	}
+
+	ambient, err := parseVector3FromRaw(ambientRaw, general.AmbientColor)
+	if err != nil {
+		return general, fmt.Errorf("cannot parse ambient color: %w", err)
+	}
+	skylight, err := parseVector3FromRaw(skylightRaw, general.SkyLightColor)
+	if err != nil {
+		return general, fmt.Errorf("cannot parse skylight color: %w", err)
+	}
+	clearColor, err := parseVector3FromRaw(clearRaw, general.ClearColor)
+	if err != nil {
+		return general, fmt.Errorf("cannot parse clear color: %w", err)
+	}
+	cameraParallaxValue, err := parseBoolFromRaw(cameraParallaxRaw)
+	if err != nil {
+		return general, fmt.Errorf("cannot parse camera parallax flag: %w", err)
+	}
+	cameraParallaxAmountValue, err := parseFloat64FromRaw(cameraParallaxAmountRaw)
+	if err != nil {
+		return general, fmt.Errorf("cannot parse camera parallax amount: %w", err)
+	}
+	cameraParallaxDelayValue, err := parseFloat64FromRaw(cameraParallaxDelayRaw)
+	if err != nil {
+		return general, fmt.Errorf("cannot parse camera parallax delay: %w", err)
+	}
+	cameraParallaxMouseValue, err := parseFloat64FromRaw(cameraParallaxMouseRaw)
+	if err != nil {
+		return general, fmt.Errorf("cannot parse camera parallax mouse influence: %w", err)
+	}
+
+	general.AmbientColor = ambient
+	general.SkyLightColor = skylight
+	general.ClearColor = clearColor
+	general.Parallax = cameraParallaxValue
+	general.ParallaxAmount = float32(cameraParallaxAmountValue)
+	general.ParallaxDelay = float32(cameraParallaxDelayValue)
+	general.ParallaxMouseInfluence = float32(cameraParallaxMouseValue)
+
+	if zoomRaw, exists := getOptionalField(object, "zoom"); exists {
+		value, parseErr := parseFloat64FromRaw(zoomRaw)
+		if parseErr == nil {
+			general.Zoom = float32(value)
+		}
+	}
+	if fovRaw, exists := getOptionalField(object, "fov"); exists {
+		value, parseErr := parseFloat64FromRaw(fovRaw)
+		if parseErr == nil {
+			general.Fov = float32(value)
+		}
+	}
+	if nearRaw, exists := getOptionalField(object, "nearz"); exists {
+		value, parseErr := parseFloat64FromRaw(nearRaw)
+		if parseErr == nil {
+			general.NearZ = float32(value)
+		}
+	}
+	if farRaw, exists := getOptionalField(object, "farz"); exists {
+		value, parseErr := parseFloat64FromRaw(farRaw)
+		if parseErr == nil {
+			general.FarZ = float32(value)
+		}
+	}
+
+	if orthoRaw, exists := getOptionalField(object, "orthogonalprojection"); exists {
+		if bytesFromRawNullAware(orthoRaw) == nil {
+			general.Orthographic = false
+		} else {
+			projection, parseErr := parseOrthogonalProjection(orthoRaw)
+			if parseErr != nil {
+				return general, parseErr
+			}
+			general.Orthographic = true
+			general.Ortho = projection
+		}
+	} else {
+		general.Orthographic = true
+	}
+
+	return general, nil
+}
+
+func ParseScene(pkgMap *map[string][]byte) (Scene, error) {
+	sceneBytes, err := loadBytesFromPackage(pkgMap, "scene.json")
+	if err != nil {
+		return Scene{}, err
+	}
+	var root map[string]json.RawMessage
+	err = json.Unmarshal(sceneBytes, &root)
+	if err != nil {
+		return Scene{}, fmt.Errorf("cannot parse scene JSON: %w", err)
+	}
+
+	scene := Scene{}
+
+	if cameraRaw, exists := root["camera"]; exists {
+		camera, parseErr := parseSceneCamera(cameraRaw)
+		if parseErr != nil {
+			return Scene{}, parseErr
+		}
+		scene.Camera = camera
+	} else {
+		return Scene{}, fmt.Errorf("scene has no camera object")
+	}
+
+	if generalRaw, exists := root["general"]; exists {
+		general, parseErr := parseSceneGeneral(generalRaw)
+		if parseErr != nil {
+			return Scene{}, parseErr
+		}
+		scene.General = general
+	} else {
+		return Scene{}, fmt.Errorf("scene has no general block")
+	}
+
+	if versionRaw, exists := root["version"]; exists {
+		version, parseErr := parseIntFromRaw(versionRaw)
+		if parseErr == nil {
+			scene.Version = version
+		}
+	}
+
+	objectsRaw, exists := root["objects"]
+	if !exists {
+		return Scene{}, nil
+	}
+	var objectsArray []json.RawMessage
+	err = json.Unmarshal(objectsRaw, &objectsArray)
+	if err != nil {
+		return Scene{}, fmt.Errorf("cannot parse scene objects array: %w", err)
+	}
+
+	for _, objectRaw := range objectsArray {
+		var object map[string]json.RawMessage
+		parseErr := json.Unmarshal(objectRaw, &object)
+		if parseErr != nil {
+			return Scene{}, fmt.Errorf("cannot parse object entry: %w", parseErr)
+		}
+		if _, hasParticle := object["particle"]; hasParticle {
+			var particleObject ParticleObject
+			parseErr = particleObject.parseFromSceneJSON(objectRaw, pkgMap)
+			if parseErr != nil {
+				return Scene{}, parseErr
+			}
+			scene.Objects = append(scene.Objects, &particleObject)
+			continue
+		}
+		if _, hasImage := object["image"]; hasImage {
+			var imageObject ImageObject
+			parseErr = imageObject.parseFromSceneJSON(objectRaw, pkgMap)
+			if parseErr != nil {
+				return Scene{}, parseErr
+			}
+			scene.Objects = append(scene.Objects, &imageObject)
+			continue
+		}
+		if _, hasSound := object["sound"]; hasSound {
+			var soundObject SoundObject
+			parseErr = soundObject.parseFromSceneJSON(objectRaw)
+			if parseErr != nil {
+				return Scene{}, parseErr
+			}
+			scene.Objects = append(scene.Objects, &soundObject)
+			continue
+		}
+		if _, hasLight := object["light"]; hasLight {
+			var lightObject LightObject
+			parseErr = lightObject.parseFromSceneJSON(objectRaw)
+			if parseErr != nil {
+				return Scene{}, parseErr
+			}
+			scene.Objects = append(scene.Objects, &lightObject)
+			continue
+		}
+	}
+
+	return scene, nil
 }

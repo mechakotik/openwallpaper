@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"regexp"
 	"strconv"
 	"strings"
 	"text/template"
@@ -102,14 +101,15 @@ var (
 		KeepSources bool   `arg:"--keep-sources"`
 	}
 
-	pkgMap       map[string][]byte
-	scene        *Scene
-	outputMap    = map[string][]byte{}
-	textureMap   = map[string]ImportedTexture{}
-	lastObjectID = -1
-	lastPassID   = 0
-	lastShaderID = -1
-	codegenData  CodegenData
+	pkgMap        map[string][]byte
+	scene         Scene
+	outputMap     = map[string][]byte{}
+	textureMap    = map[string]ImportedTexture{}
+	lastObjectID  = -1
+	lastPassID    = 0
+	lastShaderID  = -1
+	screenCleared = false
+	codegenData   CodegenData
 )
 
 //go:embed scene.tmpl
@@ -130,56 +130,15 @@ func main() {
 		panic("extract pkg failed: " + err.Error())
 	}
 
-	scene, err = parseSceneJSON(string(pkgMap["scene.json"]))
+	scene, err = ParseScene(&pkgMap)
 	if err != nil {
 		panic("parse scene.json failed: " + err.Error())
 	}
 
-	screenCleared := false
 	for _, object := range scene.Objects {
-		if object.Image == "" || object.Size == nil {
-			continue
+		if imageObject, ok := object.(*ImageObject); ok {
+			processImageObject(*imageObject)
 		}
-
-		tempBuffers := [2]int{}
-		tempBuffers[0] = getTempBuffer(TempBufferParameters{
-			Width:  int(object.Size.X + 0.5),
-			Height: int(object.Size.Y + 0.5),
-			Number: 0,
-		})
-		tempBuffers[1] = getTempBuffer(TempBufferParameters{
-			Width:  int(object.Size.X + 0.5),
-			Height: int(object.Size.Y + 0.5),
-			Number: 1,
-		})
-
-		initialPass, err := processObjectInit(object, &tempBuffers)
-		if err != nil {
-			fmt.Printf("warning: skipping object %s because processing initial passes failed: %s\n", object.Name, err)
-			continue
-		}
-		codegenData.Passes = append(codegenData.Passes, initialPass)
-
-		for _, effectInstance := range object.Effects {
-			passes, err := processEffect(object, effectInstance, &tempBuffers)
-			if err != nil {
-				fmt.Printf("warning: skipping object %s effect %s because processing effect failed: %s\n", object.Name, effectInstance.Name, err)
-				continue
-			}
-			codegenData.Passes = append(codegenData.Passes, passes...)
-		}
-
-		lastIdx := len(codegenData.Passes) - 1
-		if !screenCleared {
-			codegenData.Passes[lastIdx].ClearColor = true
-			screenCleared = true
-		} else {
-			codegenData.Passes[lastIdx].ClearColor = false
-		}
-		codegenData.Passes[lastIdx].ColorTarget = "0"
-		codegenData.Passes[lastIdx].ColorTargetFormat = "OW_TEXTURE_SWAPCHAIN"
-		codegenData.Passes[lastIdx].BlendMode = "OW_BLEND_ALPHA"
-		codegenData.Passes[lastIdx].Transform.Enabled = true
 	}
 
 	sceneTemplate, err := template.New("scene.tmpl").Parse(string(sceneTemplateCode))
@@ -242,23 +201,58 @@ func main() {
 	}
 }
 
-func processObjectInit(object SceneObject, tempBuffers *[2]int) (CodegenPassData, error) {
+func processImageObject(object ImageObject) {
+	if object.Fullscreen || object.ImagePath == "" || object.Size[0] == 0 || object.Size[1] == 0 {
+		return
+	}
+
+	tempBuffers := [2]int{}
+	tempBuffers[0] = getTempBuffer(TempBufferParameters{
+		Width:  int(object.Size[0] + 0.5),
+		Height: int(object.Size[1] + 0.5),
+		Number: 0,
+	})
+	tempBuffers[1] = getTempBuffer(TempBufferParameters{
+		Width:  int(object.Size[0] + 0.5),
+		Height: int(object.Size[1] + 0.5),
+		Number: 1,
+	})
+
+	initialPass, err := processImageObjectInit(object, &tempBuffers)
+	if err != nil {
+		fmt.Printf("warning: skipping image object %s because processing initial passes failed: %s", object.Name, err)
+		return
+	}
+	codegenData.Passes = append(codegenData.Passes, initialPass)
+
+	for _, effect := range object.Effects {
+		passes, err := processImageEffect(object, effect, &tempBuffers)
+		if err != nil {
+			fmt.Printf("warning: skipping image object %s effect %s because processing effect failed: %s\n", object.Name, effect.Name, err)
+			continue
+		}
+		codegenData.Passes = append(codegenData.Passes, passes...)
+	}
+
+	lastIdx := len(codegenData.Passes) - 1
+	if !screenCleared {
+		codegenData.Passes[lastIdx].ClearColor = true
+		screenCleared = true
+	} else {
+		codegenData.Passes[lastIdx].ClearColor = false
+	}
+	codegenData.Passes[lastIdx].ColorTarget = "0"
+	codegenData.Passes[lastIdx].ColorTargetFormat = "OW_TEXTURE_SWAPCHAIN"
+	codegenData.Passes[lastIdx].BlendMode = "OW_BLEND_ALPHA"
+	codegenData.Passes[lastIdx].Transform.Enabled = true
+}
+
+func processImageObjectInit(object ImageObject, tempBuffers *[2]int) (CodegenPassData, error) {
 	lastObjectID++
 	lastPassID = 0
 
-	materialPath := replaceByRegex(object.Image, "models/(.*)", "materials/$1")
-	materialBytes, err := getAssetBytes(materialPath)
-	if err != nil {
-		return CodegenPassData{}, fmt.Errorf("loading material file %s failed: %s", materialPath, err)
-	}
-
-	material, err := parseMaterialJSON(materialBytes)
-	if err != nil {
-		return CodegenPassData{}, fmt.Errorf("parsing material JSON %s failed: %s", materialPath, err)
-	}
-
 	textures := []ImportedTexture{}
-	for _, textureName := range material.Textures {
+	for _, textureName := range object.Material.Textures {
 		texture, err := importTexture(textureName)
 		if err != nil {
 			return CodegenPassData{}, fmt.Errorf("loading texture %s failed: %s", textureName, err)
@@ -269,10 +263,9 @@ func processObjectInit(object SceneObject, tempBuffers *[2]int) (CodegenPassData
 		textures = append(textures, texture)
 	}
 
-	shader, err := compileShader(material.Shader, []bool{}, material.Combos)
+	shader, err := compileShader(object.Material.Shader, []bool{}, object.Material.Combos)
 	if err != nil {
-		fmt.Printf("warning: skipping material %s because compiling shader failed: %s\n", materialPath, err)
-		return CodegenPassData{}, fmt.Errorf("compiling shader %s failed: %s", material.Shader, err)
+		return CodegenPassData{}, fmt.Errorf("compiling shader %s failed: %s", object.Material.Shader, err)
 	}
 
 	passData := CodegenPassData{
@@ -299,19 +292,19 @@ func processObjectInit(object SceneObject, tempBuffers *[2]int) (CodegenPassData
 		Enabled:                false,
 		SceneWidth:             float32(scene.General.Ortho.Width),
 		SceneHeight:            float32(scene.General.Ortho.Height),
-		OriginX:                float32(object.Origin.X),
-		OriginY:                float32(object.Origin.Y),
-		OriginZ:                float32(object.Origin.Z),
-		SizeX:                  float32(object.Size.X),
-		SizeY:                  float32(object.Size.Y),
-		ScaleX:                 float32(object.Scale.X),
-		ScaleY:                 float32(object.Scale.Y),
-		ScaleZ:                 float32(object.Scale.Z),
-		ParallaxDepthX:         float32(object.ParallaxDepth.X),
-		ParallaxDepthY:         float32(object.ParallaxDepth.Y),
-		ParallaxEnabled:        scene.General.CameraParallax,
-		ParallaxAmount:         float32(scene.General.CameraParallaxAmount),
-		ParallaxMouseInfluence: float32(scene.General.CameraParallaxMouseInfluence),
+		OriginX:                float32(object.Origin[0]),
+		OriginY:                float32(object.Origin[1]),
+		OriginZ:                float32(object.Origin[2]),
+		SizeX:                  float32(object.Size[0]),
+		SizeY:                  float32(object.Size[1]),
+		ScaleX:                 float32(object.Scale[0]),
+		ScaleY:                 float32(object.Scale[1]),
+		ScaleZ:                 float32(object.Scale[2]),
+		ParallaxDepthX:         float32(object.ParallaxDepth[0]),
+		ParallaxDepthY:         float32(object.ParallaxDepth[1]),
+		ParallaxEnabled:        scene.General.Parallax,
+		ParallaxAmount:         float32(scene.General.ParallaxAmount),
+		ParallaxMouseInfluence: float32(scene.General.ParallaxMouseInfluence),
 	}
 
 	passData.UniformSetupCode = generateUniformSetupCode("vertex_uniforms", shader.VertexUniforms, map[string][]float32{}, resolutions)
@@ -319,42 +312,34 @@ func processObjectInit(object SceneObject, tempBuffers *[2]int) (CodegenPassData
 	return passData, nil
 }
 
-func processEffect(object SceneObject, effectInstance EffectInstance, tempBuffers *[2]int) ([]CodegenPassData, error) {
-	effect, err := parseEffect(pkgMap[effectInstance.File])
-	if err != nil {
-		return []CodegenPassData{}, fmt.Errorf("parsing effect JSON %s failed: %s", effectInstance.File, err)
-	}
-
+func processImageEffect(object ImageObject, effect ImageEffect, tempBuffers *[2]int) ([]CodegenPassData, error) {
 	allBoundTextures := [][]bool{}
-	for _, pass := range effectInstance.Passes {
+	for _, pass := range effect.Passes {
 		boundTextures := []bool{}
 		for _, textureName := range pass.Textures {
-			boundTextures = append(boundTextures, textureName != nil)
+			boundTextures = append(boundTextures, textureName != "")
 		}
 		allBoundTextures = append(allBoundTextures, boundTextures)
 	}
 
 	meta := make([]EffectPassMeta, len(effect.Passes))
 	for idx, pass := range effect.Passes {
-		effectMaterial, err := parseMaterialJSON(pkgMap[pass.Material])
+		shader, err := compileShader(effect.Materials[idx].Shader, allBoundTextures[idx], pass.Combos)
 		if err != nil {
-			return []CodegenPassData{}, fmt.Errorf("parsing effect material JSON %s failed: %s", pass.Material, err)
+			return []CodegenPassData{}, fmt.Errorf("compiling effect shader %s failed: %s", effect.Materials[idx].Shader, err)
 		}
-		meta[idx].Shader, err = compileShader(effectMaterial.Shader, allBoundTextures[idx], effectMaterial.Combos)
-		if err != nil {
-			return []CodegenPassData{}, fmt.Errorf("compiling effect shader %s failed: %s", effectMaterial.Shader, err)
-		}
+		meta[idx].Shader = shader
 	}
 
-	for idx, pass := range effectInstance.Passes {
+	for idx, pass := range effect.Passes {
 		for _, textureName := range pass.Textures {
-			if textureName == nil {
+			if textureName == "" {
 				meta[idx].Textures = append(meta[idx].Textures, ImportedTexture{ID: -1})
 				continue
 			}
-			texture, err := importTexture(*textureName)
+			texture, err := importTexture(textureName)
 			if err != nil {
-				return []CodegenPassData{}, fmt.Errorf("loading texture %s failed: %s", *textureName, err)
+				return []CodegenPassData{}, fmt.Errorf("loading texture %s failed: %s", textureName, err)
 			}
 			meta[idx].Textures = append(meta[idx].Textures, texture)
 		}
@@ -380,6 +365,7 @@ func processEffect(object SceneObject, effectInstance EffectInstance, tempBuffer
 		}
 
 		resolutions := [][4]float32{}
+
 		for slot, texture := range pass.Textures {
 			if texture.ID == -1 {
 				passData.TextureBindings = append(passData.TextureBindings, CodegenTextureBindingData{
@@ -387,14 +373,24 @@ func processEffect(object SceneObject, effectInstance EffectInstance, tempBuffer
 					Texture: fmt.Sprintf("temp_buffers[%d]", tempBuffers[0]),
 					Sampler: "linear_clamp_sampler",
 				})
-				resolutions = append(resolutions, [4]float32{float32(scene.General.Ortho.Width), float32(scene.General.Ortho.Height), float32(scene.General.Ortho.Width), float32(scene.General.Ortho.Height)})
+				resolutions = append(resolutions, [4]float32{
+					float32(scene.General.Ortho.Width),
+					float32(scene.General.Ortho.Height),
+					float32(scene.General.Ortho.Width),
+					float32(scene.General.Ortho.Height),
+				})
 			} else {
 				passData.TextureBindings = append(passData.TextureBindings, CodegenTextureBindingData{
 					Slot:    slot,
 					Texture: fmt.Sprintf("texture%d", texture.ID),
 					Sampler: getTextureSampler(texture),
 				})
-				resolutions = append(resolutions, [4]float32{float32(texture.Width), float32(texture.Height), float32(texture.Width), float32(texture.Height)})
+				resolutions = append(resolutions, [4]float32{
+					float32(texture.Width),
+					float32(texture.Height),
+					float32(texture.Width),
+					float32(texture.Height),
+				})
 			}
 		}
 
@@ -402,19 +398,19 @@ func processEffect(object SceneObject, effectInstance EffectInstance, tempBuffer
 			Enabled:                false,
 			SceneWidth:             float32(scene.General.Ortho.Width),
 			SceneHeight:            float32(scene.General.Ortho.Height),
-			OriginX:                float32(object.Origin.X),
-			OriginY:                float32(object.Origin.Y),
-			OriginZ:                float32(object.Origin.Z),
-			SizeX:                  float32(object.Size.X),
-			SizeY:                  float32(object.Size.Y),
-			ScaleX:                 float32(object.Scale.X),
-			ScaleY:                 float32(object.Scale.Y),
-			ScaleZ:                 float32(object.Scale.Z),
-			ParallaxDepthX:         float32(object.ParallaxDepth.X),
-			ParallaxDepthY:         float32(object.ParallaxDepth.Y),
-			ParallaxEnabled:        scene.General.CameraParallax,
-			ParallaxAmount:         float32(scene.General.CameraParallaxAmount),
-			ParallaxMouseInfluence: float32(scene.General.CameraParallaxMouseInfluence),
+			OriginX:                float32(object.Origin[0]),
+			OriginY:                float32(object.Origin[1]),
+			OriginZ:                float32(object.Origin[2]),
+			SizeX:                  float32(object.Size[0]),
+			SizeY:                  float32(object.Size[1]),
+			ScaleX:                 float32(object.Scale[0]),
+			ScaleY:                 float32(object.Scale[1]),
+			ScaleZ:                 float32(object.Scale[2]),
+			ParallaxDepthX:         float32(object.ParallaxDepth[0]),
+			ParallaxDepthY:         float32(object.ParallaxDepth[1]),
+			ParallaxEnabled:        scene.General.Parallax,
+			ParallaxAmount:         float32(scene.General.ParallaxAmount),
+			ParallaxMouseInfluence: float32(scene.General.ParallaxMouseInfluence),
 		}
 
 		passData.UniformSetupCode = generateUniformSetupCode("vertex_uniforms", pass.Shader.VertexUniforms, pass.Constants, resolutions)
@@ -642,9 +638,4 @@ func compileShader(shaderName string, boundTextures []bool, defines map[string]i
 
 	codegenData.Shaders = append(codegenData.Shaders, compiledShader)
 	return compiledShader, nil
-}
-
-func replaceByRegex(source, pattern, replace string) string {
-	regex := regexp.MustCompile(pattern)
-	return regex.ReplaceAllString(source, replace)
 }

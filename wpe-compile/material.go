@@ -3,226 +3,318 @@ package main
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"maps"
-	"strconv"
 )
 
-type Material struct {
-	Blending             string               `json:"blending"`
-	CullMode             string               `json:"cullmode"`
-	DepthTest            string               `json:"depthtest"`
-	DepthWrite           string               `json:"depthwrite"`
-	Shader               string               `json:"shader"`
-	Textures             []string             `json:"textures"`
-	Combos               map[string]int       `json:"combos"`
-	ConstantShaderValues map[string][]float32 `json:"constantshadervalues"`
-}
-
-type BindItem struct {
-	Name  string `json:"name"`
-	Index int    `json:"index"`
+type MaterialPassBindItem struct {
+	Name  string
+	Index int
 }
 
 type MaterialPass struct {
-	Textures             []string             `json:"textures"`
-	Combos               map[string]int       `json:"combos"`
-	ConstantShaderValues map[string][]float32 `json:"constantshadervalues"`
-	Target               string               `json:"target"`
-	Bind                 []BindItem           `json:"bind"`
+	Textures  []string
+	Combos    map[string]int
+	Constants map[string][]float32
+	Target    string
+	Bind      []MaterialPassBindItem
 }
 
-func parseMaterialJSON(data []byte) (Material, error) {
-	var root struct {
-		Passes []json.RawMessage `json:"passes"`
-	}
-	if err := json.Unmarshal(data, &root); err != nil {
-		return Material{}, err
-	}
-	if len(root.Passes) == 0 {
-		return Material{}, errors.New("material no data")
-	}
-	passObj := map[string]json.RawMessage{}
-	if err := json.Unmarshal(root.Passes[0], &passObj); err != nil {
-		return Material{}, err
-	}
-	mat := Material{
-		Blending:             "translucent",
-		CullMode:             "nocull",
-		DepthTest:            "disabled",
-		DepthWrite:           "disabled",
-		Textures:             []string{},
-		Combos:               map[string]int{},
-		ConstantShaderValues: map[string][]float32{},
-	}
-	if raw, ok := passObj["shader"]; ok && !isJSONNull(raw) {
-		if err := json.Unmarshal(raw, &mat.Shader); err != nil {
-			return Material{}, fmt.Errorf("material shader: %w", err)
-		}
-	} else {
-		return Material{}, errors.New("material no shader")
-	}
-	decodeOptionalString(passObj, "blending", &mat.Blending)
-	decodeOptionalString(passObj, "cullmode", &mat.CullMode)
-	decodeOptionalString(passObj, "depthtest", &mat.DepthTest)
-	decodeOptionalString(passObj, "depthwrite", &mat.DepthWrite)
-	if raw, ok := passObj["textures"]; ok && !isJSONNull(raw) {
-		var anyArr []json.RawMessage
-		if err := json.Unmarshal(raw, &anyArr); err != nil {
-			return Material{}, fmt.Errorf("textures: %w", err)
-		}
-		for _, el := range anyArr {
-			if isJSONNull(el) {
-				mat.Textures = append(mat.Textures, "")
-				continue
-			}
-			var s string
-			if err := json.Unmarshal(el, &s); err != nil {
-				mat.Textures = append(mat.Textures, "")
-			} else {
-				mat.Textures = append(mat.Textures, s)
-			}
-		}
-	}
-	if raw, ok := passObj["constantshadervalues"]; ok && !isJSONNull(raw) {
-		var m map[string]json.RawMessage
-		if err := json.Unmarshal(raw, &m); err != nil {
-			return Material{}, fmt.Errorf("constantshadervalues: %w", err)
-		}
-		for k, v := range m {
-			fs, err := ParseFloat32AnyJSON(v)
-			if err != nil {
-				return Material{}, fmt.Errorf("constantshadervalues[%s]: %w", k, err)
-			}
-			mat.ConstantShaderValues[k] = fs
-		}
-	}
-	if raw, ok := passObj["combos"]; ok && !isJSONNull(raw) {
-		var m map[string]json.RawMessage
-		if err := json.Unmarshal(raw, &m); err != nil {
-			return Material{}, fmt.Errorf("combos: %w", err)
-		}
-		for k, v := range m {
-			val, err := parseint(v)
-			if err != nil {
-				return Material{}, fmt.Errorf("combos[%s]: %w", k, err)
-			}
-			mat.Combos[k] = val
-		}
-	}
-	return mat, nil
+type Material struct {
+	Blending   string
+	CullMode   string
+	DepthTest  string
+	DepthWrite string
+	Shader     string
+	Textures   []string
+	Combos     map[string]int
+	Constants  map[string][]float32
 }
 
-func ParseMaterialPass(data []byte) (MaterialPass, error) {
-	var obj map[string]json.RawMessage
-	if err := json.Unmarshal(data, &obj); err != nil {
-		return MaterialPass{}, err
+func (bindItem *MaterialPassBindItem) parseFromJSON(raw json.RawMessage) error {
+	var object map[string]json.RawMessage
+	err := json.Unmarshal(raw, &object)
+	if err != nil {
+		return fmt.Errorf("cannot parse material bind item: %w", err)
 	}
-	var p MaterialPass
-	p.Combos = map[string]int{}
-	p.ConstantShaderValues = map[string][]float32{}
-	if raw, ok := obj["textures"]; ok && !isJSONNull(raw) {
-		var anyArr []json.RawMessage
-		if err := json.Unmarshal(raw, &anyArr); err != nil {
-			return MaterialPass{}, fmt.Errorf("textures: %w", err)
-		}
-		for _, el := range anyArr {
-			if isJSONNull(el) {
-				p.Textures = append(p.Textures, "")
-				continue
-			}
-			var s string
-			if err := json.Unmarshal(el, &s); err != nil {
-				p.Textures = append(p.Textures, "")
-			} else {
-				p.Textures = append(p.Textures, s)
-			}
-		}
+	nameRaw, err := getRequiredField(object, "name")
+	if err != nil {
+		return err
 	}
-	if raw, ok := obj["constantshadervalues"]; ok && !isJSONNull(raw) {
-		var m map[string]json.RawMessage
-		if err := json.Unmarshal(raw, &m); err != nil {
-			return MaterialPass{}, fmt.Errorf("constantshadervalues: %w", err)
-		}
-		for k, v := range m {
-			fs, err := ParseFloat32AnyJSON(v)
-			if err != nil {
-				return MaterialPass{}, fmt.Errorf("constantshadervalues[%s]: %w", k, err)
-			}
-			p.ConstantShaderValues[k] = fs
-		}
+	indexRaw, err := getRequiredField(object, "index")
+	if err != nil {
+		return err
 	}
-	if raw, ok := obj["combos"]; ok && !isJSONNull(raw) {
-		var m map[string]json.RawMessage
-		if err := json.Unmarshal(raw, &m); err != nil {
-			return MaterialPass{}, fmt.Errorf("combos: %w", err)
-		}
-		for k, v := range m {
-			val, err := parseint(v)
-			if err != nil {
-				return MaterialPass{}, fmt.Errorf("combos[%s]: %w", k, err)
-			}
-			p.Combos[k] = val
-		}
+	name, err := parseStringFromRaw(nameRaw)
+	if err != nil {
+		return fmt.Errorf("cannot parse bind name: %w", err)
 	}
-	decodeOptionalString(obj, "target", &p.Target)
-	if raw, ok := obj["bind"]; ok && !isJSONNull(raw) {
-		if err := json.Unmarshal(raw, &p.Bind); err != nil {
-			return MaterialPass{}, fmt.Errorf("bind: %w", err)
-		}
+	index, err := parseIntFromRaw(indexRaw)
+	if err != nil {
+		return fmt.Errorf("cannot parse bind index: %w", err)
 	}
-	return p, nil
+	bindItem.Name = name
+	bindItem.Index = index
+	return nil
 }
 
-func (m *Material) MergePass(p MaterialPass) {
-	if len(p.Textures) > len(m.Textures) {
-		tmp := make([]string, len(p.Textures))
-		copy(tmp, m.Textures)
-		m.Textures = tmp
+func (materialPass *MaterialPass) updateFrom(other MaterialPass) {
+	if len(other.Textures) > len(materialPass.Textures) {
+		newTextures := make([]string, len(other.Textures))
+		copy(newTextures, materialPass.Textures)
+		materialPass.Textures = newTextures
 	}
-	for i, el := range p.Textures {
-		if el != "" {
-			m.Textures[i] = el
+	for index, textureName := range other.Textures {
+		if textureName != "" {
+			materialPass.Textures[index] = textureName
 		}
 	}
-	maps.Copy(m.ConstantShaderValues, p.ConstantShaderValues)
-	maps.Copy(m.Combos, p.Combos)
-}
-
-func isJSONNull(raw json.RawMessage) bool {
-	b := bytes.TrimSpace(raw)
-	return bytes.Equal(b, []byte("null"))
-}
-
-func decodeOptionalString(obj map[string]json.RawMessage, key string, out *string) {
-	if raw, ok := obj[key]; ok && !isJSONNull(raw) {
-		_ = json.Unmarshal(raw, out)
+	if materialPass.Combos == nil {
+		materialPass.Combos = make(map[string]int)
+	}
+	for key, value := range other.Combos {
+		materialPass.Combos[key] = value
+	}
+	if materialPass.Constants == nil {
+		materialPass.Constants = make(map[string][]float32)
+	}
+	for key, value := range other.Constants {
+		materialPass.Constants[key] = value
+	}
+	if other.Target != "" {
+		materialPass.Target = other.Target
+	}
+	if len(other.Bind) > 0 {
+		materialPass.Bind = other.Bind
 	}
 }
 
-func parseint(raw json.RawMessage) (int, error) {
-	var n int64
-	if err := json.Unmarshal(raw, &n); err == nil {
-		return int(n), nil
+func (material *Material) mergePass(other MaterialPass) {
+	if len(other.Textures) > len(material.Textures) {
+		newTextures := make([]string, len(other.Textures))
+		copy(newTextures, material.Textures)
+		material.Textures = newTextures
 	}
-	var b bool
-	if err := json.Unmarshal(raw, &b); err == nil {
-		if b {
-			return 1, nil
+	for index, textureName := range other.Textures {
+		if textureName != "" {
+			material.Textures[index] = textureName
 		}
-		return 0, nil
 	}
-	var s string
-	if err := json.Unmarshal(raw, &s); err == nil {
-		if s == "" {
-			return 0, nil
-		}
-		f, err := strconv.ParseFloat(s, 64)
+	if material.Combos == nil {
+		material.Combos = make(map[string]int)
+	}
+	for key, value := range other.Combos {
+		material.Combos[key] = value
+	}
+	if material.Constants == nil {
+		material.Constants = make(map[string][]float32)
+	}
+	for key, value := range other.Constants {
+		material.Constants[key] = value
+	}
+}
+
+func (materialPass *MaterialPass) parseFromJSON(raw json.RawMessage) error {
+	var object map[string]json.RawMessage
+	err := json.Unmarshal(raw, &object)
+	if err != nil {
+		return fmt.Errorf("cannot parse material pass: %w", err)
+	}
+
+	if texturesRaw, exists := getOptionalField(object, "textures"); exists {
+		var texturesArray []json.RawMessage
+		err = json.Unmarshal(texturesRaw, &texturesArray)
 		if err != nil {
-			return 0, fmt.Errorf("not an int: %q", s)
+			return fmt.Errorf("cannot parse textures array: %w", err)
 		}
-		return int(f), nil
+		for _, textureRaw := range texturesArray {
+			if bytes := bytesFromRawNullAware(textureRaw); bytes == nil {
+				materialPass.Textures = append(materialPass.Textures, "")
+			} else {
+				textureName, parseErr := parseStringFromRaw(textureRaw)
+				if parseErr != nil {
+					return fmt.Errorf("cannot parse texture name: %w", parseErr)
+				}
+				materialPass.Textures = append(materialPass.Textures, textureName)
+			}
+		}
 	}
-	return 0, errors.New("unsupported int format")
+
+	if constantValuesRaw, exists := getOptionalField(object, "constantshadervalues"); exists {
+		values, parseErr := parseFloatSliceMapFromRaw(constantValuesRaw)
+		if parseErr != nil {
+			return fmt.Errorf("cannot parse constant shader values: %w", parseErr)
+		}
+		if materialPass.Constants == nil {
+			materialPass.Constants = make(map[string][]float32)
+		}
+		for key, value := range values {
+			materialPass.Constants[key] = value
+		}
+	}
+
+	if combosRaw, exists := getOptionalField(object, "combos"); exists {
+		combos, parseErr := parseCombosMapFromRaw(combosRaw)
+		if parseErr != nil {
+			return fmt.Errorf("cannot parse combos: %w", parseErr)
+		}
+		if materialPass.Combos == nil {
+			materialPass.Combos = make(map[string]int)
+		}
+		for key, value := range combos {
+			materialPass.Combos[key] = value
+		}
+	}
+
+	if targetRaw, exists := getOptionalField(object, "target"); exists {
+		target, parseErr := parseStringFromRaw(targetRaw)
+		if parseErr != nil {
+			return fmt.Errorf("cannot parse material pass target: %w", parseErr)
+		}
+		materialPass.Target = target
+	}
+
+	if bindRaw, exists := getOptionalField(object, "bind"); exists {
+		var bindArray []json.RawMessage
+		err = json.Unmarshal(bindRaw, &bindArray)
+		if err != nil {
+			return fmt.Errorf("cannot parse bind array: %w", err)
+		}
+		for _, bindItemRaw := range bindArray {
+			var bindItem MaterialPassBindItem
+			parseErr := bindItem.parseFromJSON(bindItemRaw)
+			if parseErr != nil {
+				return parseErr
+			}
+			materialPass.Bind = append(materialPass.Bind, bindItem)
+		}
+	}
+
+	return nil
+}
+
+func (material *Material) parseFromJSON(raw json.RawMessage) error {
+	var root map[string]json.RawMessage
+	err := json.Unmarshal(raw, &root)
+	if err != nil {
+		return fmt.Errorf("cannot parse material document: %w", err)
+	}
+	passesRaw, exists := root["passes"]
+	if !exists {
+		return fmt.Errorf("material has no passes field")
+	}
+	var passesArray []json.RawMessage
+	err = json.Unmarshal(passesRaw, &passesArray)
+	if err != nil {
+		return fmt.Errorf("cannot parse material passes array: %w", err)
+	}
+	if len(passesArray) == 0 {
+		return fmt.Errorf("material has empty passes array")
+	}
+	firstPassRaw := passesArray[0]
+	var firstPass map[string]json.RawMessage
+	err = json.Unmarshal(firstPassRaw, &firstPass)
+	if err != nil {
+		return fmt.Errorf("cannot parse material first pass: %w", err)
+	}
+
+	blendingRaw, err := getRequiredField(firstPass, "blending")
+	if err != nil {
+		return err
+	}
+	cullModeRaw, err := getRequiredField(firstPass, "cullmode")
+	if err != nil {
+		return err
+	}
+	depthTestRaw, err := getRequiredField(firstPass, "depthtest")
+	if err != nil {
+		return err
+	}
+	depthWriteRaw, err := getRequiredField(firstPass, "depthwrite")
+	if err != nil {
+		return err
+	}
+	shaderRaw, err := getRequiredField(firstPass, "shader")
+	if err != nil {
+		return err
+	}
+
+	blending, err := parseStringFromRaw(blendingRaw)
+	if err != nil {
+		return fmt.Errorf("cannot parse material blending: %w", err)
+	}
+	cullMode, err := parseStringFromRaw(cullModeRaw)
+	if err != nil {
+		return fmt.Errorf("cannot parse material cull mode: %w", err)
+	}
+	depthTest, err := parseStringFromRaw(depthTestRaw)
+	if err != nil {
+		return fmt.Errorf("cannot parse material depth test: %w", err)
+	}
+	depthWrite, err := parseStringFromRaw(depthWriteRaw)
+	if err != nil {
+		return fmt.Errorf("cannot parse material depth write: %w", err)
+	}
+	shader, err := parseStringFromRaw(shaderRaw)
+	if err != nil {
+		return fmt.Errorf("cannot parse material shader: %w", err)
+	}
+
+	material.Blending = blending
+	material.CullMode = cullMode
+	material.DepthTest = depthTest
+	material.DepthWrite = depthWrite
+	material.Shader = shader
+
+	if texturesRaw, exists := getOptionalField(firstPass, "textures"); exists {
+		var texturesArray []json.RawMessage
+		err = json.Unmarshal(texturesRaw, &texturesArray)
+		if err != nil {
+			return fmt.Errorf("cannot parse material textures array: %w", err)
+		}
+		for _, textureRaw := range texturesArray {
+			if bytes := bytesFromRawNullAware(textureRaw); bytes == nil {
+				material.Textures = append(material.Textures, "")
+			} else {
+				textureName, parseErr := parseStringFromRaw(textureRaw)
+				if parseErr != nil {
+					return fmt.Errorf("cannot parse material texture: %w", parseErr)
+				}
+				material.Textures = append(material.Textures, textureName)
+			}
+		}
+	}
+	if constantValuesRaw, exists := getOptionalField(firstPass, "constantshadervalues"); exists {
+		values, parseErr := parseFloatSliceMapFromRaw(constantValuesRaw)
+		if parseErr != nil {
+			return fmt.Errorf("cannot parse material constant values: %w", parseErr)
+		}
+		if material.Constants == nil {
+			material.Constants = make(map[string][]float32)
+		}
+		for key, value := range values {
+			material.Constants[key] = value
+		}
+	}
+	if combosRaw, exists := getOptionalField(firstPass, "combos"); exists {
+		combos, parseErr := parseCombosMapFromRaw(combosRaw)
+		if parseErr != nil {
+			return fmt.Errorf("cannot parse material combos: %w", parseErr)
+		}
+		if material.Combos == nil {
+			material.Combos = make(map[string]int)
+		}
+		for key, value := range combos {
+			material.Combos[key] = value
+		}
+	}
+
+	return nil
+}
+
+func bytesFromRawNullAware(raw json.RawMessage) []byte {
+	trimmed := bytes.TrimSpace(raw)
+	if bytes.Equal(trimmed, []byte("null")) {
+		return nil
+	}
+	return raw
 }

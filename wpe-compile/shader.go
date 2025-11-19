@@ -50,6 +50,9 @@ func preprocessShader(vertexSource, fragmentSource, includePath string, boundTex
 	vertexSource = removeRequireDirectives(vertexSource)
 	fragmentSource = removeRequireDirectives(fragmentSource)
 
+	vertexSource = removePrecisionSpecifiers(vertexSource)
+	fragmentSource = removePrecisionSpecifiers(fragmentSource)
+
 	vertexUniformConstantNames := parseUniformConstantNames(vertexSource)
 	vertexUniformDefaults := parseUniformDefaults(vertexSource)
 	fragmentUniformConstantNames := parseUniformConstantNames(fragmentSource)
@@ -158,6 +161,11 @@ func removeRequireDirectives(source string) string {
 	return reRequire.ReplaceAllString(source, "")
 }
 
+func removePrecisionSpecifiers(source string) string {
+	rePrecision := regexp.MustCompile(`uniform *(lowp|mediump|highp)`)
+	return rePrecision.ReplaceAllString(source, "uniform ")
+}
+
 func appendGLSL450Header(source string) string {
 	return `#version 450
 
@@ -232,7 +240,7 @@ func parseUniformDefaults(source string) map[string][]float32 {
 			fmt.Printf("warning: unable to parse uniform properties JSON for %s: %s\n", match[2], err.Error())
 			continue
 		}
-		value, err := ParseFloat32AnyJSON(meta.Default)
+		value, err := parseFloatSliceFromRaw(meta.Default)
 		if err != nil {
 			fmt.Printf("warning: unable to parse uniform properties JSON for %s: %s\n", match[2], err.Error())
 			continue
