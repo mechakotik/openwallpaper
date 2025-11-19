@@ -14,11 +14,13 @@ import (
 )
 
 type CompiledShader struct {
-	ID               int
-	NameInfo         string
-	VertexUniforms   []UniformInfo
-	FragmentUniforms []UniformInfo
-	Samplers         []string
+	ID                     int
+	NameInfo               string
+	VertexUniforms         []UniformInfo
+	FragmentUniforms       []UniformInfo
+	VertexUniformsStruct   string
+	FragmentUniformsStruct string
+	Samplers               []string
 }
 
 type ImportedTexture struct {
@@ -446,7 +448,7 @@ func generateUniformSetupCode(structName string, uniforms []UniformInfo, constan
 		} else if uniform.Name == "g_ModelViewProjectionMatrix" {
 			code += "        " + structName + ".g_ModelViewProjectionMatrix = matrices.model_view_projection;\n"
 		} else if strings.HasPrefix(uniform.Name, "g_Texture") && strings.HasSuffix(uniform.Name, "Rotation") {
-			code += "        " + structName + ".g_Texture0Rotation = (glsl_vec4){.x = 1.0f, .y = 0.0f, .z = 0.0f, .w = 1.0f};\n"
+			code += "        " + structName + ".g_Texture0Rotation = (glsl_vec4){.at = {1, 0, 0, 1}};\n"
 		} else if strings.HasPrefix(uniform.Name, "g_Texture") && strings.HasSuffix(uniform.Name, "Translation") {
 			// TODO:
 		} else if strings.HasPrefix(uniform.Name, "g_Texture") && strings.HasSuffix(uniform.Name, "Resolution") {
@@ -454,12 +456,12 @@ func generateUniformSetupCode(structName string, uniforms []UniformInfo, constan
 			idxString, _ = strings.CutSuffix(idxString, "Resolution")
 			idx, _ := strconv.Atoi(idxString)
 			if idx < len(resolutions) {
-				code += fmt.Sprintf("        %s.%s = (glsl_vec4){.x = %f, .y = %f, .z = %f, .w = %f};\n", structName, uniform.Name, resolutions[idx][0], resolutions[idx][1], resolutions[idx][2], resolutions[idx][3])
+				code += fmt.Sprintf("        %s.%s = (glsl_vec4){.at = {%f, %f, %f, %f}};\n", structName, uniform.Name, resolutions[idx][0], resolutions[idx][1], resolutions[idx][2], resolutions[idx][3])
 			}
 		} else if uniform.Name == "g_Time" {
-			code += "        " + structName + ".g_Time = (glsl_float){.x = time};\n"
+			code += "        " + structName + ".g_Time = (glsl_float){.at = {time}};\n"
 		} else if uniform.Name == "g_ParallaxPosition" {
-			code += "        " + structName + ".g_ParallaxPosition = (glsl_vec2){ .x = matrices.parallax_position_x, .y = matrices.parallax_position_y };\n"
+			code += "        " + structName + ".g_ParallaxPosition = (glsl_vec2){.at = {matrices.parallax_position_x, matrices.parallax_position_y}};\n"
 		} else if uniform.Name == "g_Screen" {
 			code += "        " + structName + ".g_Screen = (glsl_vec3){.at = {screen_width, screen_height, (float)screen_width / (float)screen_height}};\n"
 		} else if uniform.Name == "g_EffectTextureProjectionMatrix" || uniform.Name == "g_EffectTextureProjectionMatrixInverse" {
@@ -642,12 +644,17 @@ func compileShader(shaderName string, boundTextures []bool, defines map[string]i
 	outputMap[fmt.Sprintf("assets/shader%d_vertex.spv", lastShaderID)] = vertexSPIRVBytes
 	outputMap[fmt.Sprintf("assets/shader%d_fragment.spv", lastShaderID)] = fragmentSPIRVBytes
 
+	vertexUniformsStructCode := generateUniformsStructCode(transformed.VertexUniforms, fmt.Sprintf("shader%d_vertex_uniforms_t", lastShaderID))
+	fragmentUniformsStructCode := generateUniformsStructCode(transformed.FragmentUniforms, fmt.Sprintf("shader%d_fragment_uniforms_t", lastShaderID))
+
 	compiledShader := CompiledShader{
-		ID:               lastShaderID,
-		NameInfo:         nameInfo,
-		VertexUniforms:   transformed.VertexUniforms,
-		FragmentUniforms: transformed.FragmentUniforms,
-		Samplers:         transformed.Samplers,
+		ID:                     lastShaderID,
+		NameInfo:               nameInfo,
+		VertexUniforms:         transformed.VertexUniforms,
+		FragmentUniforms:       transformed.FragmentUniforms,
+		VertexUniformsStruct:   vertexUniformsStructCode,
+		FragmentUniformsStruct: fragmentUniformsStructCode,
+		Samplers:               transformed.Samplers,
 	}
 
 	codegenData.Shaders = append(codegenData.Shaders, compiledShader)

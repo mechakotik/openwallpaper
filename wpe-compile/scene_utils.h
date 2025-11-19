@@ -2,7 +2,26 @@
 #define WPE_COMPILE_SCENE_UTILS_H
 
 #include "openwallpaper.h"
-#include "openwallpaper_std140.h"
+
+typedef struct {
+    float at[1];
+} glsl_float;
+
+typedef struct {
+    float at[2];
+} glsl_vec2;
+
+typedef struct {
+    float at[3];
+} glsl_vec3;
+
+typedef struct {
+    float at[4];
+} glsl_vec4;
+
+typedef struct {
+    float at[4][4];
+} glsl_mat4;
 
 typedef enum {
     SCALE_MODE_STRETCH,

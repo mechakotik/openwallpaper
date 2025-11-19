@@ -437,3 +437,39 @@ func normalizeNewlines(source string) string {
 	}
 	return result
 }
+
+func generateUniformsStructCode(uniforms []UniformInfo, structName string) string {
+	code := "typedef struct {\n"
+	offset := 0
+	lastPaddingID := -1
+	for _, uniform := range uniforms {
+		size, align := getGLSLTypeSizeAndAlignment(uniform.Type)
+		if offset%align != 0 {
+			lastPaddingID++
+			padding := align - (offset % align)
+			code += fmt.Sprintf("    uint8_t __pad%d[%d];\n", lastPaddingID, padding)
+			offset += padding
+		}
+		code += fmt.Sprintf("    glsl_%s %s;\n", uniform.Type, uniform.Name)
+		offset += size
+	}
+	code += "} " + structName + ";\n"
+	return code
+}
+
+func getGLSLTypeSizeAndAlignment(typeName string) (int, int) {
+	switch typeName {
+	case "float":
+		return 4, 4
+	case "vec2":
+		return 8, 8
+	case "vec3":
+		return 12, 16
+	case "vec4":
+		return 16, 16
+	case "mat4":
+		return 64, 16
+	default:
+		panic("unknown/unhandled GLSL type: " + typeName)
+	}
+}
