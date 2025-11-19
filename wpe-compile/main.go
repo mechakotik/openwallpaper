@@ -37,12 +37,6 @@ type UniformCMapping struct {
 	Alignment  int
 }
 
-type EffectPassMeta struct {
-	Shader    CompiledShader
-	Constants map[string][]float32
-	Textures  []ImportedTexture
-}
-
 type CodegenTextureBindingData struct {
 	Slot    int
 	Texture string
@@ -322,64 +316,77 @@ func processImageEffect(object ImageObject, effect ImageEffect, tempBuffers *[2]
 		allBoundTextures = append(allBoundTextures, boundTextures)
 	}
 
-	meta := make([]EffectPassMeta, len(effect.Passes))
-	for idx, pass := range effect.Passes {
-		shader, err := compileShader(effect.Materials[idx].Shader, allBoundTextures[idx], pass.Combos)
-		if err != nil {
-			return []CodegenPassData{}, fmt.Errorf("compiling effect shader %s failed: %s", effect.Materials[idx].Shader, err)
-		}
-		meta[idx].Shader = shader
-	}
-
-	for idx, pass := range effect.Passes {
-		for _, textureName := range pass.Textures {
-			if textureName == "" {
-				meta[idx].Textures = append(meta[idx].Textures, ImportedTexture{ID: -1})
-				continue
-			}
-			texture, err := importTexture(textureName)
-			if err != nil {
-				return []CodegenPassData{}, fmt.Errorf("loading texture %s failed: %s", textureName, err)
-			}
-			meta[idx].Textures = append(meta[idx].Textures, texture)
-		}
-		for len(meta[idx].Textures) < len(meta[idx].Shader.Samplers) {
-			meta[idx].Textures = append(meta[idx].Textures, ImportedTexture{ID: -1})
-		}
-		meta[idx].Constants = pass.Constants
+	fbos := map[string]int{}
+	for idx, fbo := range effect.FBOs {
+		fbos[fbo.Name] = getTempBuffer(TempBufferParameters{
+			Width:  int(object.Size[0]/float32(fbo.Scale) + 0.5),
+			Height: int(object.Size[1]/float32(fbo.Scale) + 0.5),
+			Number: idx,
+		})
 	}
 
 	passes := []CodegenPassData{}
 
-	for _, pass := range meta {
+	for idx, pass := range effect.Passes {
 		lastPassID++
 
 		passData := CodegenPassData{
 			ObjectID:          lastObjectID,
 			PassID:            lastPassID,
-			ShaderID:          pass.Shader.ID,
 			ColorTargetFormat: "OW_TEXTURE_RGBA8_UNORM",
-			ColorTarget:       fmt.Sprintf("temp_buffers[%d]", tempBuffers[1]),
 			ClearColor:        true,
 			BlendMode:         "OW_BLEND_NONE",
 		}
 
-		resolutions := [][4]float32{}
+		compiledShader, err := compileShader(effect.Materials[idx].Shader, allBoundTextures[idx], pass.Combos)
+		if err != nil {
+			return []CodegenPassData{}, fmt.Errorf("compiling effect shader %s failed: %s", effect.Materials[idx].Shader, err)
+		}
+		passData.ShaderID = compiledShader.ID
 
+		resolutions := [][4]float32{}
+		textureNames := make([]string, len(compiledShader.Samplers))
+		for _, binding := range pass.Bind {
+			if binding.Name != "previous" {
+				textureNames[binding.Index] = binding.Name
+			}
+		}
 		for slot, texture := range pass.Textures {
-			if texture.ID == -1 {
+			if texture != "" {
+				textureNames[slot] = texture
+			}
+		}
+
+		for slot, textureName := range textureNames {
+			if textureName == "" || strings.HasPrefix(textureName, "_rt_imageLayerComposite") {
 				passData.TextureBindings = append(passData.TextureBindings, CodegenTextureBindingData{
 					Slot:    slot,
 					Texture: fmt.Sprintf("temp_buffers[%d]", tempBuffers[0]),
 					Sampler: "linear_clamp_sampler",
 				})
 				resolutions = append(resolutions, [4]float32{
-					float32(scene.General.Ortho.Width),
-					float32(scene.General.Ortho.Height),
-					float32(scene.General.Ortho.Width),
-					float32(scene.General.Ortho.Height),
+					float32(object.Size[0]),
+					float32(object.Size[1]),
+					float32(object.Size[0]),
+					float32(object.Size[1]),
+				})
+			} else if fbo, exists := fbos[textureName]; exists {
+				passData.TextureBindings = append(passData.TextureBindings, CodegenTextureBindingData{
+					Slot:    slot,
+					Texture: fmt.Sprintf("temp_buffers[%d]", fbo),
+					Sampler: "linear_clamp_sampler",
+				})
+				resolutions = append(resolutions, [4]float32{
+					float32(object.Size[0] + 0.5),
+					float32(object.Size[1] + 0.5),
+					float32(object.Size[0] + 0.5),
+					float32(object.Size[1] + 0.5),
 				})
 			} else {
+				texture, err := importTexture(textureName)
+				if err != nil {
+					return []CodegenPassData{}, fmt.Errorf("importing texture %s failed: %s", textureName, err)
+				}
 				passData.TextureBindings = append(passData.TextureBindings, CodegenTextureBindingData{
 					Slot:    slot,
 					Texture: fmt.Sprintf("texture%d", texture.ID),
@@ -393,6 +400,14 @@ func processImageEffect(object ImageObject, effect ImageEffect, tempBuffers *[2]
 				})
 			}
 		}
+
+		colorTarget := fmt.Sprintf("temp_buffers[%d]", tempBuffers[1])
+		if fbo, exists := fbos[pass.Target]; exists {
+			colorTarget = fmt.Sprintf("temp_buffers[%d]", fbo)
+		} else {
+			tempBuffers[0], tempBuffers[1] = tempBuffers[1], tempBuffers[0]
+		}
+		passData.ColorTarget = colorTarget
 
 		passData.Transform = CodegenTransformData{
 			Enabled:                false,
@@ -413,10 +428,9 @@ func processImageEffect(object ImageObject, effect ImageEffect, tempBuffers *[2]
 			ParallaxMouseInfluence: float32(scene.General.ParallaxMouseInfluence),
 		}
 
-		passData.UniformSetupCode = generateUniformSetupCode("vertex_uniforms", pass.Shader.VertexUniforms, pass.Constants, resolutions)
-		passData.UniformSetupCode += generateUniformSetupCode("fragment_uniforms", pass.Shader.FragmentUniforms, pass.Constants, resolutions)
+		passData.UniformSetupCode = generateUniformSetupCode("vertex_uniforms", compiledShader.VertexUniforms, pass.Constants, resolutions)
+		passData.UniformSetupCode += generateUniformSetupCode("fragment_uniforms", compiledShader.FragmentUniforms, pass.Constants, resolutions)
 		passes = append(passes, passData)
-		tempBuffers[0], tempBuffers[1] = tempBuffers[1], tempBuffers[0]
 	}
 
 	return passes, nil
