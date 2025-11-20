@@ -20,7 +20,7 @@ type CompiledShader struct {
 	FragmentUniforms       []UniformInfo
 	VertexUniformsStruct   string
 	FragmentUniformsStruct string
-	Samplers               []string
+	Samplers               []SamplerInfo
 }
 
 type ImportedTexture struct {
@@ -348,6 +348,9 @@ func processImageEffect(object ImageObject, effect ImageEffect, tempBuffers *[2]
 
 		resolutions := [][4]float32{}
 		textureNames := make([]string, len(compiledShader.Samplers))
+		for idx, sampler := range compiledShader.Samplers {
+			textureNames[idx] = sampler.Default
+		}
 		for _, binding := range pass.Bind {
 			if binding.Name != "previous" {
 				textureNames[binding.Index] = binding.Name

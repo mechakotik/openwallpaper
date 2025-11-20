@@ -25,13 +25,18 @@ type AttributeInfo struct {
 	Type string
 }
 
+type SamplerInfo struct {
+	Name    string
+	Default string
+}
+
 type PreprocessedShader struct {
 	VertexGLSL       string
 	FragmentGLSL     string
 	VertexUniforms   []UniformInfo
 	FragmentUniforms []UniformInfo
 	Attributes       []AttributeInfo
-	Samplers         []string
+	Samplers         []SamplerInfo
 }
 
 type comboMeta struct {
@@ -39,8 +44,9 @@ type comboMeta struct {
 	Default int    `json:"default"`
 }
 
-type samplerComboMeta struct {
-	Combo string `json:"combo"`
+type samplerMeta struct {
+	Combo   string `json:"combo"`
+	Default string `json:"default"`
 }
 
 func preprocessShader(vertexSource, fragmentSource, includePath string, boundTextures []bool, comboOverrides map[string]int) (PreprocessedShader, error) {
@@ -61,11 +67,14 @@ func preprocessShader(vertexSource, fragmentSource, includePath string, boundTex
 	vertexSource = appendGLSL450Header(vertexSource)
 	fragmentSource = appendGLSL450Header(fragmentSource)
 
+	vertexCombos, vertexDefaults := parseSamplerCombos(vertexSource, boundTextures)
+	fragmentCombos, fragmentDefaults := parseSamplerCombos(fragmentSource, boundTextures)
+
 	combos := map[string]int{}
 	maps.Copy(combos, parseCombos(vertexSource))
 	maps.Copy(combos, parseCombos(fragmentSource))
-	maps.Copy(combos, parseSamplerCombos(vertexSource, boundTextures))
-	maps.Copy(combos, parseSamplerCombos(fragmentSource, boundTextures))
+	maps.Copy(combos, vertexCombos)
+	maps.Copy(combos, fragmentCombos)
 
 	for combo, value := range comboOverrides {
 		if _, exists := combos[combo]; exists {
@@ -102,7 +111,7 @@ func preprocessShader(vertexSource, fragmentSource, includePath string, boundTex
 		varying = append(varying, info)
 	}
 
-	fragmentSource, samplers := preprocessSamplers(fragmentSource)
+	fragmentSource, samplerNames := preprocessSamplers(fragmentSource)
 	vertexSource = insertIntermediateAttributes(vertexSource, varying, "out")
 	fragmentSource = insertIntermediateAttributes(fragmentSource, varying, "in")
 
@@ -135,6 +144,20 @@ func preprocessShader(vertexSource, fragmentSource, includePath string, boundTex
 			fragmentUniforms[i].Default = value
 			fragmentUniforms[i].DefaultSet = true
 		}
+	}
+
+	samplers := []SamplerInfo{}
+	for _, samplerName := range samplerNames {
+		defaultTexture := ""
+		if texture, exists := fragmentDefaults[samplerName]; exists {
+			defaultTexture = texture
+		} else if texture, exists := vertexDefaults[samplerName]; exists {
+			defaultTexture = texture
+		}
+		samplers = append(samplers, SamplerInfo{
+			Name:    samplerName,
+			Default: defaultTexture,
+		})
 	}
 
 	return PreprocessedShader{
@@ -267,23 +290,25 @@ func parseCombos(source string) map[string]int {
 	return combos
 }
 
-func parseSamplerCombos(source string, boundTextures []bool) map[string]int {
-	combos := make(map[string]int)
+func parseSamplerCombos(source string, boundTextures []bool) (map[string]int, map[string]string) {
+	combos := map[string]int{}
+	defaults := map[string]string{}
 	reSamplerCombo := regexp.MustCompile(`uniform\s*sampler2D\s*([a-z|A-Z|0-9|_]*)\s*;\s*//\s*({.*})`)
 	matches := reSamplerCombo.FindAllStringSubmatch(source, -1)
 	for idx, match := range matches {
-		comboJSON := match[2]
-		combo := samplerComboMeta{}
-		err := json.Unmarshal([]byte(comboJSON), &combo)
+		metaJSON := match[2]
+		meta := samplerMeta{}
+		err := json.Unmarshal([]byte(metaJSON), &meta)
 		if err != nil {
-			fmt.Printf("warning: unable to parse combo JSON %s: %s\n", comboJSON, err.Error())
+			fmt.Printf("warning: unable to parse combo JSON %s: %s\n", metaJSON, err.Error())
 			continue
 		}
-		if combo.Combo != "" && idx < len(boundTextures) && boundTextures[idx] {
-			combos[combo.Combo] = 1
+		if meta.Combo != "" && idx < len(boundTextures) && boundTextures[idx] {
+			combos[meta.Combo] = 1
 		}
+		defaults[match[1]] = meta.Default
 	}
-	return combos
+	return combos, defaults
 }
 
 func runGLSLCPreprocessor(source, includePath string, defines map[string]int) (string, error) {
