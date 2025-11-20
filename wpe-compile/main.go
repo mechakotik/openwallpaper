@@ -367,10 +367,10 @@ func processImageEffect(object ImageObject, effect ImageEffect, tempBuffers *[2]
 					Sampler: "linear_clamp_sampler",
 				})
 				resolutions = append(resolutions, [4]float32{
-					float32(object.Size[0]),
-					float32(object.Size[1]),
-					float32(object.Size[0]),
-					float32(object.Size[1]),
+					float32(object.Size[0] + 0.5),
+					float32(object.Size[1] + 0.5),
+					float32(object.Size[0] + 0.5),
+					float32(object.Size[1] + 0.5),
 				})
 			} else if fbo, exists := fbos[textureName]; exists {
 				passData.TextureBindings = append(passData.TextureBindings, CodegenTextureBindingData{
@@ -448,7 +448,7 @@ func generateUniformSetupCode(structName string, uniforms []UniformInfo, constan
 		} else if uniform.Name == "g_ModelViewProjectionMatrix" {
 			code += "        " + structName + ".g_ModelViewProjectionMatrix = matrices.model_view_projection;\n"
 		} else if strings.HasPrefix(uniform.Name, "g_Texture") && strings.HasSuffix(uniform.Name, "Rotation") {
-			code += "        " + structName + ".g_Texture0Rotation = (glsl_vec4){.at = {1, 0, 0, 1}};\n"
+			code += "        " + structName + "." + uniform.Name + " = (glsl_vec4){.at = {1, 0, 0, 1}};\n"
 		} else if strings.HasPrefix(uniform.Name, "g_Texture") && strings.HasSuffix(uniform.Name, "Translation") {
 			// TODO:
 		} else if strings.HasPrefix(uniform.Name, "g_Texture") && strings.HasSuffix(uniform.Name, "Resolution") {
@@ -468,6 +468,8 @@ func generateUniformSetupCode(structName string, uniforms []UniformInfo, constan
 			code += "        " + structName + "." + uniform.Name + " = mat4_identity();\n"
 		} else if uniform.Name == "g_EyePosition" {
 			code += "        " + structName + ".g_EyePosition = (glsl_vec3){.at = {0, 0, 0}};\n"
+		} else if uniform.Name == "g_Color4" {
+			code += "        " + structName + ".g_Color4 = (glsl_vec4){.at = {1, 1, 1, 1}};\n"
 		} else if uniform.DefaultSet {
 			code += fmt.Sprintf("        %s.%s = (glsl_%s){.at = {", structName, uniform.Name, uniform.Type)
 			value := uniform.Default

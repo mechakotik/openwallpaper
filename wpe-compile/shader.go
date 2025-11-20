@@ -202,7 +202,7 @@ func parseUniformConstantNames(source string) map[string]string {
 	matches := reUniform.FindAllStringSubmatch(source, -1)
 	constantNames := map[string]string{}
 	for _, match := range matches {
-		if match[1] == "sampler2D" {
+		if match[1] == "sampler2D" || match[1] == "sampler2DComparison" {
 			continue
 		}
 		type uniformMeta struct {
@@ -228,7 +228,7 @@ func parseUniformDefaults(source string) map[string][]float32 {
 	matches := reUniform.FindAllStringSubmatch(source, -1)
 	defaults := map[string][]float32{}
 	for _, match := range matches {
-		if match[1] == "sampler2D" {
+		if match[1] == "sampler2D" || match[1] == "sampler2DComparison" {
 			continue
 		}
 		type uniformMeta struct {
