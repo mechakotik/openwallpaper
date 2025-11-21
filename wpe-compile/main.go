@@ -45,6 +45,13 @@ type CodegenTextureBindingData struct {
 	Sampler string
 }
 
+type CodegenParallaxData struct {
+	Enabled        bool
+	Amount         float32
+	Delay          float32
+	MouseInfluence float32
+}
+
 type CodegenTransformData struct {
 	Enabled                bool
 	SceneWidth             float32
@@ -88,6 +95,7 @@ type CodegenData struct {
 	Shaders     []CompiledShader
 	Passes      []CodegenPassData
 	TempBuffers []TempBufferParameters
+	Parallax    CodegenParallaxData
 }
 
 var (
@@ -129,6 +137,13 @@ func main() {
 	scene, err = ParseScene(&pkgMap)
 	if err != nil {
 		panic("parse scene.json failed: " + err.Error())
+	}
+
+	codegenData.Parallax = CodegenParallaxData{
+		Enabled:        scene.General.Parallax,
+		Amount:         scene.General.ParallaxAmount,
+		Delay:          scene.General.ParallaxDelay,
+		MouseInfluence: scene.General.ParallaxMouseInfluence,
 	}
 
 	for _, object := range scene.Objects {
