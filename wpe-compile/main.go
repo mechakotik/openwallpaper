@@ -39,6 +39,14 @@ type UniformCMapping struct {
 	Alignment  int
 }
 
+type UniformCodegenContext struct {
+	StructName  string
+	Uniforms    []UniformInfo
+	Constants   map[string][]float32
+	Resolutions [][4]float32
+	Color       [4]float32
+}
+
 type CodegenTextureBindingData struct {
 	Slot    int
 	Texture string
@@ -326,8 +334,20 @@ func processImageObjectInit(object ImageObject, tempBuffers *[2]int) (CodegenPas
 		ParallaxMouseInfluence: float32(scene.General.ParallaxMouseInfluence),
 	}
 
-	passData.UniformSetupCode = generateUniformSetupCode("vertex_uniforms", shader.VertexUniforms, map[string][]float32{}, resolutions)
-	passData.UniformSetupCode += generateUniformSetupCode("fragment_uniforms", shader.FragmentUniforms, map[string][]float32{}, resolutions)
+	passData.UniformSetupCode += generateUniformSetupCode(UniformCodegenContext{
+		StructName:  "vertex_uniforms",
+		Uniforms:    shader.VertexUniforms,
+		Constants:   map[string][]float32{},
+		Resolutions: resolutions,
+		Color:       [4]float32{object.Color[0], object.Color[1], object.Color[2], object.Alpha},
+	})
+	passData.UniformSetupCode += generateUniformSetupCode(UniformCodegenContext{
+		StructName:  "fragment_uniforms",
+		Uniforms:    shader.FragmentUniforms,
+		Constants:   map[string][]float32{},
+		Resolutions: resolutions,
+		Color:       [4]float32{object.Color[0], object.Color[1], object.Color[2], object.Alpha},
+	})
 	return passData, nil
 }
 
@@ -456,50 +476,64 @@ func processImageEffect(object ImageObject, effect ImageEffect, tempBuffers *[2]
 			ParallaxMouseInfluence: float32(scene.General.ParallaxMouseInfluence),
 		}
 
-		passData.UniformSetupCode = generateUniformSetupCode("vertex_uniforms", compiledShader.VertexUniforms, pass.Constants, resolutions)
-		passData.UniformSetupCode += generateUniformSetupCode("fragment_uniforms", compiledShader.FragmentUniforms, pass.Constants, resolutions)
+		passData.UniformSetupCode += generateUniformSetupCode(UniformCodegenContext{
+			StructName:  "vertex_uniforms",
+			Uniforms:    compiledShader.VertexUniforms,
+			Constants:   pass.Constants,
+			Resolutions: resolutions,
+			Color:       [4]float32{object.Color[0], object.Color[1], object.Color[2], object.Alpha},
+		})
+		passData.UniformSetupCode += generateUniformSetupCode(UniformCodegenContext{
+			StructName:  "fragment_uniforms",
+			Uniforms:    compiledShader.FragmentUniforms,
+			Constants:   pass.Constants,
+			Resolutions: resolutions,
+			Color:       [4]float32{object.Color[0], object.Color[1], object.Color[2], object.Alpha},
+		})
 		passes = append(passes, passData)
 	}
 
 	return passes, nil
 }
 
-func generateUniformSetupCode(structName string, uniforms []UniformInfo, constants map[string][]float32, resolutions [][4]float32) string {
+func generateUniformSetupCode(ctx UniformCodegenContext) string {
 	code := ""
-	for _, uniform := range uniforms {
+	for _, uniform := range ctx.Uniforms {
 		if uniform.Name == "g_ModelMatrix" {
-			code += "        " + structName + ".g_ModelMatrix = matrices.model;\n"
+			code += "        " + ctx.StructName + ".g_ModelMatrix = matrices.model;\n"
 		} else if uniform.Name == "g_ViewProjectionMatrix" {
-			code += "        " + structName + ".g_ViewProjectionMatrix = matrices.view_projection;\n"
+			code += "        " + ctx.StructName + ".g_ViewProjectionMatrix = matrices.view_projection;\n"
 		} else if uniform.Name == "g_ModelViewProjectionMatrix" {
-			code += "        " + structName + ".g_ModelViewProjectionMatrix = matrices.model_view_projection;\n"
+			code += "        " + ctx.StructName + ".g_ModelViewProjectionMatrix = matrices.model_view_projection;\n"
 		} else if strings.HasPrefix(uniform.Name, "g_Texture") && strings.HasSuffix(uniform.Name, "Rotation") {
-			code += "        " + structName + "." + uniform.Name + " = (glsl_vec4){.at = {1, 0, 0, 1}};\n"
+			code += "        " + ctx.StructName + "." + uniform.Name + " = (glsl_vec4){.at = {1, 0, 0, 1}};\n"
 		} else if strings.HasPrefix(uniform.Name, "g_Texture") && strings.HasSuffix(uniform.Name, "Translation") {
 			// TODO:
 		} else if strings.HasPrefix(uniform.Name, "g_Texture") && strings.HasSuffix(uniform.Name, "Resolution") {
 			idxString, _ := strings.CutPrefix(uniform.Name, "g_Texture")
 			idxString, _ = strings.CutSuffix(idxString, "Resolution")
 			idx, _ := strconv.Atoi(idxString)
-			if idx < len(resolutions) {
-				code += fmt.Sprintf("        %s.%s = (glsl_vec4){.at = {%f, %f, %f, %f}};\n", structName, uniform.Name, resolutions[idx][0], resolutions[idx][1], resolutions[idx][2], resolutions[idx][3])
+			if idx < len(ctx.Resolutions) {
+				code += fmt.Sprintf("        %s.%s = (glsl_vec4){.at = {%f, %f, %f, %f}};\n", ctx.StructName, uniform.Name,
+					ctx.Resolutions[idx][0], ctx.Resolutions[idx][1], ctx.Resolutions[idx][2], ctx.Resolutions[idx][3])
 			}
 		} else if uniform.Name == "g_Time" {
-			code += "        " + structName + ".g_Time = (glsl_float){.at = {time}};\n"
+			code += "        " + ctx.StructName + ".g_Time = (glsl_float){.at = {time}};\n"
 		} else if uniform.Name == "g_ParallaxPosition" {
-			code += "        " + structName + ".g_ParallaxPosition = (glsl_vec2){.at = {matrices.parallax_position_x, matrices.parallax_position_y}};\n"
+			code += "        " + ctx.StructName + ".g_ParallaxPosition = (glsl_vec2){.at = {matrices.parallax_position_x, matrices.parallax_position_y}};\n"
 		} else if uniform.Name == "g_Screen" {
-			code += "        " + structName + ".g_Screen = (glsl_vec3){.at = {screen_width, screen_height, (float)screen_width / (float)screen_height}};\n"
+			code += "        " + ctx.StructName + ".g_Screen = (glsl_vec3){.at = {screen_width, screen_height, (float)screen_width / (float)screen_height}};\n"
 		} else if uniform.Name == "g_EffectTextureProjectionMatrix" || uniform.Name == "g_EffectTextureProjectionMatrixInverse" {
-			code += "        " + structName + "." + uniform.Name + " = mat4_identity();\n"
+			code += "        " + ctx.StructName + "." + uniform.Name + " = mat4_identity();\n"
 		} else if uniform.Name == "g_EyePosition" {
-			code += "        " + structName + ".g_EyePosition = (glsl_vec3){.at = {0, 0, 0}};\n"
+			code += "        " + ctx.StructName + ".g_EyePosition = (glsl_vec3){.at = {0, 0, 0}};\n"
 		} else if uniform.Name == "g_Color4" {
-			code += "        " + structName + ".g_Color4 = (glsl_vec4){.at = {1, 1, 1, 1}};\n"
+			code += fmt.Sprintf("        %s.g_Color4 = (glsl_vec4){.at = {%f, %f, %f, %f}};\n",
+				ctx.StructName, ctx.Color[0], ctx.Color[1], ctx.Color[2], ctx.Color[3])
 		} else if uniform.DefaultSet {
-			code += fmt.Sprintf("        %s.%s = (glsl_%s){.at = {", structName, uniform.Name, uniform.Type)
+			code += fmt.Sprintf("        %s.%s = (glsl_%s){.at = {", ctx.StructName, uniform.Name, uniform.Type)
 			value := uniform.Default
-			if override, exists := constants[uniform.ConstantName]; exists {
+			if override, exists := ctx.Constants[uniform.ConstantName]; exists {
 				value = override
 			}
 			for _, value := range value {

@@ -173,27 +173,26 @@ func (imageObject *ImageObject) parseFromSceneJSON(raw json.RawMessage, pkgMap *
 		}
 	}
 
+	imageObject.Color = Vector3{1, 1, 1}
 	if colorRaw, exists := getOptionalField(object, "color"); exists {
 		color, parseErr := parseVector3FromRaw(colorRaw, imageObject.Color)
 		if parseErr == nil {
 			imageObject.Color = color
 		}
 	}
+	imageObject.Alpha = 1
 	if alphaRaw, exists := getOptionalField(object, "alpha"); exists {
 		value, parseErr := parseFloat64FromRaw(alphaRaw)
 		if parseErr == nil {
 			imageObject.Alpha = float32(value)
 		}
-	} else {
-		imageObject.Alpha = 1
 	}
+	imageObject.Brightness = 1
 	if brightnessRaw, exists := getOptionalField(object, "brightness"); exists {
 		value, parseErr := parseFloat64FromRaw(brightnessRaw)
 		if parseErr == nil {
 			imageObject.Brightness = float32(value)
 		}
-	} else {
-		imageObject.Brightness = 1
 	}
 
 	if puppetRaw, exists := imageDocument["puppet"]; exists {
