@@ -252,9 +252,17 @@ func processImageObject(object ImageObject) {
 	} else {
 		codegenData.Passes[lastIdx].ClearColor = false
 	}
+
+	switch object.Material.Blending {
+	case "translucent":
+		codegenData.Passes[lastIdx].BlendMode = "OW_BLEND_ALPHA"
+	case "additive":
+		codegenData.Passes[lastIdx].BlendMode = "OW_BLEND_ADD"
+	case "normal", "disabled":
+		codegenData.Passes[lastIdx].BlendMode = "OW_BLEND_NONE"
+	}
 	codegenData.Passes[lastIdx].ColorTarget = "0"
 	codegenData.Passes[lastIdx].ColorTargetFormat = "OW_TEXTURE_SWAPCHAIN"
-	codegenData.Passes[lastIdx].BlendMode = "OW_BLEND_ALPHA"
 	codegenData.Passes[lastIdx].Transform.Enabled = true
 }
 
