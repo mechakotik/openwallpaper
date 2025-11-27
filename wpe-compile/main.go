@@ -44,7 +44,8 @@ type UniformCodegenContext struct {
 	Uniforms    []UniformInfo
 	Constants   map[string][]float32
 	Resolutions [][4]float32
-	Color       [4]float32
+	Color       [3]float32
+	Alpha       float32
 }
 
 type CodegenTextureBindingData struct {
@@ -339,14 +340,16 @@ func processImageObjectInit(object ImageObject, tempBuffers *[2]int) (CodegenPas
 		Uniforms:    shader.VertexUniforms,
 		Constants:   map[string][]float32{},
 		Resolutions: resolutions,
-		Color:       [4]float32{object.Color[0], object.Color[1], object.Color[2], object.Alpha},
+		Color:       [3]float32{object.Color[0], object.Color[1], object.Color[2]},
+		Alpha:       object.Alpha,
 	})
 	passData.UniformSetupCode += generateUniformSetupCode(UniformCodegenContext{
 		StructName:  "fragment_uniforms",
 		Uniforms:    shader.FragmentUniforms,
 		Constants:   map[string][]float32{},
 		Resolutions: resolutions,
-		Color:       [4]float32{object.Color[0], object.Color[1], object.Color[2], object.Alpha},
+		Color:       [3]float32{object.Color[0], object.Color[1], object.Color[2]},
+		Alpha:       object.Alpha,
 	})
 	return passData, nil
 }
@@ -481,14 +484,16 @@ func processImageEffect(object ImageObject, effect ImageEffect, tempBuffers *[2]
 			Uniforms:    compiledShader.VertexUniforms,
 			Constants:   pass.Constants,
 			Resolutions: resolutions,
-			Color:       [4]float32{object.Color[0], object.Color[1], object.Color[2], object.Alpha},
+			Color:       [3]float32{object.Color[0], object.Color[1], object.Color[2]},
+			Alpha:       object.Alpha,
 		})
 		passData.UniformSetupCode += generateUniformSetupCode(UniformCodegenContext{
 			StructName:  "fragment_uniforms",
 			Uniforms:    compiledShader.FragmentUniforms,
 			Constants:   pass.Constants,
 			Resolutions: resolutions,
-			Color:       [4]float32{object.Color[0], object.Color[1], object.Color[2], object.Alpha},
+			Color:       [3]float32{object.Color[0], object.Color[1], object.Color[2]},
+			Alpha:       object.Alpha,
 		})
 		passes = append(passes, passData)
 	}
@@ -529,7 +534,12 @@ func generateUniformSetupCode(ctx UniformCodegenContext) string {
 			code += "        " + ctx.StructName + ".g_EyePosition = (glsl_vec3){.at = {0, 0, 0}};\n"
 		} else if uniform.Name == "g_Color4" {
 			code += fmt.Sprintf("        %s.g_Color4 = (glsl_vec4){.at = {%f, %f, %f, %f}};\n",
-				ctx.StructName, ctx.Color[0], ctx.Color[1], ctx.Color[2], ctx.Color[3])
+				ctx.StructName, ctx.Color[0], ctx.Color[1], ctx.Color[2], ctx.Alpha)
+		} else if uniform.Name == "g_Color" {
+			code += fmt.Sprintf("        %s.g_Color = (glsl_vec3){.at = {%f, %f, %f}};\n",
+				ctx.StructName, ctx.Color[0], ctx.Color[1], ctx.Color[2])
+		} else if uniform.Name == "g_Alpha" {
+			code += fmt.Sprintf("        %s.g_Alpha = (glsl_float){.at = %f};\n", ctx.StructName, ctx.Alpha)
 		} else if uniform.DefaultSet {
 			code += fmt.Sprintf("        %s.%s = (glsl_%s){.at = {", ctx.StructName, uniform.Name, uniform.Type)
 			value := uniform.Default
