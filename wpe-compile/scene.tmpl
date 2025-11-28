@@ -26,7 +26,11 @@ ow_vertex_attribute vertex_attributes[2] = {
     { .slot = 0, .location = 1, .type = OW_ATTRIBUTE_FLOAT2, .offset = sizeof(float) * 3 },
 };
 
+ow_id screen_buffer = 0;
+uint32_t screen_buffer_width, screen_buffer_height;
+
 ow_id temp_buffers[{{len .TempBuffers}}];
+ow_id temp_screen_buffers[{{len .TempScreenBuffers}}];
 ow_id vertex_quad_buffer;
 
 ow_id linear_clamp_sampler;
@@ -55,7 +59,7 @@ __attribute__((export_name("init"))) void init() {
 
 {{range $idx, $buffer := .TempBuffers}}
     {
-        ow_texture_info temp_texture_info = {
+        ow_texture_info temp_buffer_info = {
             .width = {{$buffer.Width}},
             .height = {{$buffer.Height}},
             .format = OW_TEXTURE_RGBA8_UNORM,
@@ -63,7 +67,7 @@ __attribute__((export_name("init"))) void init() {
             .mip_levels = 1,
         };
 
-        temp_buffers[{{$idx}}] = ow_create_texture(&temp_texture_info);
+        temp_buffers[{{$idx}}] = ow_create_texture(&temp_buffer_info);
     }
 {{end}}
 
@@ -126,6 +130,29 @@ __attribute__((export_name("init"))) void init() {
 __attribute__((export_name("update"))) void update(float delta) {
     uint32_t screen_width, screen_height;
     ow_get_screen_size(&screen_width, &screen_height);
+
+    if(screen_width != screen_buffer_width || screen_height != screen_buffer_height) {
+        ow_texture_info screen_buffer_info = {
+            .width = screen_width,
+            .height = screen_height,
+            .format = OW_TEXTURE_RGBA8_UNORM,
+            .render_target = true,
+            .mip_levels = 1,
+        };
+
+        ow_free(screen_buffer);
+        screen_buffer = ow_create_texture(&screen_buffer_info);
+
+{{range $idx, $buffer := .TempScreenBuffers}}
+        screen_buffer_info.width = screen_width * {{$buffer.ScaleX}};
+        screen_buffer_info.height = screen_height * {{$buffer.ScaleY}};
+        ow_free(temp_screen_buffers[{{$idx}}]);
+        temp_screen_buffers[{{$idx}}] = ow_create_texture(&screen_buffer_info);
+{{end}}
+
+        screen_buffer_width = screen_width;
+        screen_buffer_height = screen_height;
+    }
 
     ow_get_mouse_state(&mouse_x, &mouse_y);
     if(screen_width != 0 && screen_height != 0) {

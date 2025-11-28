@@ -99,12 +99,19 @@ type TempBufferParameters struct {
 	Number int
 }
 
+type TempScreenBufferParameters struct {
+	ScaleX float32
+	ScaleY float32
+	Number int
+}
+
 type CodegenData struct {
-	Textures    []ImportedTexture
-	Shaders     []CompiledShader
-	Passes      []CodegenPassData
-	TempBuffers []TempBufferParameters
-	Parallax    CodegenParallaxData
+	Textures          []ImportedTexture
+	Shaders           []CompiledShader
+	Passes            []CodegenPassData
+	TempBuffers       []TempBufferParameters
+	TempScreenBuffers []TempScreenBufferParameters
+	Parallax          CodegenParallaxData
 }
 
 var (
@@ -160,6 +167,7 @@ func main() {
 			processImageObject(*imageObject)
 		}
 	}
+	processFinalPassthrough()
 
 	sceneTemplate, err := template.New("scene.tmpl").Parse(string(sceneTemplateCode))
 	if err != nil {
@@ -222,21 +230,30 @@ func main() {
 }
 
 func processImageObject(object ImageObject) {
-	if object.Fullscreen || object.ImagePath == "" || object.Size[0] == 0 || object.Size[1] == 0 {
-		return
-	}
-
 	tempBuffers := [2]int{}
-	tempBuffers[0] = getTempBuffer(TempBufferParameters{
-		Width:  int(object.Size[0] + 0.5),
-		Height: int(object.Size[1] + 0.5),
-		Number: 0,
-	})
-	tempBuffers[1] = getTempBuffer(TempBufferParameters{
-		Width:  int(object.Size[0] + 0.5),
-		Height: int(object.Size[1] + 0.5),
-		Number: 1,
-	})
+	if object.Fullscreen {
+		tempBuffers[0] = getTempScreenBuffer(TempScreenBufferParameters{
+			ScaleX: 1,
+			ScaleY: 1,
+			Number: 0,
+		})
+		tempBuffers[1] = getTempScreenBuffer(TempScreenBufferParameters{
+			ScaleX: 1,
+			ScaleY: 1,
+			Number: 1,
+		})
+	} else {
+		tempBuffers[0] = getTempBuffer(TempBufferParameters{
+			Width:  int(object.Size[0] + 0.5),
+			Height: int(object.Size[1] + 0.5),
+			Number: 0,
+		})
+		tempBuffers[1] = getTempBuffer(TempBufferParameters{
+			Width:  int(object.Size[0] + 0.5),
+			Height: int(object.Size[1] + 0.5),
+			Number: 1,
+		})
+	}
 
 	initialPass, err := processImageObjectInit(object, &tempBuffers)
 	if err != nil {
@@ -263,16 +280,21 @@ func processImageObject(object ImageObject) {
 	}
 
 	switch object.Material.Blending {
-	case "translucent":
+	case "translucent", "normal":
 		codegenData.Passes[lastIdx].BlendMode = "OW_BLEND_ALPHA"
 	case "additive":
 		codegenData.Passes[lastIdx].BlendMode = "OW_BLEND_ADD"
-	case "normal", "disabled":
+	case "disabled":
 		codegenData.Passes[lastIdx].BlendMode = "OW_BLEND_NONE"
+	default:
+		fmt.Printf("warning: unknown blend mode %s, using default\n", object.Material.Blending)
+		codegenData.Passes[lastIdx].BlendMode = "OW_BLEND_ALPHA"
 	}
-	codegenData.Passes[lastIdx].ColorTarget = "0"
-	codegenData.Passes[lastIdx].ColorTargetFormat = "OW_TEXTURE_SWAPCHAIN"
-	codegenData.Passes[lastIdx].Transform.Enabled = true
+	codegenData.Passes[lastIdx].ColorTarget = "screen_buffer"
+	codegenData.Passes[lastIdx].ColorTargetFormat = "OW_TEXTURE_RGBA8_UNORM"
+	if !object.Fullscreen {
+		codegenData.Passes[lastIdx].Transform.Enabled = true
+	}
 }
 
 func processImageObjectInit(object ImageObject, tempBuffers *[2]int) (CodegenPassData, error) {
@@ -296,17 +318,30 @@ func processImageObjectInit(object ImageObject, tempBuffers *[2]int) (CodegenPas
 		return CodegenPassData{}, fmt.Errorf("compiling shader %s failed: %s", object.Material.Shader, err)
 	}
 
+	tempBuffersArray := "temp_buffers"
+	if object.Fullscreen {
+		tempBuffersArray = "temp_screen_buffers"
+	}
+
 	passData := CodegenPassData{
 		ObjectID:          lastObjectID,
 		PassID:            0,
 		ShaderID:          shader.ID,
-		ColorTarget:       fmt.Sprintf("temp_buffers[%d]", tempBuffers[0]),
+		ColorTarget:       fmt.Sprintf("%s[%d]", tempBuffersArray, tempBuffers[0]),
 		ColorTargetFormat: "OW_TEXTURE_RGBA8_UNORM",
 		ClearColor:        true,
 		BlendMode:         "OW_BLEND_NONE",
 	}
 
 	resolutions := [][4]float32{}
+	if object.Config.Passthrough || len(textures) == 0 {
+		passData.TextureBindings = append(passData.TextureBindings, CodegenTextureBindingData{
+			Slot:    0,
+			Texture: "screen_buffer",
+			Sampler: "linear_clamp_sampler",
+		})
+		resolutions = append(resolutions, [4]float32{1920, 1080, 1920, 1080})
+	}
 	for slot, texture := range textures {
 		passData.TextureBindings = append(passData.TextureBindings, CodegenTextureBindingData{
 			Slot:    slot,
@@ -366,11 +401,24 @@ func processImageEffect(object ImageObject, effect ImageEffect, tempBuffers *[2]
 
 	fbos := map[string]int{}
 	for idx, fbo := range effect.FBOs {
-		fbos[fbo.Name] = getTempBuffer(TempBufferParameters{
-			Width:  int(object.Size[0]/float32(fbo.Scale) + 0.5),
-			Height: int(object.Size[1]/float32(fbo.Scale) + 0.5),
-			Number: idx,
-		})
+		if object.Fullscreen {
+			fbos[fbo.Name] = getTempScreenBuffer(TempScreenBufferParameters{
+				ScaleX: float32(fbo.Scale),
+				ScaleY: float32(fbo.Scale),
+				Number: idx,
+			})
+		} else {
+			fbos[fbo.Name] = getTempBuffer(TempBufferParameters{
+				Width:  int(object.Size[0]/float32(fbo.Scale) + 0.5),
+				Height: int(object.Size[1]/float32(fbo.Scale) + 0.5),
+				Number: idx,
+			})
+		}
+	}
+
+	tempBuffersArray := "temp_buffers"
+	if object.Fullscreen {
+		tempBuffersArray = "temp_screen_buffers"
 	}
 
 	passes := []CodegenPassData{}
@@ -412,7 +460,7 @@ func processImageEffect(object ImageObject, effect ImageEffect, tempBuffers *[2]
 			if textureName == "" || strings.HasPrefix(textureName, "_rt_imageLayerComposite") {
 				passData.TextureBindings = append(passData.TextureBindings, CodegenTextureBindingData{
 					Slot:    slot,
-					Texture: fmt.Sprintf("temp_buffers[%d]", tempBuffers[0]),
+					Texture: fmt.Sprintf("%s[%d]", tempBuffersArray, tempBuffers[0]),
 					Sampler: "linear_clamp_sampler",
 				})
 				resolutions = append(resolutions, [4]float32{
@@ -424,7 +472,7 @@ func processImageEffect(object ImageObject, effect ImageEffect, tempBuffers *[2]
 			} else if fbo, exists := fbos[textureName]; exists {
 				passData.TextureBindings = append(passData.TextureBindings, CodegenTextureBindingData{
 					Slot:    slot,
-					Texture: fmt.Sprintf("temp_buffers[%d]", fbo),
+					Texture: fmt.Sprintf("%s[%d]", tempBuffersArray, fbo),
 					Sampler: "linear_clamp_sampler",
 				})
 				resolutions = append(resolutions, [4]float32{
@@ -452,9 +500,9 @@ func processImageEffect(object ImageObject, effect ImageEffect, tempBuffers *[2]
 			}
 		}
 
-		colorTarget := fmt.Sprintf("temp_buffers[%d]", tempBuffers[1])
+		colorTarget := fmt.Sprintf("%s[%d]", tempBuffersArray, tempBuffers[1])
 		if fbo, exists := fbos[pass.Target]; exists {
-			colorTarget = fmt.Sprintf("temp_buffers[%d]", fbo)
+			colorTarget = fmt.Sprintf("%s[%d]", tempBuffersArray, fbo)
 		} else {
 			tempBuffers[0], tempBuffers[1] = tempBuffers[1], tempBuffers[0]
 		}
@@ -499,6 +547,36 @@ func processImageEffect(object ImageObject, effect ImageEffect, tempBuffers *[2]
 	}
 
 	return passes, nil
+}
+
+func processFinalPassthrough() {
+	shader, err := compileShader("passthrough", []bool{true}, map[string]int{})
+	if err != nil {
+		panic("compile passthrough shader failed: " + err.Error())
+	}
+
+	passData := CodegenPassData{
+		ObjectID:          9999,
+		PassID:            0,
+		ShaderID:          shader.ID,
+		ColorTarget:       "0",
+		ColorTargetFormat: "OW_TEXTURE_SWAPCHAIN",
+		ClearColor:        true,
+		BlendMode:         "OW_BLEND_NONE",
+		TextureBindings: []CodegenTextureBindingData{
+			{
+				Slot:    0,
+				Texture: "screen_buffer",
+				Sampler: "linear_clamp_sampler",
+			},
+		},
+		UniformSetupCode: "",
+		Transform: CodegenTransformData{
+			Enabled: false,
+		},
+	}
+
+	codegenData.Passes = append(codegenData.Passes, passData)
 }
 
 func generateUniformSetupCode(ctx UniformCodegenContext) string {
@@ -627,6 +705,23 @@ func getTempBuffer(params TempBufferParameters) int {
 	}
 	codegenData.TempBuffers = append(codegenData.TempBuffers, params)
 	return len(codegenData.TempBuffers) - 1
+}
+
+func getTempScreenBuffer(params TempScreenBufferParameters) int {
+	for idx, curParams := range codegenData.TempScreenBuffers {
+		if scalesEqual(curParams.ScaleX, params.ScaleX) &&
+			scalesEqual(curParams.ScaleY, params.ScaleY) &&
+			curParams.Number == params.Number {
+			return idx
+		}
+	}
+	codegenData.TempScreenBuffers = append(codegenData.TempScreenBuffers, params)
+	return len(codegenData.TempScreenBuffers) - 1
+}
+
+func scalesEqual(scale1, scale2 float32) bool {
+	diff := scale1 - scale2
+	return 0.01 <= diff && diff <= 0.99
 }
 
 func compileShader(shaderName string, boundTextures []bool, defines map[string]int) (CompiledShader, error) {
