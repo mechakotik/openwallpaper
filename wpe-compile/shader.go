@@ -66,6 +66,8 @@ func preprocessShader(vertexSource, fragmentSource, includePath string, boundTex
 
 	vertexSource = appendGLSL450Header(vertexSource)
 	fragmentSource = appendGLSL450Header(fragmentSource)
+	vertexSource = takeAbsFromPowBase(vertexSource)
+	fragmentSource = takeAbsFromPowBase(fragmentSource)
 
 	vertexCombos, vertexDefaults := parseSamplerCombos(vertexSource, boundTextures)
 	fragmentCombos, fragmentDefaults := parseSamplerCombos(fragmentSource, boundTextures)
@@ -218,6 +220,14 @@ func appendGLSL450Header(source string) string {
 #define lerp mix
 
 ` + source
+}
+
+func takeAbsFromPowBase(source string) string {
+	rePow := regexp.MustCompile(`(pow\()(.*)(,\s*.*\))`)
+	return rePow.ReplaceAllStringFunc(source, func(match string) string {
+		submatches := rePow.FindStringSubmatch(match)
+		return fmt.Sprintf("%sabs(%s)%s", submatches[1], submatches[2], submatches[3])
+	})
 }
 
 func parseUniformConstantNames(source string) map[string]string {
