@@ -223,10 +223,11 @@ func appendGLSL450Header(source string) string {
 }
 
 func takeAbsFromPowBase(source string) string {
-	rePow := regexp.MustCompile(`(pow\()(.*)(,\s*.*\))`)
+	// TODO: this will fail if there is another ',' in first argument of pow
+	rePow := regexp.MustCompile(`pow\(([^,]*),`)
 	return rePow.ReplaceAllStringFunc(source, func(match string) string {
 		submatches := rePow.FindStringSubmatch(match)
-		return fmt.Sprintf("%sabs(%s)%s", submatches[1], submatches[2], submatches[3])
+		return fmt.Sprintf("pow(abs(%s),", submatches[1])
 	})
 }
 
