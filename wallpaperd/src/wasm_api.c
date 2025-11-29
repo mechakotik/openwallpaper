@@ -131,7 +131,8 @@ static uint32_t create_shader_from_bytecode(
     SDL_ShaderCross_GraphicsShaderMetadata* metadata = SDL_ShaderCross_ReflectGraphicsSPIRV(bytecode, size, 0);
     DEBUG_CHECK_RET0(metadata != NULL, "SDL_ShaderCross_ReflectGraphicsSPIRV failed: %s", SDL_GetError());
 
-    SDL_GPUShader* shader = SDL_ShaderCross_CompileGraphicsShaderFromSPIRV(state->output.gpu, &info, metadata, 0);
+    SDL_GPUShader* shader =
+        SDL_ShaderCross_CompileGraphicsShaderFromSPIRV(state->output.gpu, &info, &metadata->resource_info, 0);
     free(metadata);
     DEBUG_CHECK_RET0(shader != NULL, "SDL_ShaderCross_CompileGraphicsShaderFromSPIRV failed: %s", SDL_GetError());
 
