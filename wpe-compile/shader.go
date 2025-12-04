@@ -223,12 +223,40 @@ func appendGLSL450Header(source string) string {
 }
 
 func takeAbsFromPowBase(source string) string {
-	// TODO: this will fail if there is another ',' in first argument of pow
-	rePow := regexp.MustCompile(`pow\(([^,]*),`)
-	return rePow.ReplaceAllStringFunc(source, func(match string) string {
-		submatches := rePow.FindStringSubmatch(match)
-		return fmt.Sprintf("pow(abs(%s),", submatches[1])
-	})
+	for {
+		replaced := false
+		for start := len(source) - len("pow("); start >= 0; start-- {
+			if source[start:start+len("pow(")] != "pow(" {
+				continue
+			}
+			balance := 0
+			repl := ""
+			endPos := 0
+			for idx := start + len("pow("); idx < len(source); idx++ {
+				if source[idx] == '(' {
+					balance++
+				} else if source[idx] == ')' {
+					balance--
+					if balance < 0 {
+						break
+					}
+				}
+				if balance == 0 && source[idx] == ',' {
+					repl = strings.Clone(source[start+len("pow(") : idx])
+					endPos = idx
+					break
+				}
+			}
+			if !strings.HasPrefix(repl, "abs(") {
+				source = strings.Clone(source[:start+len("pow(")]) + "abs(" + repl + ")" + strings.Clone(source[endPos:])
+				replaced = true
+			}
+		}
+		if !replaced {
+			break
+		}
+	}
+	return source
 }
 
 func parseUniformConstantNames(source string) map[string]string {
