@@ -46,6 +46,7 @@ type UniformCodegenContext struct {
 	Resolutions [][4]float32
 	Color       [3]float32
 	Alpha       float32
+	Brightness  float32
 }
 
 type CodegenTextureBindingData struct {
@@ -280,11 +281,11 @@ func processImageObject(object ImageObject) {
 	}
 
 	switch object.Material.Blending {
-	case "translucent", "normal":
+	case "translucent":
 		codegenData.Passes[lastIdx].BlendMode = "OW_BLEND_ALPHA"
 	case "additive":
 		codegenData.Passes[lastIdx].BlendMode = "OW_BLEND_ADD"
-	case "disabled":
+	case "normal", "disabled":
 		codegenData.Passes[lastIdx].BlendMode = "OW_BLEND_NONE"
 	default:
 		fmt.Printf("warning: unknown blend mode %s, using default\n", object.Material.Blending)
@@ -377,6 +378,7 @@ func processImageObjectInit(object ImageObject, tempBuffers *[2]int) (CodegenPas
 		Resolutions: resolutions,
 		Color:       [3]float32{object.Color[0], object.Color[1], object.Color[2]},
 		Alpha:       object.Alpha,
+		Brightness:  object.Brightness,
 	})
 	passData.UniformSetupCode += generateUniformSetupCode(UniformCodegenContext{
 		StructName:  "fragment_uniforms",
@@ -385,6 +387,7 @@ func processImageObjectInit(object ImageObject, tempBuffers *[2]int) (CodegenPas
 		Resolutions: resolutions,
 		Color:       [3]float32{object.Color[0], object.Color[1], object.Color[2]},
 		Alpha:       object.Alpha,
+		Brightness:  object.Brightness,
 	})
 	return passData, nil
 }
@@ -534,6 +537,7 @@ func processImageEffect(object ImageObject, effect ImageEffect, tempBuffers *[2]
 			Resolutions: resolutions,
 			Color:       [3]float32{object.Color[0], object.Color[1], object.Color[2]},
 			Alpha:       object.Alpha,
+			Brightness:  object.Brightness,
 		})
 		passData.UniformSetupCode += generateUniformSetupCode(UniformCodegenContext{
 			StructName:  "fragment_uniforms",
@@ -542,6 +546,7 @@ func processImageEffect(object ImageObject, effect ImageEffect, tempBuffers *[2]
 			Resolutions: resolutions,
 			Color:       [3]float32{object.Color[0], object.Color[1], object.Color[2]},
 			Alpha:       object.Alpha,
+			Brightness:  object.Brightness,
 		})
 		passes = append(passes, passData)
 	}
@@ -616,8 +621,10 @@ func generateUniformSetupCode(ctx UniformCodegenContext) string {
 		} else if uniform.Name == "g_Color" {
 			code += fmt.Sprintf("        %s.g_Color = (glsl_vec3){.at = {%f, %f, %f}};\n",
 				ctx.StructName, ctx.Color[0], ctx.Color[1], ctx.Color[2])
-		} else if uniform.Name == "g_Alpha" {
-			code += fmt.Sprintf("        %s.g_Alpha = (glsl_float){.at = %f};\n", ctx.StructName, ctx.Alpha)
+		} else if uniform.Name == "g_UserAlpha" {
+			code += fmt.Sprintf("        %s.g_UserAlpha = (glsl_float){.at = %f};\n", ctx.StructName, ctx.Alpha)
+		} else if uniform.Name == "g_Brightness" {
+			code += fmt.Sprintf("        %s.g_Brightness = (glsl_float){.at = %f};\n", ctx.StructName, ctx.Brightness)
 		} else if uniform.DefaultSet {
 			code += fmt.Sprintf("        %s.%s = (glsl_%s){.at = {", ctx.StructName, uniform.Name, uniform.Type)
 			value := uniform.Default
