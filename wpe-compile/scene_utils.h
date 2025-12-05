@@ -226,4 +226,24 @@ static transform_matrices_t compute_transform_matrices(transform_parameters_t pa
     return res;
 }
 
+typedef struct {
+    bool alive;
+
+    float position[3];
+    float velocity[3];
+    float acceleration[3];
+
+    float rotation[3];
+    float angular_velocity[3];
+    float angular_acceleration[3];
+
+    float color[3];
+    float alpha;
+    float size;
+    float frame;
+
+    float lifetime;
+    float age;
+} particle_instance_t;
+
 #endif

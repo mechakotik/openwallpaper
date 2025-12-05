@@ -92,6 +92,8 @@ type CodegenPassData struct {
 	TextureBindings   []CodegenTextureBindingData
 	UniformSetupCode  string
 	Transform         CodegenTransformData
+	IsParticle        bool
+	InstanceCount     int
 }
 
 type TempBufferParameters struct {
@@ -106,12 +108,18 @@ type TempScreenBufferParameters struct {
 	Number int
 }
 
+type CodegenParticleData struct {
+	ObjectID int
+	MaxCount int
+}
+
 type CodegenData struct {
 	Textures          []ImportedTexture
 	Shaders           []CompiledShader
 	Passes            []CodegenPassData
 	TempBuffers       []TempBufferParameters
 	TempScreenBuffers []TempScreenBufferParameters
+	Particles         []CodegenParticleData
 	Parallax          CodegenParallaxData
 }
 
@@ -122,22 +130,29 @@ var (
 		KeepSources bool   `arg:"--keep-sources"`
 	}
 
-	pkgMap        map[string][]byte
-	scene         Scene
-	outputMap     = map[string][]byte{}
-	textureMap    = map[string]ImportedTexture{}
-	lastObjectID  = -1
-	lastPassID    = 0
-	lastShaderID  = -1
-	screenCleared = false
-	codegenData   CodegenData
+	pkgMap              map[string][]byte
+	scene               Scene
+	outputMap           = map[string][]byte{}
+	textureMap          = map[string]ImportedTexture{}
+	lastObjectID        = -1
+	lastPassID          = 0
+	lastShaderID        = -1
+	screenCleared       = false
+	codegenData         CodegenData
+	particleShaderState = 0
 )
 
 //go:embed scene.tmpl
-var sceneTemplateCode []uint8
+var sceneTemplateCode []byte
 
 //go:embed scene_utils.h
-var sceneUtilsCode []uint8
+var sceneUtilsCode []byte
+
+//go:embed particle_vertex.glsl
+var particleVertexGLSL []byte
+
+//go:embed particle_fragment.glsl
+var particleFragmentGLSL []byte
 
 func main() {
 	arg.MustParse(&args)
@@ -166,6 +181,8 @@ func main() {
 	for _, object := range scene.Objects {
 		if imageObject, ok := object.(*ImageObject); ok {
 			processImageObject(*imageObject)
+		} else if particleObject, ok := object.(*ParticleObject); ok {
+			processParticleObject(*particleObject)
 		}
 	}
 	processFinalPassthrough()
@@ -332,6 +349,7 @@ func processImageObjectInit(object ImageObject, tempBuffers *[2]int) (CodegenPas
 		ColorTargetFormat: "OW_TEXTURE_RGBA8_UNORM",
 		ClearColor:        true,
 		BlendMode:         "OW_BLEND_NONE",
+		InstanceCount:     1,
 	}
 
 	resolutions := [][4]float32{}
@@ -435,6 +453,7 @@ func processImageEffect(object ImageObject, effect ImageEffect, tempBuffers *[2]
 			ColorTargetFormat: "OW_TEXTURE_RGBA8_UNORM",
 			ClearColor:        true,
 			BlendMode:         "OW_BLEND_NONE",
+			InstanceCount:     1,
 		}
 
 		compiledShader, err := compileShader(effect.Materials[idx].Shader, allBoundTextures[idx], pass.Combos)
@@ -554,6 +573,82 @@ func processImageEffect(object ImageObject, effect ImageEffect, tempBuffers *[2]
 	return passes, nil
 }
 
+func processParticleObject(object ParticleObject) {
+	if particleShaderState == 0 {
+		err := compileParticleShader()
+		if err != nil {
+			fmt.Printf("warning: skipping particles because compile particle shader failed: %s\n", err)
+			particleShaderState = 2
+		} else {
+			particleShaderState = 1
+		}
+	}
+	if particleShaderState != 1 {
+		return
+	}
+
+	lastObjectID++
+
+	if len(object.ParticleData.Material.Textures) == 0 {
+		fmt.Printf("warning: skipping particle object %s because it has no texture\n", object.Name)
+		return
+	}
+
+	textureName := object.ParticleData.Material.Textures[0]
+	texture, err := importTexture(textureName)
+	if err != nil {
+		fmt.Printf("warning: skipping particle object %s because importing texture %s failed: %s\n", object.Name, textureName, err)
+		return
+	}
+
+	particleData := CodegenParticleData{
+		ObjectID: lastObjectID,
+		MaxCount: int(object.ParticleData.MaxCount),
+	}
+
+	codegenData.Particles = append(codegenData.Particles, particleData)
+
+	uniformSetupCode := "vertex_uniforms.mvp = matrices.model_view_projection;\n"
+
+	passData := CodegenPassData{
+		ObjectID:          lastObjectID,
+		PassID:            0,
+		ColorTarget:       "screen_buffer",
+		ColorTargetFormat: "OW_TEXTURE_RGBA8_UNORM",
+		ClearColor:        false,
+		BlendMode:         "OW_BLEND_ADD",
+		TextureBindings: []CodegenTextureBindingData{{
+			Slot:    0,
+			Texture: fmt.Sprintf("texture%d", texture.ID),
+			Sampler: getTextureSampler(texture),
+		}},
+		UniformSetupCode: uniformSetupCode,
+		IsParticle:       true,
+		InstanceCount:    int(object.ParticleData.MaxCount),
+	}
+
+	passData.Transform = CodegenTransformData{
+		Enabled:                true,
+		SceneWidth:             float32(scene.General.Ortho.Width),
+		SceneHeight:            float32(scene.General.Ortho.Height),
+		OriginX:                float32(object.Origin[0]),
+		OriginY:                float32(object.Origin[1]),
+		OriginZ:                float32(object.Origin[2]),
+		SizeX:                  2,
+		SizeY:                  2,
+		ScaleX:                 float32(object.Scale[0]),
+		ScaleY:                 float32(object.Scale[1]),
+		ScaleZ:                 float32(object.Scale[2]),
+		ParallaxDepthX:         float32(object.ParallaxDepth[0]),
+		ParallaxDepthY:         float32(object.ParallaxDepth[1]),
+		ParallaxEnabled:        scene.General.Parallax,
+		ParallaxAmount:         float32(scene.General.ParallaxAmount),
+		ParallaxMouseInfluence: float32(scene.General.ParallaxMouseInfluence),
+	}
+
+	codegenData.Passes = append(codegenData.Passes, passData)
+}
+
 func processFinalPassthrough() {
 	shader, err := compileShader("passthrough", []bool{true}, map[string]int{})
 	if err != nil {
@@ -579,6 +674,7 @@ func processFinalPassthrough() {
 		Transform: CodegenTransformData{
 			Enabled: false,
 		},
+		InstanceCount: 1,
 	}
 
 	codegenData.Passes = append(codegenData.Passes, passData)
@@ -768,51 +864,22 @@ func compileShader(shaderName string, boundTextures []bool, defines map[string]i
 		outputMap[fmt.Sprintf("assets/shader%d_fragment.glsl", lastShaderID)] = []byte(transformed.FragmentGLSL)
 	}
 
-	tempDirBytes, err := exec.Command("mktemp", "-d").Output()
-	if err != nil {
-		return CompiledShader{}, err
-	}
-	tempDir := strings.TrimSuffix(string(tempDirBytes), "\n")
-
-	err = os.WriteFile(tempDir+"/vertex.glsl", []byte(transformed.VertexGLSL), 0644)
-	if err != nil {
-		panic("write vertex.glsl failed: " + err.Error())
-	}
-	err = os.WriteFile(tempDir+"/fragment.glsl", []byte(transformed.FragmentGLSL), 0644)
-	if err != nil {
-		panic("write fragment.glsl failed: " + err.Error())
-	}
-
-	glslcArgs := []string{"-fshader-stage=vertex", tempDir + "/vertex.glsl", "-o", tempDir + "/vertex.spv"}
+	glslcArgs := []string{"-fshader-stage=vertex"}
 	for name, value := range defines {
 		glslcArgs = append(glslcArgs, fmt.Sprintf("-D%s=%d", name, value))
 	}
-	logBytes, err := exec.Command("glslc", glslcArgs...).CombinedOutput()
+	vertexSPIRVBytes, err := compileRawShader([]byte(transformed.VertexGLSL), glslcArgs)
 	if err != nil {
-		return CompiledShader{}, fmt.Errorf("compiling vertex shader failed: %s", logBytes)
+		return CompiledShader{}, fmt.Errorf("compiling vertex shader failed: %s", err)
 	}
 
-	glslcArgs = []string{"-fshader-stage=fragment", tempDir + "/fragment.glsl", "-o", tempDir + "/fragment.spv"}
+	glslcArgs = []string{"-fshader-stage=fragment"}
 	for name, value := range defines {
 		glslcArgs = append(glslcArgs, fmt.Sprintf("-D%s=%d", name, value))
 	}
-	logBytes, err = exec.Command("glslc", glslcArgs...).CombinedOutput()
+	fragmentSPIRVBytes, err := compileRawShader([]byte(transformed.FragmentGLSL), glslcArgs)
 	if err != nil {
-		return CompiledShader{}, fmt.Errorf("compiling fragment shader failed: %s", logBytes)
-	}
-
-	vertexSPIRVBytes, err := os.ReadFile(tempDir + "/vertex.spv")
-	if err != nil {
-		return CompiledShader{}, err
-	}
-	fragmentSPIRVBytes, err := os.ReadFile(tempDir + "/fragment.spv")
-	if err != nil {
-		return CompiledShader{}, err
-	}
-
-	err = os.RemoveAll(tempDir)
-	if err != nil {
-		println("warning: failed to remove temp dir: " + err.Error())
+		return CompiledShader{}, fmt.Errorf("compiling fragment shader failed: %s", err)
 	}
 
 	outputMap[fmt.Sprintf("assets/shader%d_vertex.spv", lastShaderID)] = vertexSPIRVBytes
@@ -833,4 +900,53 @@ func compileShader(shaderName string, boundTextures []bool, defines map[string]i
 
 	codegenData.Shaders = append(codegenData.Shaders, compiledShader)
 	return compiledShader, nil
+}
+
+func compileParticleShader() error {
+	fmt.Printf("compiling particle shader\n")
+
+	vertexSPIRVBytes, err := compileRawShader(particleVertexGLSL, []string{"-fshader-stage=vertex"})
+	if err != nil {
+		return fmt.Errorf("compile particle vertex shader failed: %s", err)
+	}
+
+	fragmentSPIRVBytes, err := compileRawShader(particleFragmentGLSL, []string{"-fshader-stage=fragment"})
+	if err != nil {
+		return fmt.Errorf("compile particle fragment shader failed: %s", err)
+	}
+
+	outputMap["assets/particle_vertex.spv"] = vertexSPIRVBytes
+	outputMap["assets/particle_fragment.spv"] = fragmentSPIRVBytes
+	return nil
+}
+
+func compileRawShader(source []byte, glslcArgs []string) ([]byte, error) {
+	tempDirBytes, err := exec.Command("mktemp", "-d").Output()
+	if err != nil {
+		return []byte{}, fmt.Errorf("mktemp failed: %s", err)
+	}
+	tempDir := strings.TrimSuffix(string(tempDirBytes), "\n")
+
+	err = os.WriteFile(tempDir+"/shader.glsl", source, 0644)
+	if err != nil {
+		return []byte{}, fmt.Errorf("write shader.glsl failed: %s", err)
+	}
+
+	glslcArgs = append(glslcArgs, tempDir+"/shader.glsl", "-o", tempDir+"/shader.spv")
+	logBytes, err := exec.Command("glslc", glslcArgs...).CombinedOutput()
+	if err != nil {
+		return []byte{}, fmt.Errorf("glslc failed: %s", logBytes)
+	}
+
+	SPIRVBytes, err := os.ReadFile(tempDir + "/shader.spv")
+	if err != nil {
+		return []byte{}, fmt.Errorf("read shader.spv failed: %s", err)
+	}
+
+	err = os.RemoveAll(tempDir)
+	if err != nil {
+		println("warning: failed to remove temp dir: " + err.Error())
+	}
+
+	return SPIRVBytes, nil
 }
