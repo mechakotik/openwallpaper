@@ -179,8 +179,8 @@ static transform_matrices_t compute_transform_matrices(transform_parameters_t pa
     if(params.parallax_enabled) {
         float diff_x = clamped_mouse_x - 0.5f;
         float diff_y = -clamped_mouse_y - 0.5f;
-        parallax_pos_x = 0.5f + diff_x * params.parallax_mouse_influence * 0.5f;
-        parallax_pos_y = 0.5f + diff_y * params.parallax_mouse_influence * 0.5f;
+        parallax_pos_x = 0.5f + diff_x * params.parallax_mouse_influence;
+        parallax_pos_y = 0.5f + diff_y * params.parallax_mouse_influence;
     }
 
     float node_pos_x = params.origin_x;
@@ -197,8 +197,8 @@ static transform_matrices_t compute_transform_matrices(transform_parameters_t pa
         mouse_vec_y *= params.scene_height * params.parallax_mouse_influence;
         float depth_x = params.parallax_depth_x;
         float depth_y = params.parallax_depth_y;
-        float dx = (node_pos_x - cam_pos_x + mouse_vec_x) * depth_x * params.parallax_amount * 0.5f;
-        float dy = (node_pos_y - cam_pos_y + mouse_vec_y) * depth_y * params.parallax_amount * 0.5f;
+        float dx = (node_pos_x - cam_pos_x + mouse_vec_x) * depth_x * params.parallax_amount;
+        float dy = (node_pos_y - cam_pos_y + mouse_vec_y) * depth_y * params.parallax_amount;
         parallax_offset_x = dx;
         parallax_offset_y = dy;
     }
