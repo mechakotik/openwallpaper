@@ -5,22 +5,6 @@
 #include "openwallpaper.h"
 #include "scene_utils.h"
 
-{{range $_, $texture := .Textures}}ow_id texture{{$texture.ID}}; // {{$texture.Name}}
-{{end}}
-{{range $_, $shader := .Shaders}}{{template "shader_header" $shader}}
-{{end}}{{range $_, $pass := .Passes}}ow_id object{{$pass.ObjectID}}_pass{{$pass.PassID}}_pipeline;
-{{end}}
-{{range $_, $particle := .Particles}}{{template "particle_header" $particle}}
-{{end}}
-typedef struct {
-    float position[3];
-    float texcoord[2];
-} vertex_t;
-
-typedef struct {
-    float texcoord[2];
-} particle_vertex_data_t;
-
 typedef struct {
     float position[3];
     float rotation;
@@ -28,6 +12,25 @@ typedef struct {
     float color[4];
     float frame;
 } particle_instance_data_t;
+
+{{range $_, $texture := .Textures}}ow_id texture{{$texture.ID}}; // {{$texture.Name}}
+{{end}}
+{{range $_, $shader := .Shaders}}{{template "shader_header" $shader}}
+{{end}}{{range $_, $pass := .Passes}}ow_id object{{$pass.ObjectID}}_pass{{$pass.PassID}}_pipeline;
+{{end}}
+{{range $_, $particle := .Particles}}{{template "particle_header" $particle}}
+{{end}}
+{{range $_, $particle := .Particles}}{{template "particle_update_func" $particle}}
+{{end}}
+
+typedef struct {
+    float position[3];
+    float texcoord[2];
+} vertex_data_t;
+
+typedef struct {
+    float texcoord[2];
+} particle_vertex_data_t;
 
 typedef struct {
     glsl_mat4 mvp;
@@ -37,7 +40,7 @@ typedef struct {
     glsl_vec2 spritesheet_size;
 } particle_fragment_uniforms_t;
 
-vertex_t vertex_quad[4] = {
+vertex_data_t vertex_quad[4] = {
     { {-1.0f, -1.0f, 0.0f}, {0.0f, 1.0f} },
     { { 1.0f, -1.0f, 0.0f}, {1.0f, 1.0f} },
     { {-1.0f,  1.0f, 0.0f}, {0.0f, 0.0f} },
@@ -226,6 +229,39 @@ __attribute__((export_name("update"))) void update(float delta) {
         parallax_mouse_y = mouse_y;
     }
 
+    ow_begin_copy_pass();
+
+{{range $_, $particle := .Particles}}
+    particle{{.ObjectID}}_update(delta);
+
+    for(int i = 0; i < {{.MaxCount}}; i++) {
+        particle{{.ObjectID}}.instance_data[i] = (particle_instance_data_t){
+            .position = {
+                particle{{.ObjectID}}.instances[i].position[0],
+                particle{{.ObjectID}}.instances[i].position[1],
+                particle{{.ObjectID}}.instances[i].position[2],
+            },
+            .rotation = {
+                particle{{.ObjectID}}.instances[i].rotation[0],
+                particle{{.ObjectID}}.instances[i].rotation[1],
+                particle{{.ObjectID}}.instances[i].rotation[2],
+            },
+            .size = particle{{.ObjectID}}.instances[i].size,
+            .color = {
+                particle{{.ObjectID}}.instances[i].color[0],
+                particle{{.ObjectID}}.instances[i].color[1],
+                particle{{.ObjectID}}.instances[i].color[2],
+                particle{{.ObjectID}}.instances[i].alpha,
+            },
+            .frame = particle{{.ObjectID}}.instances[i].frame,
+        };
+    }
+
+    ow_update_buffer(particle{{.ObjectID}}.instance_buffer, 0, particle{{.ObjectID}}.instance_data, sizeof(particle_instance_data_t) * {{.MaxCount}});
+{{end}}
+
+    ow_end_copy_pass();
+
     time += delta;
 {{range $_, $pass := .Passes}}
 {{template "pass_update" $pass}}{{end}}
@@ -248,26 +284,32 @@ ow_id shader{{.ID}}_fragment;
 {{define "particle_header"}}struct {
     ow_id instance_buffer;
     particle_instance_t instances[{{.MaxCount}}];
+    particle_instance_data_t instance_data[{{.MaxCount}}];
 } particle{{.ObjectID}};
 {{end}}
 
 {{define "particle_init"}}    {
         particle{{.ObjectID}}.instance_buffer = ow_create_buffer(OW_BUFFER_VERTEX, sizeof(particle_instance_data_t) * {{.MaxCount}});
-        particle_instance_data_t* instance_data = malloc(sizeof(particle_instance_data_t) * {{.MaxCount}});
-
         for(int i = 0; i < {{.MaxCount}}; i++) {
-            instance_data[i] = (particle_instance_data_t){
-                .position = {(float)rand() / RAND_MAX * 3840.0f - 1920.0f, (float)rand() / RAND_MAX * 2160.0f - 1080.0f, 0.0f},
-                .rotation = 0.0f,
-                .size = 2.0f + (float)rand() / RAND_MAX * 28.0f,
-                .color = {1.0f, 1.0f, 1.0f, 1.0f},
-                .frame = 0.0f,
+            particle{{.ObjectID}}.instances[i] = (particle_instance_t){
+                .alive = true,
+                .position = {rand() % 3840 - 1920, rand() % 2160 - 1080, 0.0f},
+                .velocity = {0.0f, -50 - rand() % 41, 0.0f},
+                .size = 2 + rand() % 29,
+                .color = {1.0f, 1.0f, 1.0f},
+                .alpha = 1.0f,
             };
         }
-
-        ow_update_buffer(particle{{.ObjectID}}.instance_buffer, 0, instance_data, sizeof(particle_instance_data_t) * {{.MaxCount}});
-        free(instance_data);
     }
+{{end}}
+
+{{define "particle_update_func"}}
+void particle{{.ObjectID}}_update(float delta) {
+    for(int i = 0; i < {{.MaxCount}}; i++) {
+        particle{{.ObjectID}}.instances[i].position[0] += particle{{.ObjectID}}.instances[i].velocity[0] * delta;
+        particle{{.ObjectID}}.instances[i].position[1] += particle{{.ObjectID}}.instances[i].velocity[1] * delta;
+    }
+}
 {{end}}
 
 {{define "transform_setup"}}
@@ -317,7 +359,7 @@ ow_id shader{{.ID}}_fragment;
 {{else}}
         ow_vertex_binding_info vertex_binding_info = {
             .slot = 0,
-            .stride = sizeof(vertex_t),
+            .stride = sizeof(vertex_data_t),
         };
 
         ow_pipeline_info pipeline_info = {
