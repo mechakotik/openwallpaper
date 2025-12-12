@@ -127,11 +127,12 @@ type CodegenParticleInitializerData struct {
 }
 
 type CodegenParticleData struct {
-	ObjectID int
-	MaxCount int
-	Init     CodegenParticleInitializerData
-	Emitters []Emitter
-	Origin   [3]float32
+	ObjectID  int
+	MaxCount  int
+	Init      CodegenParticleInitializerData
+	Emitters  []Emitter
+	Origin    [3]float32
+	StartTime float32
 }
 
 type CodegenData struct {
@@ -646,11 +647,12 @@ func processParticleObject(object ParticleObject) {
 	usePerspective := object.ParticleData.Flags&ParticleFlagPerspective != 0
 
 	particleData := CodegenParticleData{
-		ObjectID: lastObjectID,
-		MaxCount: int(object.ParticleData.MaxCount),
-		Init:     initData,
-		Emitters: object.ParticleData.Emitters,
-		Origin:   object.Origin,
+		ObjectID:  lastObjectID,
+		MaxCount:  int(object.ParticleData.MaxCount),
+		Init:      initData,
+		Emitters:  object.ParticleData.Emitters,
+		Origin:    object.Origin,
+		StartTime: object.ParticleData.StartTime,
 	}
 
 	codegenData.Particles = append(codegenData.Particles, particleData)

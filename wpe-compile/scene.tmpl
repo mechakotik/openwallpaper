@@ -326,6 +326,9 @@ ow_id shader{{.ID}}_fragment;
 
     particle{{.ObjectID}}.instance_buffer = ow_create_buffer(OW_BUFFER_VERTEX, sizeof(particle_instance_data_t) * {{.MaxCount}});
     init_particle(&particle{{.ObjectID}});
+    for(float timer = 0.0f; timer < {{.StartTime}}; timer += 0.05f) {
+        update_particle(&particle{{.ObjectID}}, 0.05f);
+    }
 }
 {{end}}
 
