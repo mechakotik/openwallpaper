@@ -5,22 +5,12 @@
 #include "openwallpaper.h"
 #include "scene_utils.h"
 
-typedef struct {
-    float position[3];
-    float rotation;
-    float size;
-    float color[4];
-    float frame;
-} particle_instance_data_t;
-
 {{range $_, $texture := .Textures}}ow_id texture{{$texture.ID}}; // {{$texture.Name}}
 {{end}}
 {{range $_, $shader := .Shaders}}{{template "shader_header" $shader}}
 {{end}}{{range $_, $pass := .Passes}}ow_id object{{$pass.ObjectID}}_pass{{$pass.PassID}}_pipeline;
 {{end}}
-{{range $_, $particle := .Particles}}{{template "particle_header" $particle}}
-{{end}}
-{{range $_, $particle := .Particles}}{{template "particle_update_func" $particle}}
+{{range $_, $particle := .Particles}}particle_t particle{{.ObjectID}};
 {{end}}
 
 typedef struct {
@@ -232,31 +222,8 @@ __attribute__((export_name("update"))) void update(float delta) {
     ow_begin_copy_pass();
 
 {{range $_, $particle := .Particles}}
-    particle{{.ObjectID}}_update(delta);
-
-    for(int i = 0; i < {{.MaxCount}}; i++) {
-        particle{{.ObjectID}}.instance_data[i] = (particle_instance_data_t){
-            .position = {
-                particle{{.ObjectID}}.instances[i].position[0],
-                particle{{.ObjectID}}.instances[i].position[1],
-                particle{{.ObjectID}}.instances[i].position[2],
-            },
-            .rotation = {
-                particle{{.ObjectID}}.instances[i].rotation[0],
-                particle{{.ObjectID}}.instances[i].rotation[1],
-                particle{{.ObjectID}}.instances[i].rotation[2],
-            },
-            .size = particle{{.ObjectID}}.instances[i].size,
-            .color = {
-                particle{{.ObjectID}}.instances[i].color[0],
-                particle{{.ObjectID}}.instances[i].color[1],
-                particle{{.ObjectID}}.instances[i].color[2],
-                particle{{.ObjectID}}.instances[i].alpha,
-            },
-            .frame = particle{{.ObjectID}}.instances[i].frame,
-        };
-    }
-
+    update_particle(&particle{{.ObjectID}}, delta);
+    update_particle_instance_data(&particle{{.ObjectID}});
     ow_update_buffer(particle{{.ObjectID}}.instance_buffer, 0, particle{{.ObjectID}}.instance_data, sizeof(particle_instance_data_t) * {{.MaxCount}});
 {{end}}
 
@@ -281,34 +248,84 @@ ow_id shader{{.ID}}_fragment;
     shader{{.ID}}_fragment = ow_create_shader_from_file("assets/shader{{.ID}}_fragment.spv", OW_SHADER_FRAGMENT);
 {{end}}
 
-{{define "particle_header"}}struct {
-    ow_id instance_buffer;
-    particle_instance_t instances[{{.MaxCount}}];
-    particle_instance_data_t instance_data[{{.MaxCount}}];
-} particle{{.ObjectID}};
-{{end}}
-
 {{define "particle_init"}}    {
-        particle{{.ObjectID}}.instance_buffer = ow_create_buffer(OW_BUFFER_VERTEX, sizeof(particle_instance_data_t) * {{.MaxCount}});
-        for(int i = 0; i < {{.MaxCount}}; i++) {
-            particle{{.ObjectID}}.instances[i] = (particle_instance_t){
-                .alive = true,
-                .position = {rand() % 3840 - 1920, rand() % 2160 - 1080, 0.0f},
-                .velocity = {0.0f, -50 - rand() % 41, 0.0f},
-                .size = 2 + rand() % 29,
-                .color = {1.0f, 1.0f, 1.0f},
-                .alpha = 1.0f,
-            };
-        }
-    }
+    particle{{.ObjectID}} = (particle_t){
+        .emitters = calloc({{len .Emitters}}, sizeof(particle_emitter_t)),
+        .init = {
+            .randomize_lifetime = {{.Init.RandomizeLifetime}},
+            .min_lifetime = {{.Init.MinLifetime}},
+            .max_lifetime = {{.Init.MaxLifetime}},
+            .randomize_size = {{.Init.RandomizeSize}},
+            .min_size = {{.Init.MinSize}},
+            .max_size = {{.Init.MaxSize}},
+            .randomize_velocity = {{.Init.RandomizeVelocity}},
+            .min_velocity = {
+                {{index .Init.MinVelocity 0}},
+                {{index .Init.MinVelocity 1}},
+                {{index .Init.MinVelocity 2}},
+            },
+            .max_velocity = {
+                {{index .Init.MaxVelocity 0}},
+                {{index .Init.MaxVelocity 1}},
+                {{index .Init.MaxVelocity 2}},
+            },
+            .randomize_color = {{.Init.RandomizeColor}},
+            .min_color = {
+                {{index .Init.MinColor 0}},
+                {{index .Init.MinColor 1}},
+                {{index .Init.MinColor 2}},
+            },
+            .max_color = {
+                {{index .Init.MaxColor 0}},
+                {{index .Init.MaxColor 1}},
+                {{index .Init.MaxColor 2}},
+            },
+        },
+        .max_count = {{.MaxCount}},
+        .emitter_count = {{len .Emitters}},
+        .origin = {
+            {{index .Origin 0}},
+            {{index .Origin 1}},
+            {{index .Origin 2}},
+        },
+    };
+
+{{range $idx, $emitter := .Emitters}}
+    particle{{$.ObjectID}}.emitters[{{$idx}}] = (particle_emitter_t){
+        .directions = {
+            {{index .Directions 0}},
+            {{index .Directions 1}},
+            {{index .Directions 2}},
+        },
+        .distance_max = {
+            {{index .DistanceMax 0}},
+            {{index .DistanceMax 1}},
+            {{index .DistanceMax 2}},
+        },
+        .distance_min = {
+            {{index .DistanceMin 0}},
+            {{index .DistanceMin 1}},
+            {{index .DistanceMin 2}},
+        },
+        .origin = {
+            {{index .Origin 0}},
+            {{index .Origin 1}},
+            {{index .Origin 2}},
+        },
+        .sign = {
+            {{index .Sign 0}},
+            {{index .Sign 1}},
+            {{index .Sign 2}},
+        },
+        .speed_min = {{.SpeedMin}},
+        .speed_max = {{.SpeedMax}},
+        .interval = 1.0f / {{.Rate}},
+        .timer = 0.0f,
+    };
 {{end}}
 
-{{define "particle_update_func"}}
-void particle{{.ObjectID}}_update(float delta) {
-    for(int i = 0; i < {{.MaxCount}}; i++) {
-        particle{{.ObjectID}}.instances[i].position[0] += particle{{.ObjectID}}.instances[i].velocity[0] * delta;
-        particle{{.ObjectID}}.instances[i].position[1] += particle{{.ObjectID}}.instances[i].velocity[1] * delta;
-    }
+    particle{{.ObjectID}}.instance_buffer = ow_create_buffer(OW_BUFFER_VERTEX, sizeof(particle_instance_data_t) * {{.MaxCount}});
+    init_particle(&particle{{.ObjectID}});
 }
 {{end}}
 
@@ -330,6 +347,9 @@ void particle{{.ObjectID}}_update(float delta) {
 			.parallax_enabled = {{.ParallaxEnabled}},
 			.parallax_amount = {{.ParallaxAmount}},
 			.parallax_mouse_influence = {{.ParallaxMouseInfluence}},
+			.perspective = {{.Perspective}},
+			.near_z = {{.NearZ}},
+			.far_z = {{.FarZ}},
 			.scale_mode = scale_mode,
 			.mouse_x = parallax_mouse_x,
 			.mouse_y = parallax_mouse_y,

@@ -60,6 +60,12 @@ type ParticleChild struct {
 
 type ParticleFlags uint32
 
+const (
+	ParticleFlagWorldSpace ParticleFlags = 1 << iota
+	ParticleFlagSpriteNoFrameBlending
+	ParticleFlagPerspective
+)
+
 type Particle struct {
 	Emitters           []Emitter
 	Initializers       []json.RawMessage

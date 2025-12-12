@@ -79,6 +79,9 @@ type CodegenTransformData struct {
 	ParallaxEnabled        bool
 	ParallaxAmount         float32
 	ParallaxMouseInfluence float32
+	Perspective            bool
+	NearZ                  float32
+	FarZ                   float32
 }
 
 type CodegenPassData struct {
@@ -108,9 +111,27 @@ type TempScreenBufferParameters struct {
 	Number int
 }
 
+type CodegenParticleInitializerData struct {
+	RandomizeLifetime bool
+	MinLifetime       float32
+	MaxLifetime       float32
+	RandomizeSize     bool
+	MinSize           float32
+	MaxSize           float32
+	RandomizeVelocity bool
+	MinVelocity       [3]float32
+	MaxVelocity       [3]float32
+	RandomizeColor    bool
+	MinColor          [3]float32
+	MaxColor          [3]float32
+}
+
 type CodegenParticleData struct {
 	ObjectID int
 	MaxCount int
+	Init     CodegenParticleInitializerData
+	Emitters []Emitter
+	Origin   [3]float32
 }
 
 type CodegenData struct {
@@ -387,6 +408,9 @@ func processImageObjectInit(object ImageObject, tempBuffers *[2]int) (CodegenPas
 		ParallaxEnabled:        scene.General.Parallax,
 		ParallaxAmount:         float32(scene.General.ParallaxAmount),
 		ParallaxMouseInfluence: float32(scene.General.ParallaxMouseInfluence),
+		Perspective:            false,
+		NearZ:                  float32(scene.General.NearZ),
+		FarZ:                   float32(scene.General.FarZ),
 	}
 
 	passData.UniformSetupCode += generateUniformSetupCode(UniformCodegenContext{
@@ -547,6 +571,9 @@ func processImageEffect(object ImageObject, effect ImageEffect, tempBuffers *[2]
 			ParallaxEnabled:        scene.General.Parallax,
 			ParallaxAmount:         float32(scene.General.ParallaxAmount),
 			ParallaxMouseInfluence: float32(scene.General.ParallaxMouseInfluence),
+			Perspective:            false,
+			NearZ:                  float32(scene.General.NearZ),
+			FarZ:                   float32(scene.General.FarZ),
 		}
 
 		passData.UniformSetupCode += generateUniformSetupCode(UniformCodegenContext{
@@ -601,9 +628,29 @@ func processParticleObject(object ParticleObject) {
 		return
 	}
 
+	initData := CodegenParticleInitializerData{
+		RandomizeLifetime: true,
+		MinLifetime:       8,
+		MaxLifetime:       20,
+		RandomizeSize:     true,
+		MinSize:           2,
+		MaxSize:           30,
+		RandomizeVelocity: true,
+		MinVelocity:       [3]float32{-37, -90, 0},
+		MaxVelocity:       [3]float32{-10, -50, 0},
+		RandomizeColor:    true,
+		MinColor:          [3]float32{1, 1, 1},
+		MaxColor:          [3]float32{95.0 / 255.0, 98.0 / 255.0, 100.0 / 255.0},
+	}
+
+	usePerspective := object.ParticleData.Flags&ParticleFlagPerspective != 0
+
 	particleData := CodegenParticleData{
 		ObjectID: lastObjectID,
 		MaxCount: int(object.ParticleData.MaxCount),
+		Init:     initData,
+		Emitters: object.ParticleData.Emitters,
+		Origin:   object.Origin,
 	}
 
 	codegenData.Particles = append(codegenData.Particles, particleData)
@@ -644,6 +691,9 @@ func processParticleObject(object ParticleObject) {
 		ParallaxEnabled:        scene.General.Parallax,
 		ParallaxAmount:         float32(scene.General.ParallaxAmount),
 		ParallaxMouseInfluence: float32(scene.General.ParallaxMouseInfluence),
+		Perspective:            usePerspective,
+		NearZ:                  float32(scene.General.NearZ),
+		FarZ:                   float32(scene.General.FarZ),
 	}
 
 	codegenData.Passes = append(codegenData.Passes, passData)

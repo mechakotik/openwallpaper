@@ -176,10 +176,13 @@ func parseVector3FromRaw(raw json.RawMessage, defaultValue Vector3) (Vector3, er
 	if err != nil {
 		return defaultValue, err
 	}
-	if len(values) != 3 {
-		return defaultValue, fmt.Errorf("expected 3 components, got %d", len(values))
+	if len(values) == 1 {
+		return Vector3{values[0], values[0], values[0]}, nil
 	}
-	return Vector3{values[0], values[1], values[2]}, nil
+	if len(values) == 3 {
+		return Vector3{values[0], values[1], values[2]}, nil
+	}
+	return defaultValue, fmt.Errorf("expected 3 components, got %d", len(values))
 }
 
 func getRequiredField(object map[string]json.RawMessage, fieldName string) (json.RawMessage, error) {
