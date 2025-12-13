@@ -93,6 +93,9 @@ bool wd_init_scene(wd_state* state, wd_args_state* args) {
     }
 
     if(!wasm_runtime_call_wasm(scene->exec_env, init_func, 0, NULL)) {
+        if(!wd_is_error_set()) {
+            wd_set_error("init wasm call failed: %s", wasm_runtime_get_exception(scene->instance));
+        }
         return false;
     }
 
@@ -101,6 +104,9 @@ bool wd_init_scene(wd_state* state, wd_args_state* args) {
 
 bool wd_update_scene(wd_scene_state* scene, float delta) {
     if(!wasm_runtime_call_wasm(scene->exec_env, scene->update_func, 1, (void*)&delta)) {
+        if(!wd_is_error_set()) {
+            wd_set_error("update wasm call failed: %s", wasm_runtime_get_exception(scene->instance));
+        }
         return false;
     }
 

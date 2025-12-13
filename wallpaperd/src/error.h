@@ -5,5 +5,6 @@
 
 void wd_set_error(const char* format, ...);
 const char* wd_get_last_error();
+bool wd_is_error_set();
 
 #endif
