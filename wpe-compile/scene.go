@@ -1,9 +1,1444 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"os"
+	"strconv"
+	"strings"
 )
+
+type (
+	Vector2 [2]float32
+	Vector3 [3]float32
+)
+
+type BoolValue bool
+type IntValue int
+type FloatValue float32
+type StringValue string
+type FloatSlice []float32
+type NullString string
+
+func (value *StringValue) UnmarshalJSON(raw []byte) error {
+	parsed, err := parseStringFromRaw(raw)
+	if err != nil {
+		return err
+	}
+	*value = StringValue(parsed)
+	return nil
+}
+
+func (value *BoolValue) UnmarshalJSON(raw []byte) error {
+	parsed, err := parseBoolFromRaw(raw)
+	if err != nil {
+		return err
+	}
+	*value = BoolValue(parsed)
+	return nil
+}
+
+func (value *FloatValue) UnmarshalJSON(raw []byte) error {
+	parsed, err := parseFloat64FromRaw(raw)
+	if err != nil {
+		return err
+	}
+	*value = FloatValue(parsed)
+	return nil
+}
+
+func (value *IntValue) UnmarshalJSON(raw []byte) error {
+	parsed, err := parseIntFromRaw(raw)
+	if err != nil {
+		return err
+	}
+	*value = IntValue(parsed)
+	return nil
+}
+
+func (value *FloatSlice) UnmarshalJSON(raw []byte) error {
+	parsed, err := parseFloatSliceFromRaw(raw)
+	if err != nil {
+		return err
+	}
+	*value = FloatSlice(parsed)
+	return nil
+}
+
+func (value *NullString) UnmarshalJSON(raw []byte) error {
+	if bytesFromRawNullAware(raw) == nil {
+		*value = ""
+		return nil
+	}
+	var str StringValue
+	if err := json.Unmarshal(raw, &str); err != nil {
+		return err
+	}
+	*value = NullString(str)
+	return nil
+}
+
+func (vector *Vector2) UnmarshalJSON(raw []byte) error {
+	parsed, err := parseVector2FromRaw(raw, *vector)
+	if err != nil {
+		return err
+	}
+	*vector = parsed
+	return nil
+}
+
+func (vector *Vector3) UnmarshalJSON(raw []byte) error {
+	parsed, err := parseVector3FromRaw(raw, *vector)
+	if err != nil {
+		return err
+	}
+	*vector = parsed
+	return nil
+}
+
+func bytesFromRawNullAware(raw json.RawMessage) []byte {
+	trimmed := bytes.TrimSpace(raw)
+	if bytes.Equal(trimmed, []byte("null")) {
+		return nil
+	}
+	return raw
+}
+
+func unwrapJSONValue(raw json.RawMessage) json.RawMessage {
+	trimmed := bytes.TrimSpace(raw)
+	if len(trimmed) == 0 || trimmed[0] != '{' {
+		return raw
+	}
+	trimmed = bytes.Trim(raw, ",")
+	if len(trimmed) == 0 || trimmed[0] != '{' {
+		return raw
+	}
+
+	var object map[string]json.RawMessage
+	err := json.Unmarshal(raw, &object)
+	if err != nil {
+		return raw
+	}
+	if value, exists := object["value"]; exists {
+		return value
+	}
+	return raw
+}
+
+func parseStringFromRaw(raw json.RawMessage) (string, error) {
+	if bytesFromRawNullAware(raw) == nil {
+		return "", nil
+	}
+	raw = unwrapJSONValue(raw)
+	var value string
+	err := json.Unmarshal(raw, &value)
+	if err != nil {
+		return "", fmt.Errorf("value is not a string: %w", err)
+	}
+	return value, nil
+}
+
+func parseBoolFromRaw(raw json.RawMessage) (bool, error) {
+	raw = unwrapJSONValue(raw)
+	var value bool
+	err := json.Unmarshal(raw, &value)
+	if err == nil {
+		return value, nil
+	}
+	var text string
+	err = json.Unmarshal(raw, &text)
+	if err == nil {
+		text = strings.TrimSpace(strings.ToLower(text))
+		if text == "true" {
+			return true, nil
+		}
+		if text == "false" {
+			return false, nil
+		}
+		return false, fmt.Errorf("cannot parse bool from string %q", text)
+	}
+	return false, errors.New("value is not a bool or string")
+}
+
+func parseFloat64FromRaw(raw json.RawMessage) (float64, error) {
+	raw = unwrapJSONValue(raw)
+	var number float64
+	err := json.Unmarshal(raw, &number)
+	if err == nil {
+		return number, nil
+	}
+	var text string
+	err = json.Unmarshal(raw, &text)
+	if err == nil {
+		text = strings.TrimSpace(text)
+		if text == "" {
+			return 0, errors.New("empty string for float value")
+		}
+		value, parseErr := strconv.ParseFloat(text, 64)
+		if parseErr != nil {
+			return 0, fmt.Errorf("cannot parse float from string %q: %w", text, parseErr)
+		}
+		return value, nil
+	}
+	return 0, errors.New("value is not a number or string")
+}
+
+func parseIntFromRaw(raw json.RawMessage) (int, error) {
+	raw = unwrapJSONValue(raw)
+	var integer int
+	err := json.Unmarshal(raw, &integer)
+	if err == nil {
+		return integer, nil
+	}
+	var number float64
+	err = json.Unmarshal(raw, &number)
+	if err == nil {
+		return int(number), nil
+	}
+	var text string
+	err = json.Unmarshal(raw, &text)
+	if err == nil {
+		text = strings.TrimSpace(text)
+		if text == "" {
+			return 0, errors.New("empty string for int value")
+		}
+		parsed, parseErr := strconv.ParseInt(text, 10, 64)
+		if parseErr != nil {
+			return 0, fmt.Errorf("cannot parse int from string %q: %w", text, parseErr)
+		}
+		return int(parsed), nil
+	}
+	return 0, errors.New("value is not an int, number or string")
+}
+
+func parseFloatSliceFromRaw(raw json.RawMessage) ([]float32, error) {
+	raw = unwrapJSONValue(raw)
+
+	var arrayOfNumbers []float64
+	err := json.Unmarshal(raw, &arrayOfNumbers)
+	if err == nil {
+		result := make([]float32, len(arrayOfNumbers))
+		for index, value := range arrayOfNumbers {
+			result[index] = float32(value)
+		}
+		return result, nil
+	}
+
+	var singleNumber float64
+	err = json.Unmarshal(raw, &singleNumber)
+	if err == nil {
+		return []float32{float32(singleNumber)}, nil
+	}
+
+	var text string
+	err = json.Unmarshal(raw, &text)
+	if err == nil {
+		text = strings.TrimSpace(text)
+		if text == "" {
+			return nil, errors.New("empty string for float slice")
+		}
+		parts := strings.Fields(text)
+		result := make([]float32, len(parts))
+		for index, part := range parts {
+			value, parseErr := strconv.ParseFloat(part, 64)
+			if parseErr != nil {
+				return nil, fmt.Errorf("cannot parse float from string %q: %w", part, parseErr)
+			}
+			result[index] = float32(value)
+		}
+		return result, nil
+	}
+
+	return nil, errors.New("value is not an array, number or string")
+}
+
+func parseVector2FromRaw(raw json.RawMessage, defaultValue Vector2) (Vector2, error) {
+	values, err := parseFloatSliceFromRaw(raw)
+	if err != nil {
+		return defaultValue, err
+	}
+	if len(values) != 2 {
+		return defaultValue, fmt.Errorf("expected 2 components, got %d", len(values))
+	}
+	return Vector2{values[0], values[1]}, nil
+}
+
+func parseVector3FromRaw(raw json.RawMessage, defaultValue Vector3) (Vector3, error) {
+	values, err := parseFloatSliceFromRaw(raw)
+	if err != nil {
+		return defaultValue, err
+	}
+	if len(values) == 1 {
+		return Vector3{values[0], values[0], values[0]}, nil
+	}
+	if len(values) == 3 {
+		return Vector3{values[0], values[1], values[2]}, nil
+	}
+	return defaultValue, fmt.Errorf("expected 3 components, got %d", len(values))
+}
+
+func loadBytesFromPackage(pkgMap *map[string][]byte, path string) ([]byte, error) {
+	if pkgMap == nil {
+		return nil, errors.New("package map pointer is nil")
+	}
+	if data, exists := (*pkgMap)[path]; exists {
+		return data, nil
+	}
+	if data, exists := (*pkgMap)["/assets/"+path]; exists {
+		return data, nil
+	}
+	if data, exists := (*pkgMap)["assets/"+path]; exists {
+		return data, nil
+	}
+	data, err := os.ReadFile("assets/" + path)
+	if err == nil {
+		return data, nil
+	}
+	return nil, fmt.Errorf("file %s not found", path)
+}
+
+type MaterialPassBindItem struct {
+	Name  string `json:"name"`
+	Index int    `json:"index"`
+}
+
+type MaterialPass struct {
+	Textures  []string
+	Combos    map[string]int
+	Constants map[string][]float32
+	Target    string
+	Bind      []MaterialPassBindItem
+}
+
+type Material struct {
+	Blending   string
+	CullMode   string
+	DepthTest  string
+	DepthWrite string
+	Shader     string
+	Textures   []string
+	Combos     map[string]int
+	Constants  map[string][]float32
+}
+
+func (materialPass *MaterialPass) parseFromJSON(raw json.RawMessage) error {
+	payload := struct {
+		Textures             []NullString           `json:"textures"`
+		ConstantShaderValues map[string]FloatSlice  `json:"constantshadervalues"`
+		Combos               map[string]IntValue    `json:"combos"`
+		Target               StringValue            `json:"target"`
+		Bind                 []MaterialPassBindItem `json:"bind"`
+	}{}
+
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		return fmt.Errorf("cannot parse material pass: %w", err)
+	}
+
+	for _, texture := range payload.Textures {
+		materialPass.Textures = append(materialPass.Textures, string(texture))
+	}
+
+	if len(payload.ConstantShaderValues) > 0 {
+		if materialPass.Constants == nil {
+			materialPass.Constants = make(map[string][]float32)
+		}
+		for key, value := range payload.ConstantShaderValues {
+			materialPass.Constants[key] = value
+		}
+	}
+
+	if len(payload.Combos) > 0 {
+		if materialPass.Combos == nil {
+			materialPass.Combos = make(map[string]int)
+		}
+		for key, value := range payload.Combos {
+			materialPass.Combos[key] = int(value)
+		}
+	}
+
+	if payload.Target != "" {
+		materialPass.Target = string(payload.Target)
+	}
+
+	if len(payload.Bind) > 0 {
+		materialPass.Bind = append(materialPass.Bind, payload.Bind...)
+	}
+
+	return nil
+}
+
+func (materialPass *MaterialPass) updateFrom(other MaterialPass) {
+	if len(other.Textures) > len(materialPass.Textures) {
+		newTextures := make([]string, len(other.Textures))
+		copy(newTextures, materialPass.Textures)
+		materialPass.Textures = newTextures
+	}
+	for index, textureName := range other.Textures {
+		if textureName != "" {
+			materialPass.Textures[index] = textureName
+		}
+	}
+	if materialPass.Combos == nil {
+		materialPass.Combos = make(map[string]int)
+	}
+	for key, value := range other.Combos {
+		materialPass.Combos[key] = value
+	}
+	if materialPass.Constants == nil {
+		materialPass.Constants = make(map[string][]float32)
+	}
+	for key, value := range other.Constants {
+		materialPass.Constants[key] = value
+	}
+	if other.Target != "" {
+		materialPass.Target = other.Target
+	}
+	if len(other.Bind) > 0 {
+		materialPass.Bind = other.Bind
+	}
+}
+
+func (material *Material) mergePass(other MaterialPass) {
+	if len(other.Textures) > len(material.Textures) {
+		newTextures := make([]string, len(other.Textures))
+		copy(newTextures, material.Textures)
+		material.Textures = newTextures
+	}
+	for index, textureName := range other.Textures {
+		if textureName != "" {
+			material.Textures[index] = textureName
+		}
+	}
+	if material.Combos == nil {
+		material.Combos = make(map[string]int)
+	}
+	for key, value := range other.Combos {
+		material.Combos[key] = value
+	}
+	if material.Constants == nil {
+		material.Constants = make(map[string][]float32)
+	}
+	for key, value := range other.Constants {
+		material.Constants[key] = value
+	}
+}
+
+func (material *Material) parseFromJSON(raw json.RawMessage) error {
+	type materialPassJSON struct {
+		Blending             StringValue           `json:"blending"`
+		CullMode             StringValue           `json:"cullmode"`
+		DepthTest            StringValue           `json:"depthtest"`
+		DepthWrite           StringValue           `json:"depthwrite"`
+		Shader               StringValue           `json:"shader"`
+		Textures             []NullString          `json:"textures"`
+		ConstantShaderValues map[string]FloatSlice `json:"constantshadervalues"`
+		Combos               map[string]IntValue   `json:"combos"`
+	}
+
+	type materialJSON struct {
+		Passes []materialPassJSON `json:"passes"`
+	}
+
+	var payload materialJSON
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		return fmt.Errorf("cannot parse material document: %w", err)
+	}
+	if len(payload.Passes) == 0 {
+		return fmt.Errorf("material has empty passes array")
+	}
+
+	firstPass := payload.Passes[0]
+	if firstPass.Blending == "" || firstPass.CullMode == "" || firstPass.DepthTest == "" || firstPass.DepthWrite == "" || firstPass.Shader == "" {
+		return fmt.Errorf("material pass is missing required fields")
+	}
+
+	material.Blending = string(firstPass.Blending)
+	material.CullMode = string(firstPass.CullMode)
+	material.DepthTest = string(firstPass.DepthTest)
+	material.DepthWrite = string(firstPass.DepthWrite)
+	material.Shader = string(firstPass.Shader)
+
+	for _, texture := range firstPass.Textures {
+		material.Textures = append(material.Textures, string(texture))
+	}
+	if len(firstPass.ConstantShaderValues) > 0 {
+		if material.Constants == nil {
+			material.Constants = make(map[string][]float32)
+		}
+		for key, value := range firstPass.ConstantShaderValues {
+			material.Constants[key] = value
+		}
+	}
+	if len(firstPass.Combos) > 0 {
+		if material.Combos == nil {
+			material.Combos = make(map[string]int)
+		}
+		for key, value := range firstPass.Combos {
+			material.Combos[key] = int(value)
+		}
+	}
+
+	return nil
+}
+
+type EffectCommand struct {
+	Command  string
+	Target   string
+	Source   string
+	AfterPos int
+}
+
+type EffectFBO struct {
+	Name   string
+	Scale  int
+	Format string
+}
+
+type ImageEffect struct {
+	Version   int
+	ID        string
+	Name      string
+	Visible   bool
+	Passes    []MaterialPass
+	FBOs      []EffectFBO
+	Materials []Material
+	Commands  []EffectCommand
+}
+
+func (command *EffectCommand) parseFromJSON(raw json.RawMessage) error {
+	payload := struct {
+		Command StringValue `json:"command"`
+		Target  StringValue `json:"target"`
+		Source  StringValue `json:"source"`
+	}{}
+
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		return fmt.Errorf("cannot parse effect command: %w", err)
+	}
+	if payload.Command == "" || payload.Target == "" || payload.Source == "" {
+		return fmt.Errorf("effect command missing required fields")
+	}
+	command.Command = string(payload.Command)
+	command.Target = string(payload.Target)
+	command.Source = string(payload.Source)
+	return nil
+}
+
+func (fbo *EffectFBO) parseFromJSON(raw json.RawMessage) error {
+	payload := struct {
+		Name   StringValue `json:"name"`
+		Scale  IntValue    `json:"scale"`
+		Format StringValue `json:"format"`
+	}{
+		Scale: 1,
+	}
+
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		return fmt.Errorf("cannot parse effect fbo: %w", err)
+	}
+	if payload.Name == "" {
+		return fmt.Errorf("effect fbo missing name")
+	}
+	fbo.Name = string(payload.Name)
+	fbo.Scale = int(payload.Scale)
+	fbo.Format = string(payload.Format)
+	return nil
+}
+
+func (effect *ImageEffect) parseFromFileJSON(raw json.RawMessage, pkgMap *map[string][]byte) error {
+	payload := struct {
+		Version IntValue          `json:"version"`
+		Name    StringValue       `json:"name"`
+		FBOs    []json.RawMessage `json:"fbos"`
+		Passes  []json.RawMessage `json:"passes"`
+	}{}
+
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		return fmt.Errorf("cannot parse effect file JSON: %w", err)
+	}
+
+	effect.Version = int(payload.Version)
+	if payload.Name == "" {
+		return fmt.Errorf("effect has no name")
+	}
+	effect.Name = string(payload.Name)
+
+	for _, fboRaw := range payload.FBOs {
+		var fbo EffectFBO
+		if err := fbo.parseFromJSON(fboRaw); err != nil {
+			return err
+		}
+		effect.FBOs = append(effect.FBOs, fbo)
+	}
+
+	if len(payload.Passes) == 0 {
+		return errors.New("effect has no passes field")
+	}
+
+	composeEnabled := false
+
+	for _, passRaw := range payload.Passes {
+		passProbe := struct {
+			Material StringValue `json:"material"`
+			Command  StringValue `json:"command"`
+			Compose  BoolValue   `json:"compose"`
+		}{}
+		if err := json.Unmarshal(passRaw, &passProbe); err != nil {
+			return fmt.Errorf("cannot parse effect pass object: %w", err)
+		}
+
+		if passProbe.Material == "" {
+			if passProbe.Command != "" {
+				var command EffectCommand
+				if err := command.parseFromJSON(passRaw); err != nil {
+					return err
+				}
+				command.AfterPos = len(effect.Passes)
+				effect.Commands = append(effect.Commands, command)
+				continue
+			}
+			return errors.New("effect pass has no material or command")
+		}
+
+		materialPath := string(passProbe.Material)
+		materialBytes, err := loadBytesFromPackage(pkgMap, materialPath)
+		if err != nil {
+			return fmt.Errorf("cannot load material file %s: %w", materialPath, err)
+		}
+		var material Material
+		if err := material.parseFromJSON(materialBytes); err != nil {
+			return fmt.Errorf("cannot parse material %s: %w", materialPath, err)
+		}
+		effect.Materials = append(effect.Materials, material)
+
+		var pass MaterialPass
+		if err := pass.parseFromJSON(passRaw); err != nil {
+			return err
+		}
+		effect.Passes = append(effect.Passes, pass)
+
+		if bool(passProbe.Compose) {
+			composeEnabled = true
+		}
+	}
+
+	if composeEnabled {
+		if len(effect.Passes) != 2 {
+			return errors.New("effect compose option error: expected exactly 2 passes")
+		}
+		fbo := EffectFBO{
+			Name:  "_rt_FullCompoBuffer1",
+			Scale: 1,
+		}
+		effect.FBOs = append(effect.FBOs, fbo)
+
+		firstPass := &effect.Passes[0]
+		firstPass.Bind = append(firstPass.Bind, MaterialPassBindItem{
+			Name:  "previous",
+			Index: 0,
+		})
+		firstPass.Target = "_rt_FullCompoBuffer1"
+
+		secondPass := &effect.Passes[1]
+		secondPass.Bind = append(secondPass.Bind, MaterialPassBindItem{
+			Name:  "_rt_FullCompoBuffer1",
+			Index: 0,
+		})
+	}
+
+	return nil
+}
+
+func (effect *ImageEffect) parseFromSceneJSON(raw json.RawMessage, pkgMap *map[string][]byte) error {
+	payload := struct {
+		File    StringValue       `json:"file"`
+		ID      json.RawMessage   `json:"id"`
+		Name    StringValue       `json:"name"`
+		Visible BoolValue         `json:"visible"`
+		Passes  []json.RawMessage `json:"passes"`
+	}{
+		Visible: true,
+	}
+
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		return fmt.Errorf("cannot parse image effect from scene: %w", err)
+	}
+	if payload.File == "" {
+		return fmt.Errorf("effect entry missing file path")
+	}
+	effectPath := string(payload.File)
+
+	effectBytes, err := loadBytesFromPackage(pkgMap, effectPath)
+	if err != nil {
+		return fmt.Errorf("cannot load effect file %s: %w", effectPath, err)
+	}
+	if err := effect.parseFromFileJSON(effectBytes, pkgMap); err != nil {
+		return err
+	}
+
+	if len(payload.ID) > 0 {
+		if idValue, parseErr := parseStringFromRaw(payload.ID); parseErr == nil {
+			effect.ID = idValue
+		}
+	}
+
+	if strings.TrimSpace(string(payload.Name)) != "" {
+		effect.Name = string(payload.Name)
+	}
+
+	effect.Visible = bool(payload.Visible)
+
+	for index, passOverrideRaw := range payload.Passes {
+		if index >= len(effect.Passes) {
+			break
+		}
+		var overridePass MaterialPass
+		parseErr := overridePass.parseFromJSON(passOverrideRaw)
+		if parseErr != nil {
+			return parseErr
+		}
+		effect.Passes[index].updateFrom(overridePass)
+		if index < len(effect.Materials) {
+			effect.Materials[index].mergePass(overridePass)
+		}
+	}
+
+	return nil
+}
+
+type ImageConfig struct {
+	Passthrough bool
+}
+
+type ImageObject struct {
+	ID             int
+	Name           string
+	Origin         Vector3
+	Scale          Vector3
+	Angles         Vector3
+	Size           Vector2
+	ParallaxDepth  Vector2
+	Color          Vector3
+	ColorBlendMode int
+	Alpha          float32
+	Brightness     float32
+	Fullscreen     bool
+	NoPadding      bool
+	Visible        bool
+	ImagePath      string
+	Alignment      string
+	Material       Material
+	Effects        []ImageEffect
+	Config         ImageConfig
+	Puppet         string
+	PuppetLayers   []PuppetAnimationLayer
+}
+
+type PuppetAnimationLayer struct {
+	ID      int
+	Blend   float32
+	Rate    float32
+	Visible bool
+}
+
+func (imageObject *ImageObject) parseFromSceneJSON(raw json.RawMessage, pkgMap *map[string][]byte) error {
+	type layerJSON struct {
+		Animation IntValue   `json:"animation"`
+		Blend     FloatValue `json:"blend"`
+		Rate      FloatValue `json:"rate"`
+		Visible   BoolValue  `json:"visible"`
+	}
+
+	type configJSON struct {
+		Passthrough BoolValue `json:"passthrough"`
+	}
+
+	type imageSceneJSON struct {
+		ID              IntValue          `json:"id"`
+		Name            StringValue       `json:"name"`
+		Image           StringValue       `json:"image"`
+		Origin          Vector3           `json:"origin"`
+		Scale           Vector3           `json:"scale"`
+		Angles          Vector3           `json:"angles"`
+		Size            Vector2           `json:"size"`
+		ParallaxDepth   Vector2           `json:"parallaxDepth"`
+		Color           Vector3           `json:"color"`
+		ColorBlendMode  IntValue          `json:"colorBlendMode"`
+		Alpha           FloatValue        `json:"alpha"`
+		Brightness      FloatValue        `json:"brightness"`
+		Alignment       StringValue       `json:"alignment"`
+		Visible         BoolValue         `json:"visible"`
+		Effects         []json.RawMessage `json:"effects"`
+		AnimationLayers []layerJSON       `json:"animationlayers"`
+		Config          configJSON        `json:"config"`
+	}
+
+	type imageModelJSON struct {
+		Fullscreen BoolValue   `json:"fullscreen"`
+		Width      IntValue    `json:"width"`
+		Height     IntValue    `json:"height"`
+		NoPadding  BoolValue   `json:"nopadding"`
+		Puppet     StringValue `json:"puppet"`
+		Material   StringValue `json:"material"`
+	}
+
+	payload := imageSceneJSON{
+		Visible:    true,
+		Alignment:  "center",
+		Scale:      Vector3{1, 1, 1},
+		Color:      Vector3{1, 1, 1},
+		Alpha:      1,
+		Brightness: 1,
+	}
+
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		return fmt.Errorf("cannot parse image object: %w", err)
+	}
+	if payload.Image == "" {
+		return fmt.Errorf("image object missing image path")
+	}
+	imagePath := string(payload.Image)
+	imageObject.ImagePath = imagePath
+
+	imageObject.Visible = bool(payload.Visible)
+	imageObject.Alignment = string(payload.Alignment)
+	imageObject.Name = string(payload.Name)
+	imageObject.ID = int(payload.ID)
+	imageObject.ColorBlendMode = int(payload.ColorBlendMode)
+	imageObject.Origin = payload.Origin
+	imageObject.Angles = payload.Angles
+	imageObject.Scale = payload.Scale
+	imageObject.ParallaxDepth = payload.ParallaxDepth
+	imageObject.Color = payload.Color
+	imageObject.Alpha = float32(payload.Alpha)
+	imageObject.Brightness = float32(payload.Brightness)
+
+	modelBytes, err := loadBytesFromPackage(pkgMap, imagePath)
+	if err != nil {
+		return fmt.Errorf("cannot load model image JSON %s: %w", imagePath, err)
+	}
+	model := imageModelJSON{}
+	if err := json.Unmarshal(modelBytes, &model); err != nil {
+		return fmt.Errorf("cannot parse model image JSON %s: %w", imagePath, err)
+	}
+
+	imageObject.Fullscreen = bool(model.Fullscreen)
+	imageObject.Puppet = string(model.Puppet)
+	imageObject.NoPadding = bool(model.NoPadding)
+
+	if !imageObject.Fullscreen {
+		if imageObject.Origin == (Vector3{}) {
+			return fmt.Errorf("image object %s missing origin", imagePath)
+		}
+
+		switch {
+		case model.Width != 0 && model.Height != 0:
+			imageObject.Size = Vector2{float32(model.Width), float32(model.Height)}
+		case payload.Size != (Vector2{}):
+			imageObject.Size = payload.Size
+		default:
+			imageObject.Size = Vector2{imageObject.Origin[0] * 2, imageObject.Origin[1] * 2}
+		}
+	}
+
+	if model.Material == "" {
+		return fmt.Errorf("image object has no material in model JSON %s", imagePath)
+	}
+	materialPath := string(model.Material)
+	materialBytes, err := loadBytesFromPackage(pkgMap, materialPath)
+	if err != nil {
+		return fmt.Errorf("cannot load material %s: %w", materialPath, err)
+	}
+	if err := imageObject.Material.parseFromJSON(materialBytes); err != nil {
+		return fmt.Errorf("cannot parse material %s: %w", materialPath, err)
+	}
+
+	for _, effectRaw := range payload.Effects {
+		var effect ImageEffect
+		if err := effect.parseFromSceneJSON(effectRaw, pkgMap); err != nil {
+			return err
+		}
+		imageObject.Effects = append(imageObject.Effects, effect)
+	}
+
+	for _, layerRaw := range payload.AnimationLayers {
+		if layerRaw.Animation == 0 {
+			return fmt.Errorf("puppet animation layer missing animation id")
+		}
+		layer := PuppetAnimationLayer{
+			ID:      int(layerRaw.Animation),
+			Visible: true,
+		}
+		layer.Blend = float32(layerRaw.Blend)
+		layer.Rate = float32(layerRaw.Rate)
+		layer.Visible = bool(layerRaw.Visible)
+		imageObject.PuppetLayers = append(imageObject.PuppetLayers, layer)
+	}
+
+	imageObject.Config.Passthrough = bool(payload.Config.Passthrough)
+
+	return nil
+}
+
+type ParticleControlPointFlags uint32
+
+type ParticleControlPoint struct {
+	Flags  ParticleControlPointFlags
+	ID     int
+	Offset Vector3
+}
+
+type ParticleRender struct {
+	Name        string
+	Length      float32
+	MaxLength   float32
+	Subdivision float32
+}
+
+type Initializer struct {
+	Name string
+	Max  Vector3
+	Min  Vector3
+}
+
+type EmitterFlags uint32
+
+type Emitter struct {
+	Directions          Vector3
+	DistanceMax         Vector3
+	DistanceMin         Vector3
+	Origin              Vector3
+	Sign                [3]int32
+	Instantaneous       uint32
+	SpeedMin            float32
+	SpeedMax            float32
+	AudioProcessingMode uint32
+	ControlPoint        int
+	ID                  int
+	Flags               EmitterFlags
+	Name                string
+	Rate                float32
+}
+
+type ParticleChild struct {
+	Type              string
+	Name              string
+	MaxCount          uint32
+	ControlPointStart int
+	Probability       float32
+	Origin            Vector3
+	Scale             Vector3
+	Angles            Vector3
+	Object            Particle
+}
+
+type ParticleFlags uint32
+
+const (
+	ParticleFlagWorldSpace ParticleFlags = 1 << iota
+	ParticleFlagSpriteNoFrameBlending
+	ParticleFlagPerspective
+)
+
+type Particle struct {
+	Emitters           []Emitter
+	Initializers       []json.RawMessage
+	Operators          []json.RawMessage
+	Renderers          []ParticleRender
+	ControlPoints      []ParticleControlPoint
+	Material           Material
+	Children           []ParticleChild
+	AnimationMode      uint32
+	SequenceMultiplier float32
+	MaxCount           uint32
+	StartTime          float32
+	Flags              ParticleFlags
+}
+
+type ParticleInstanceOverride struct {
+	Enabled        bool
+	OverrideColor  bool
+	OverrideColorn bool
+	Alpha          float32
+	Count          float32
+	Lifetime       float32
+	Rate           float32
+	Speed          float32
+	Size           float32
+	Color          Vector3
+	ColorN         Vector3
+}
+
+type ParticleObject struct {
+	ID               int
+	Name             string
+	Origin           Vector3
+	Scale            Vector3
+	Angles           Vector3
+	ParallaxDepth    Vector2
+	Visible          bool
+	ParticlePath     string
+	ParticleData     Particle
+	InstanceOverride ParticleInstanceOverride
+}
+
+func (override *ParticleInstanceOverride) parseFromJSON(raw json.RawMessage) error {
+	payload := struct {
+		Alpha    FloatValue `json:"alpha"`
+		Size     FloatValue `json:"size"`
+		Lifetime FloatValue `json:"lifetime"`
+		Rate     FloatValue `json:"rate"`
+		Speed    FloatValue `json:"speed"`
+		Count    FloatValue `json:"count"`
+		Color    Vector3    `json:"color"`
+		ColorN   Vector3    `json:"colorn"`
+	}{}
+
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		return fmt.Errorf("cannot parse particle instance override: %w", err)
+	}
+	override.Enabled = true
+	override.Alpha = float32(payload.Alpha)
+	override.Size = float32(payload.Size)
+	override.Lifetime = float32(payload.Lifetime)
+	override.Rate = float32(payload.Rate)
+	override.Speed = float32(payload.Speed)
+	override.Count = float32(payload.Count)
+	if payload.Color != (Vector3{}) {
+		override.Color = payload.Color
+		override.OverrideColor = true
+	} else if payload.ColorN != (Vector3{}) {
+		override.ColorN = payload.ColorN
+		override.OverrideColorn = true
+	}
+	return nil
+}
+
+func (controlPoint *ParticleControlPoint) parseFromJSON(raw json.RawMessage) error {
+	payload := struct {
+		Flags  IntValue `json:"flags"`
+		ID     IntValue `json:"id"`
+		Offset Vector3  `json:"offset"`
+	}{}
+
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		return fmt.Errorf("cannot parse particle control point: %w", err)
+	}
+	controlPoint.ID = int(payload.ID)
+	controlPoint.Flags = ParticleControlPointFlags(payload.Flags)
+	controlPoint.Offset = payload.Offset
+	return nil
+}
+
+func (render *ParticleRender) parseFromJSON(raw json.RawMessage) error {
+	payload := struct {
+		Name        StringValue `json:"name"`
+		Length      FloatValue  `json:"length"`
+		MaxLength   FloatValue  `json:"maxlength"`
+		Subdivision FloatValue  `json:"subdivision"`
+	}{}
+
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		return fmt.Errorf("cannot parse particle render: %w", err)
+	}
+	if payload.Name == "" {
+		return fmt.Errorf("particle render missing name")
+	}
+	name := string(payload.Name)
+	if name == "ropetrail" {
+		name = "spritetrail"
+	}
+	render.Name = name
+	render.Length = float32(payload.Length)
+	render.MaxLength = float32(payload.MaxLength)
+	render.Subdivision = float32(payload.Subdivision)
+	return nil
+}
+
+func (emitter *Emitter) parseFromJSON(raw json.RawMessage) error {
+	payload := struct {
+		Directions          Vector3     `json:"directions"`
+		DistanceMax         Vector3     `json:"distancemax"`
+		DistanceMin         Vector3     `json:"distancemin"`
+		Origin              Vector3     `json:"origin"`
+		Sign                FloatSlice  `json:"sign"`
+		Instantaneous       IntValue    `json:"instantaneous"`
+		SpeedMin            FloatValue  `json:"speedmin"`
+		SpeedMax            FloatValue  `json:"speedmax"`
+		AudioProcessingMode IntValue    `json:"audioprocessingmode"`
+		ControlPoint        IntValue    `json:"controlpoint"`
+		ID                  IntValue    `json:"id"`
+		Flags               IntValue    `json:"flags"`
+		Name                StringValue `json:"name"`
+		Rate                FloatValue  `json:"rate"`
+	}{}
+
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		return fmt.Errorf("cannot parse particle emitter: %w", err)
+	}
+	emitter.Directions = payload.Directions
+	emitter.DistanceMax = payload.DistanceMax
+	emitter.DistanceMin = payload.DistanceMin
+	emitter.Origin = payload.Origin
+	if len(payload.Sign) == 3 {
+		emitter.Sign[0] = int32(payload.Sign[0])
+		emitter.Sign[1] = int32(payload.Sign[1])
+		emitter.Sign[2] = int32(payload.Sign[2])
+	}
+	emitter.Instantaneous = uint32(payload.Instantaneous)
+	emitter.SpeedMin = float32(payload.SpeedMin)
+	emitter.SpeedMax = float32(payload.SpeedMax)
+	emitter.AudioProcessingMode = uint32(payload.AudioProcessingMode)
+	emitter.ControlPoint = int(payload.ControlPoint)
+	emitter.ID = int(payload.ID)
+	emitter.Flags = EmitterFlags(payload.Flags)
+	emitter.Name = string(payload.Name)
+	emitter.Rate = float32(payload.Rate)
+	return nil
+}
+
+func (child *ParticleChild) parseFromJSON(raw json.RawMessage, pkgMap *map[string][]byte) error {
+	payload := struct {
+		Type              StringValue `json:"type"`
+		Name              StringValue `json:"name"`
+		MaxCount          IntValue    `json:"maxcount"`
+		ControlPointStart IntValue    `json:"controlpointstartindex"`
+		Probability       FloatValue  `json:"probability"`
+		Origin            Vector3     `json:"origin"`
+		Scale             Vector3     `json:"scale"`
+		Angles            Vector3     `json:"angles"`
+	}{
+		Type: "static",
+	}
+
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		return fmt.Errorf("cannot parse particle child: %w", err)
+	}
+	name := strings.TrimSpace(string(payload.Name))
+	if name == "" {
+		return nil
+	}
+
+	child.Name = name
+	child.Type = string(payload.Type)
+
+	particleBytes, err := loadBytesFromPackage(pkgMap, name)
+	if err != nil {
+		return fmt.Errorf("cannot load child particle %s: %w", name, err)
+	}
+	if err := child.Object.parseFromJSON(particleBytes, pkgMap); err != nil {
+		return err
+	}
+
+	child.MaxCount = uint32(payload.MaxCount)
+	child.ControlPointStart = int(payload.ControlPointStart)
+	child.Probability = float32(payload.Probability)
+	child.Origin = payload.Origin
+	child.Scale = payload.Scale
+	child.Angles = payload.Angles
+	return nil
+}
+
+func (particle *Particle) parseFromJSON(raw json.RawMessage, pkgMap *map[string][]byte) error {
+	payload := struct {
+		Emitters           []json.RawMessage `json:"emitter"`
+		Renderers          []json.RawMessage `json:"renderer"`
+		Initializers       []json.RawMessage `json:"initializer"`
+		Operators          []json.RawMessage `json:"operator"`
+		ControlPoints      []json.RawMessage `json:"controlpoint"`
+		Children           []json.RawMessage `json:"children"`
+		Material           StringValue       `json:"material"`
+		AnimationMode      json.RawMessage   `json:"animationmode"`
+		SequenceMultiplier FloatValue        `json:"sequencemultiplier"`
+		MaxCount           IntValue          `json:"maxcount"`
+		StartTime          FloatValue        `json:"starttime"`
+		Flags              IntValue          `json:"flags"`
+	}{}
+
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		return fmt.Errorf("cannot parse particle: %w", err)
+	}
+
+	if len(payload.Emitters) == 0 {
+		return fmt.Errorf("particle has no emitter array")
+	}
+
+	for _, emitterRaw := range payload.Emitters {
+		var emitter Emitter
+		if err := emitter.parseFromJSON(emitterRaw); err != nil {
+			return err
+		}
+		particle.Emitters = append(particle.Emitters, emitter)
+	}
+
+	for _, rendererRaw := range payload.Renderers {
+		var renderer ParticleRender
+		if err := renderer.parseFromJSON(rendererRaw); err != nil {
+			return err
+		}
+		particle.Renderers = append(particle.Renderers, renderer)
+	}
+	if len(particle.Renderers) == 0 {
+		particle.Renderers = append(particle.Renderers, ParticleRender{
+			Name: "sprite",
+		})
+	}
+
+	particle.Initializers = append(particle.Initializers, payload.Initializers...)
+	particle.Operators = append(particle.Operators, payload.Operators...)
+
+	for _, controlRaw := range payload.ControlPoints {
+		var controlPoint ParticleControlPoint
+		if err := controlPoint.parseFromJSON(controlRaw); err != nil {
+			return err
+		}
+		particle.ControlPoints = append(particle.ControlPoints, controlPoint)
+	}
+
+	for _, childRaw := range payload.Children {
+		var child ParticleChild
+		if err := child.parseFromJSON(childRaw, pkgMap); err != nil {
+			return err
+		}
+		if child.Name != "" {
+			particle.Children = append(particle.Children, child)
+		}
+	}
+
+	if payload.Material == "" {
+		return fmt.Errorf("particle has no material field")
+	}
+	materialBytes, err := loadBytesFromPackage(pkgMap, string(payload.Material))
+	if err != nil {
+		return fmt.Errorf("cannot load particle material %s: %w", string(payload.Material), err)
+	}
+	if err := particle.Material.parseFromJSON(materialBytes); err != nil {
+		return fmt.Errorf("cannot parse particle material %s: %w", string(payload.Material), err)
+	}
+
+	if len(payload.AnimationMode) > 0 {
+		if value, parseErr := parseIntFromRaw(payload.AnimationMode); parseErr == nil {
+			particle.AnimationMode = uint32(value)
+		}
+	}
+	particle.SequenceMultiplier = float32(payload.SequenceMultiplier)
+	particle.MaxCount = uint32(payload.MaxCount)
+	particle.StartTime = float32(payload.StartTime)
+	particle.Flags = ParticleFlags(payload.Flags)
+
+	return nil
+}
+
+func (particleObject *ParticleObject) parseFromSceneJSON(raw json.RawMessage, pkgMap *map[string][]byte) error {
+	payload := struct {
+		ID               IntValue        `json:"id"`
+		Name             StringValue     `json:"name"`
+		Origin           Vector3         `json:"origin"`
+		Scale            Vector3         `json:"scale"`
+		Angles           Vector3         `json:"angles"`
+		ParallaxDepth    Vector2         `json:"parallaxDepth"`
+		Visible          BoolValue       `json:"visible"`
+		Particle         StringValue     `json:"particle"`
+		InstanceOverride json.RawMessage `json:"instanceoverride"`
+	}{
+		Visible: true,
+	}
+
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		return fmt.Errorf("cannot parse particle object: %w", err)
+	}
+	if payload.Particle == "" {
+		return fmt.Errorf("particle object missing particle path")
+	}
+
+	particlePath := string(payload.Particle)
+	particleObject.ParticlePath = particlePath
+
+	particleObject.Visible = bool(payload.Visible)
+	particleObject.Name = string(payload.Name)
+	particleObject.ID = int(payload.ID)
+	particleObject.Origin = payload.Origin
+	particleObject.Scale = payload.Scale
+	particleObject.Angles = payload.Angles
+	particleObject.ParallaxDepth = payload.ParallaxDepth
+
+	if bytesFromRawNullAware(payload.InstanceOverride) != nil {
+		var instanceOverride ParticleInstanceOverride
+		if err := instanceOverride.parseFromJSON(payload.InstanceOverride); err != nil {
+			return err
+		}
+		particleObject.InstanceOverride = instanceOverride
+	}
+
+	particleBytes, err := loadBytesFromPackage(pkgMap, particlePath)
+	if err != nil {
+		return fmt.Errorf("cannot load particle file %s: %w", particlePath, err)
+	}
+	if err := particleObject.ParticleData.parseFromJSON(particleBytes, pkgMap); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+type SoundPlaybackMode string
+
+type ScriptValue struct {
+	Value            float32
+	Script           string
+	ScriptProperties map[string]json.RawMessage
+}
+
+type SoundObject struct {
+	ID            int
+	Name          string
+	Origin        Vector3
+	Scale         Vector3
+	Angles        Vector3
+	ParallaxDepth Vector2
+	SoundFiles    []string
+	PlaybackMode  SoundPlaybackMode
+	Volume        ScriptValue
+	StartSilent   bool
+	MinTime       float32
+	MaxTime       float32
+	MuteInEditor  bool
+}
+
+type LightObject struct {
+	ID            int
+	Name          string
+	Origin        Vector3
+	Scale         Vector3
+	Angles        Vector3
+	Color         Vector3
+	LightType     string
+	Radius        float32
+	Intensity     float32
+	Visible       bool
+	ParallaxDepth Vector2
+}
+
+func (value *ScriptValue) UnmarshalJSON(raw []byte) error {
+	*value = ScriptValue{
+		Value:            0,
+		Script:           "",
+		ScriptProperties: make(map[string]json.RawMessage),
+	}
+
+	trimmed := bytesFromRawNullAware(raw)
+	if trimmed == nil {
+		return nil
+	}
+
+	type scriptJSON struct {
+		Value            FloatValue                 `json:"value"`
+		Script           StringValue                `json:"script"`
+		ScriptProperties map[string]json.RawMessage `json:"scriptproperties"`
+	}
+
+	var payload scriptJSON
+	if err := json.Unmarshal(trimmed, &payload); err == nil {
+		value.Value = float32(payload.Value)
+		value.Script = string(payload.Script)
+		if payload.ScriptProperties != nil {
+			value.ScriptProperties = payload.ScriptProperties
+		}
+		return nil
+	}
+
+	numericValue, err := parseFloat64FromRaw(trimmed)
+	if err != nil {
+		return fmt.Errorf("cannot parse script value: %w", err)
+	}
+	value.Value = float32(numericValue)
+	return nil
+}
+
+func (sound *SoundObject) parseFromSceneJSON(raw json.RawMessage) error {
+	payload := struct {
+		ID            IntValue      `json:"id"`
+		Name          StringValue   `json:"name"`
+		Origin        Vector3       `json:"origin"`
+		Scale         Vector3       `json:"scale"`
+		Angles        Vector3       `json:"angles"`
+		ParallaxDepth Vector2       `json:"parallaxDepth"`
+		Sound         []StringValue `json:"sound"`
+		PlaybackMode  StringValue   `json:"playbackmode"`
+		Volume        ScriptValue   `json:"volume"`
+		StartSilent   BoolValue     `json:"startsilent"`
+		MinTime       FloatValue    `json:"mintime"`
+		MaxTime       FloatValue    `json:"maxtime"`
+		MuteInEditor  BoolValue     `json:"muteineditor"`
+	}{}
+
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		return fmt.Errorf("cannot parse sound object: %w", err)
+	}
+
+	for _, entry := range payload.Sound {
+		if entry == "" {
+			continue
+		}
+		sound.SoundFiles = append(sound.SoundFiles, string(entry))
+	}
+	sound.Name = string(payload.Name)
+	sound.ID = int(payload.ID)
+	sound.Origin = payload.Origin
+	sound.Scale = payload.Scale
+	sound.Angles = payload.Angles
+	sound.ParallaxDepth = payload.ParallaxDepth
+	sound.PlaybackMode = SoundPlaybackMode(payload.PlaybackMode)
+	sound.Volume = payload.Volume
+	sound.StartSilent = bool(payload.StartSilent)
+	sound.MinTime = float32(payload.MinTime)
+	sound.MaxTime = float32(payload.MaxTime)
+	sound.MuteInEditor = bool(payload.MuteInEditor)
+
+	return nil
+}
+
+func (light *LightObject) parseFromSceneJSON(raw json.RawMessage) error {
+	payload := struct {
+		Origin        Vector3     `json:"origin"`
+		Scale         Vector3     `json:"scale"`
+		Angles        Vector3     `json:"angles"`
+		Color         Vector3     `json:"color"`
+		Light         StringValue `json:"light"`
+		Radius        FloatValue  `json:"radius"`
+		Intensity     FloatValue  `json:"intensity"`
+		Visible       BoolValue   `json:"visible"`
+		Name          StringValue `json:"name"`
+		ID            IntValue    `json:"id"`
+		ParallaxDepth Vector2     `json:"parallaxDepth"`
+	}{
+		Visible: true,
+	}
+
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		return fmt.Errorf("cannot parse light object: %w", err)
+	}
+	if payload.Light == "" {
+		return fmt.Errorf("light object missing light type")
+	}
+
+	light.Origin = payload.Origin
+	light.Scale = payload.Scale
+	light.Color = payload.Color
+	light.LightType = string(payload.Light)
+	light.Radius = float32(payload.Radius)
+	light.Intensity = float32(payload.Intensity)
+
+	light.Angles = payload.Angles
+	light.Visible = bool(payload.Visible)
+	light.Name = string(payload.Name)
+	light.ID = int(payload.ID)
+	light.ParallaxDepth = payload.ParallaxDepth
+
+	return nil
+}
 
 type OrthogonalProjection struct {
 	Width  int
@@ -42,206 +1477,115 @@ type Scene struct {
 	Version int
 }
 
-func parseOrthogonalProjection(raw json.RawMessage) (OrthogonalProjection, error) {
+func parseOrthogonalProjection(raw json.RawMessage) (OrthogonalProjection, bool, error) {
+	type orthogonalProjectionJSON struct {
+		Width  IntValue  `json:"width"`
+		Height IntValue  `json:"height"`
+		Auto   BoolValue `json:"auto"`
+	}
+
 	var projection OrthogonalProjection
 	if bytesFromRawNullAware(raw) == nil {
-		return projection, nil
+		return projection, true, nil
 	}
-	var object map[string]json.RawMessage
-	err := json.Unmarshal(raw, &object)
-	if err != nil {
-		return projection, fmt.Errorf("cannot parse orthogonal projection: %w", err)
+	var payload orthogonalProjectionJSON
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		return projection, false, fmt.Errorf("cannot parse orthogonal projection: %w", err)
 	}
-	if autoRaw, exists := getOptionalField(object, "auto"); exists {
-		value, parseErr := parseBoolFromRaw(autoRaw)
-		if parseErr != nil {
-			return projection, fmt.Errorf("cannot parse orthogonal auto flag: %w", parseErr)
-		}
-		projection.Auto = value
-	} else {
-		widthRaw, err := getRequiredField(object, "width")
-		if err != nil {
-			return projection, err
-		}
-		heightRaw, err := getRequiredField(object, "height")
-		if err != nil {
-			return projection, err
-		}
-		width, err := parseIntFromRaw(widthRaw)
-		if err != nil {
-			return projection, fmt.Errorf("cannot parse orthogonal width: %w", err)
-		}
-		height, err := parseIntFromRaw(heightRaw)
-		if err != nil {
-			return projection, fmt.Errorf("cannot parse orthogonal height: %w", err)
-		}
-		projection.Width = width
-		projection.Height = height
+	if payload.Auto {
+		projection.Auto = true
+		return projection, true, nil
 	}
-	return projection, nil
+	projection.Width = int(payload.Width)
+	projection.Height = int(payload.Height)
+	return projection, true, nil
 }
 
 func parseSceneCamera(raw json.RawMessage) (SceneCamera, error) {
+	type cameraJSON struct {
+		Center Vector3 `json:"center"`
+		Eye    Vector3 `json:"eye"`
+		Up     Vector3 `json:"up"`
+	}
+
 	var camera SceneCamera
-	var object map[string]json.RawMessage
-	err := json.Unmarshal(raw, &object)
-	if err != nil {
+	var payload cameraJSON
+	if err := json.Unmarshal(raw, &payload); err != nil {
 		return camera, fmt.Errorf("cannot parse camera: %w", err)
 	}
-	centerRaw, err := getRequiredField(object, "center")
-	if err != nil {
-		return camera, err
-	}
-	eyeRaw, err := getRequiredField(object, "eye")
-	if err != nil {
-		return camera, err
-	}
-	upRaw, err := getRequiredField(object, "up")
-	if err != nil {
-		return camera, err
-	}
-
-	center, err := parseVector3FromRaw(centerRaw, camera.Center)
-	if err != nil {
-		return camera, fmt.Errorf("cannot parse camera center: %w", err)
-	}
-	eye, err := parseVector3FromRaw(eyeRaw, camera.Eye)
-	if err != nil {
-		return camera, fmt.Errorf("cannot parse camera eye: %w", err)
-	}
-	up, err := parseVector3FromRaw(upRaw, camera.Up)
-	if err != nil {
-		return camera, fmt.Errorf("cannot parse camera up: %w", err)
-	}
-
-	camera.Center = center
-	camera.Eye = eye
-	camera.Up = up
+	camera.Center = payload.Center
+	camera.Eye = payload.Eye
+	camera.Up = payload.Up
 
 	return camera, nil
 }
 
 func parseSceneGeneral(raw json.RawMessage) (SceneGeneral, error) {
-	var general SceneGeneral
-	general.Ortho.Width = 1920
-	general.Ortho.Height = 1080
-	general.Zoom = 1
-	general.FOV = 50
-	general.NearZ = 0.01
-	general.FarZ = 10000
-	general.AmbientColor = Vector3{0.2, 0.2, 0.2}
-	general.SkyLightColor = Vector3{0.3, 0.3, 0.3}
+	type generalJSON struct {
+		AmbientColor            Vector3         `json:"ambientcolor"`
+		SkyLightColor           Vector3         `json:"skylightcolor"`
+		ClearColor              Vector3         `json:"clearcolor"`
+		CameraParallax          BoolValue       `json:"cameraparallax"`
+		CameraParallaxAmount    FloatValue      `json:"cameraparallaxamount"`
+		CameraParallaxDelay     FloatValue      `json:"cameraparallaxdelay"`
+		CameraParallaxMouse     FloatValue      `json:"cameraparallaxmouseinfluence"`
+		Zoom                    FloatValue      `json:"zoom"`
+		FOV                     FloatValue      `json:"fov"`
+		NearZ                   FloatValue      `json:"nearz"`
+		FarZ                    FloatValue      `json:"farz"`
+		OrthogonalProjectionRaw json.RawMessage `json:"orthogonalprojection"`
+	}
 
-	var object map[string]json.RawMessage
-	err := json.Unmarshal(raw, &object)
-	if err != nil {
+	general := SceneGeneral{
+		Ortho:         OrthogonalProjection{Width: 1920, Height: 1080},
+		Zoom:          1,
+		FOV:           50,
+		NearZ:         0.01,
+		FarZ:          10000,
+		AmbientColor:  Vector3{0.2, 0.2, 0.2},
+		SkyLightColor: Vector3{0.3, 0.3, 0.3},
+		Orthographic:  true,
+	}
+
+	var payload generalJSON
+	if err := json.Unmarshal(raw, &payload); err != nil {
 		return general, fmt.Errorf("cannot parse general block: %w", err)
 	}
 
-	ambientRaw, err := getRequiredField(object, "ambientcolor")
-	if err != nil {
-		return general, err
+	general.AmbientColor = payload.AmbientColor
+	general.SkyLightColor = payload.SkyLightColor
+	general.ClearColor = payload.ClearColor
+	general.Parallax = bool(payload.CameraParallax)
+	general.ParallaxAmount = float32(payload.CameraParallaxAmount)
+	general.ParallaxDelay = float32(payload.CameraParallaxDelay)
+	general.ParallaxMouseInfluence = float32(payload.CameraParallaxMouse)
+
+	if payload.Zoom != 0 {
+		general.Zoom = float32(payload.Zoom)
 	}
-	skylightRaw, err := getRequiredField(object, "skylightcolor")
-	if err != nil {
-		return general, err
+	if payload.FOV != 0 {
+		general.FOV = float32(payload.FOV)
 	}
-	clearRaw, err := getRequiredField(object, "clearcolor")
-	if err != nil {
-		return general, err
+	if payload.NearZ != 0 {
+		general.NearZ = float32(payload.NearZ)
 	}
-	cameraParallaxRaw, err := getRequiredField(object, "cameraparallax")
-	if err != nil {
-		return general, err
-	}
-	cameraParallaxAmountRaw, err := getRequiredField(object, "cameraparallaxamount")
-	if err != nil {
-		return general, err
-	}
-	cameraParallaxDelayRaw, err := getRequiredField(object, "cameraparallaxdelay")
-	if err != nil {
-		return general, err
-	}
-	cameraParallaxMouseRaw, err := getRequiredField(object, "cameraparallaxmouseinfluence")
-	if err != nil {
-		return general, err
+	if payload.FarZ != 0 {
+		general.FarZ = float32(payload.FarZ)
 	}
 
-	ambient, err := parseVector3FromRaw(ambientRaw, general.AmbientColor)
-	if err != nil {
-		return general, fmt.Errorf("cannot parse ambient color: %w", err)
-	}
-	skylight, err := parseVector3FromRaw(skylightRaw, general.SkyLightColor)
-	if err != nil {
-		return general, fmt.Errorf("cannot parse skylight color: %w", err)
-	}
-	clearColor, err := parseVector3FromRaw(clearRaw, general.ClearColor)
-	if err != nil {
-		return general, fmt.Errorf("cannot parse clear color: %w", err)
-	}
-	cameraParallaxValue, err := parseBoolFromRaw(cameraParallaxRaw)
-	if err != nil {
-		return general, fmt.Errorf("cannot parse camera parallax flag: %w", err)
-	}
-	cameraParallaxAmountValue, err := parseFloat64FromRaw(cameraParallaxAmountRaw)
-	if err != nil {
-		return general, fmt.Errorf("cannot parse camera parallax amount: %w", err)
-	}
-	cameraParallaxDelayValue, err := parseFloat64FromRaw(cameraParallaxDelayRaw)
-	if err != nil {
-		return general, fmt.Errorf("cannot parse camera parallax delay: %w", err)
-	}
-	cameraParallaxMouseValue, err := parseFloat64FromRaw(cameraParallaxMouseRaw)
-	if err != nil {
-		return general, fmt.Errorf("cannot parse camera parallax mouse influence: %w", err)
-	}
-
-	general.AmbientColor = ambient
-	general.SkyLightColor = skylight
-	general.ClearColor = clearColor
-	general.Parallax = cameraParallaxValue
-	general.ParallaxAmount = float32(cameraParallaxAmountValue)
-	general.ParallaxDelay = float32(cameraParallaxDelayValue)
-	general.ParallaxMouseInfluence = float32(cameraParallaxMouseValue)
-
-	if zoomRaw, exists := getOptionalField(object, "zoom"); exists {
-		value, parseErr := parseFloat64FromRaw(zoomRaw)
-		if parseErr == nil {
-			general.Zoom = float32(value)
+	if payload.OrthogonalProjectionRaw != nil {
+		projection, present, err := parseOrthogonalProjection(payload.OrthogonalProjectionRaw)
+		if err != nil {
+			return general, err
 		}
-	}
-	if fovRaw, exists := getOptionalField(object, "fov"); exists {
-		value, parseErr := parseFloat64FromRaw(fovRaw)
-		if parseErr == nil {
-			general.FOV = float32(value)
-		}
-	}
-	if nearRaw, exists := getOptionalField(object, "nearz"); exists {
-		value, parseErr := parseFloat64FromRaw(nearRaw)
-		if parseErr == nil {
-			general.NearZ = float32(value)
-		}
-	}
-	if farRaw, exists := getOptionalField(object, "farz"); exists {
-		value, parseErr := parseFloat64FromRaw(farRaw)
-		if parseErr == nil {
-			general.FarZ = float32(value)
-		}
-	}
-
-	if orthoRaw, exists := getOptionalField(object, "orthogonalprojection"); exists {
-		if bytesFromRawNullAware(orthoRaw) == nil {
-			general.Orthographic = false
-		} else {
-			projection, parseErr := parseOrthogonalProjection(orthoRaw)
-			if parseErr != nil {
-				return general, parseErr
+		if present {
+			if bytesFromRawNullAware(payload.OrthogonalProjectionRaw) == nil {
+				general.Orthographic = false
+			} else {
+				general.Ortho = projection
+				general.Orthographic = true
 			}
-			general.Orthographic = true
-			general.Ortho = projection
 		}
-	} else {
-		general.Orthographic = true
 	}
 
 	return general, nil
@@ -252,16 +1596,22 @@ func ParseScene(pkgMap *map[string][]byte) (Scene, error) {
 	if err != nil {
 		return Scene{}, err
 	}
-	var root map[string]json.RawMessage
-	err = json.Unmarshal(sceneBytes, &root)
-	if err != nil {
+	type sceneJSON struct {
+		Camera  json.RawMessage   `json:"camera"`
+		General json.RawMessage   `json:"general"`
+		Objects []json.RawMessage `json:"objects"`
+		Version IntValue          `json:"version"`
+	}
+
+	var payload sceneJSON
+	if err := json.Unmarshal(sceneBytes, &payload); err != nil {
 		return Scene{}, fmt.Errorf("cannot parse scene JSON: %w", err)
 	}
 
 	scene := Scene{}
 
-	if cameraRaw, exists := root["camera"]; exists {
-		camera, parseErr := parseSceneCamera(cameraRaw)
+	if payload.Camera != nil {
+		camera, parseErr := parseSceneCamera(payload.Camera)
 		if parseErr != nil {
 			return Scene{}, parseErr
 		}
@@ -270,8 +1620,8 @@ func ParseScene(pkgMap *map[string][]byte) (Scene, error) {
 		return Scene{}, fmt.Errorf("scene has no camera object")
 	}
 
-	if generalRaw, exists := root["general"]; exists {
-		general, parseErr := parseSceneGeneral(generalRaw)
+	if payload.General != nil {
+		general, parseErr := parseSceneGeneral(payload.General)
 		if parseErr != nil {
 			return Scene{}, parseErr
 		}
@@ -280,61 +1630,47 @@ func ParseScene(pkgMap *map[string][]byte) (Scene, error) {
 		return Scene{}, fmt.Errorf("scene has no general block")
 	}
 
-	if versionRaw, exists := root["version"]; exists {
-		version, parseErr := parseIntFromRaw(versionRaw)
-		if parseErr == nil {
-			scene.Version = version
+	scene.Version = int(payload.Version)
+
+	for _, objectRaw := range payload.Objects {
+		var objectProbe struct {
+			Particle json.RawMessage `json:"particle"`
+			Image    json.RawMessage `json:"image"`
+			Sound    json.RawMessage `json:"sound"`
+			Light    json.RawMessage `json:"light"`
 		}
-	}
-
-	objectsRaw, exists := root["objects"]
-	if !exists {
-		return Scene{}, nil
-	}
-	var objectsArray []json.RawMessage
-	err = json.Unmarshal(objectsRaw, &objectsArray)
-	if err != nil {
-		return Scene{}, fmt.Errorf("cannot parse scene objects array: %w", err)
-	}
-
-	for _, objectRaw := range objectsArray {
-		var object map[string]json.RawMessage
-		parseErr := json.Unmarshal(objectRaw, &object)
+		parseErr := json.Unmarshal(objectRaw, &objectProbe)
 		if parseErr != nil {
 			return Scene{}, fmt.Errorf("cannot parse object entry: %w", parseErr)
 		}
-		if _, hasParticle := object["particle"]; hasParticle {
+		if len(objectProbe.Particle) > 0 {
 			var particleObject ParticleObject
-			parseErr = particleObject.parseFromSceneJSON(objectRaw, pkgMap)
-			if parseErr != nil {
-				return Scene{}, parseErr
+			if err := particleObject.parseFromSceneJSON(objectRaw, pkgMap); err != nil {
+				return Scene{}, err
 			}
 			scene.Objects = append(scene.Objects, &particleObject)
 			continue
 		}
-		if _, hasImage := object["image"]; hasImage {
+		if len(objectProbe.Image) > 0 {
 			var imageObject ImageObject
-			parseErr = imageObject.parseFromSceneJSON(objectRaw, pkgMap)
-			if parseErr != nil {
-				return Scene{}, parseErr
+			if err := imageObject.parseFromSceneJSON(objectRaw, pkgMap); err != nil {
+				return Scene{}, err
 			}
 			scene.Objects = append(scene.Objects, &imageObject)
 			continue
 		}
-		if _, hasSound := object["sound"]; hasSound {
+		if len(objectProbe.Sound) > 0 {
 			var soundObject SoundObject
-			parseErr = soundObject.parseFromSceneJSON(objectRaw)
-			if parseErr != nil {
-				return Scene{}, parseErr
+			if err := soundObject.parseFromSceneJSON(objectRaw); err != nil {
+				return Scene{}, err
 			}
 			scene.Objects = append(scene.Objects, &soundObject)
 			continue
 		}
-		if _, hasLight := object["light"]; hasLight {
+		if len(objectProbe.Light) > 0 {
 			var lightObject LightObject
-			parseErr = lightObject.parseFromSceneJSON(objectRaw)
-			if parseErr != nil {
-				return Scene{}, parseErr
+			if err := lightObject.parseFromSceneJSON(objectRaw); err != nil {
+				return Scene{}, err
 			}
 			scene.Objects = append(scene.Objects, &lightObject)
 			continue
