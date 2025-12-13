@@ -174,7 +174,8 @@ bool wd_wlroots_output_init(void** data) {
     SDL_ShowWindow(odata->window);
     SDL_EnableScreenSaver();
 
-    if(strcmp(getenv("XDG_CURRENT_DESKTOP"), "Hyprland") == 0) {
+    const char* desktop = getenv("XDG_CURRENT_DESKTOP");
+    if(desktop != NULL && strcmp(desktop, "Hyprland") == 0) {
         odata->session_type = SESSION_HYPRLAND;
     } else {
         odata->session_type = SESSION_WLROOTS;
