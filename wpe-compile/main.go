@@ -82,6 +82,7 @@ type CodegenTransformData struct {
 	Perspective            bool
 	NearZ                  float32
 	FarZ                   float32
+	FOV                    float32
 }
 
 type CodegenPassData struct {
@@ -412,6 +413,7 @@ func processImageObjectInit(object ImageObject, tempBuffers *[2]int) (CodegenPas
 		Perspective:            false,
 		NearZ:                  float32(scene.General.NearZ),
 		FarZ:                   float32(scene.General.FarZ),
+		FOV:                    float32(scene.General.FOV),
 	}
 
 	passData.UniformSetupCode += generateUniformSetupCode(UniformCodegenContext{
@@ -575,6 +577,7 @@ func processImageEffect(object ImageObject, effect ImageEffect, tempBuffers *[2]
 			Perspective:            false,
 			NearZ:                  float32(scene.General.NearZ),
 			FarZ:                   float32(scene.General.FarZ),
+			FOV:                    float32(scene.General.FOV),
 		}
 
 		passData.UniformSetupCode += generateUniformSetupCode(UniformCodegenContext{
@@ -696,6 +699,7 @@ func processParticleObject(object ParticleObject) {
 		Perspective:            usePerspective,
 		NearZ:                  float32(scene.General.NearZ),
 		FarZ:                   float32(scene.General.FarZ),
+		FOV:                    float32(scene.General.FOV),
 	}
 
 	codegenData.Passes = append(codegenData.Passes, passData)

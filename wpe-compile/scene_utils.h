@@ -51,6 +51,7 @@ typedef struct {
     int perspective;
     float near_z;
     float far_z;
+    float fov;
     scale_mode_t scale_mode;
     float mouse_x;
     float mouse_y;
@@ -225,13 +226,13 @@ static transform_matrices_t compute_transform_matrices(transform_parameters_t pa
         if(params.scale_mode == SCALE_MODE_STRETCH) {
             aspect = scene_aspect;
         }
-        float fov = 2.0f * atanf((cam_height * 0.5f) / camera_distance);
+        float fov_radians = params.fov * M_PI / 180.0f;
         glsl_vec3 eye = {{params.scene_width * 0.5f, params.scene_height * 0.5f, camera_distance}};
         glsl_vec3 center = eye;
         center.at[2] -= 1.0f;
         glsl_vec3 up = {{0.0f, 1.0f, 0.0f}};
         glsl_mat4 view = mat4_look_at(eye, center, up);
-        glsl_mat4 proj = mat4_perspective(fov, aspect, params.near_z, params.far_z);
+        glsl_mat4 proj = mat4_perspective(fov_radians, aspect, params.near_z, params.far_z);
         vp = mat4_multiply(proj, view);
     } else {
         vp.at[0][0] = vp_scale_x;
@@ -421,7 +422,7 @@ void spawn_particle_instance(particle_t* particle, particle_emitter_t* emitter) 
 
     switch(emitter->type) {
         case PARTICLE_EMITTER_TYPE_SPHERERANDOM: {
-            while(true) {
+            for(int it = 0; it < 10; it++) {
                 float dist = 0.0f;
                 for(int i = 0; i < 3; i++) {
                     float offset =
@@ -445,6 +446,7 @@ void spawn_particle_instance(particle_t* particle, particle_emitter_t* emitter) 
     if(particle->init.randomize_size) {
         instance->size = rand_float(particle->init.min_size, particle->init.max_size);
     }
+    instance->size /= 2.0f;
 
     for(int i = 0; i < 3; i++) {
         instance->velocity[i] = particle->init.min_velocity[i];

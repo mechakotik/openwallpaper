@@ -26,7 +26,7 @@ type SceneGeneral struct {
 	Orthographic           bool
 	Ortho                  OrthogonalProjection
 	Zoom                   float32
-	Fov                    float32
+	FOV                    float32
 	NearZ                  float32
 	FarZ                   float32
 	AmbientColor           Vector3
@@ -126,7 +126,7 @@ func parseSceneGeneral(raw json.RawMessage) (SceneGeneral, error) {
 	general.Ortho.Width = 1920
 	general.Ortho.Height = 1080
 	general.Zoom = 1
-	general.Fov = 50
+	general.FOV = 50
 	general.NearZ = 0.01
 	general.FarZ = 10000
 	general.AmbientColor = Vector3{0.2, 0.2, 0.2}
@@ -213,7 +213,7 @@ func parseSceneGeneral(raw json.RawMessage) (SceneGeneral, error) {
 	if fovRaw, exists := getOptionalField(object, "fov"); exists {
 		value, parseErr := parseFloat64FromRaw(fovRaw)
 		if parseErr == nil {
-			general.Fov = float32(value)
+			general.FOV = float32(value)
 		}
 	}
 	if nearRaw, exists := getOptionalField(object, "nearz"); exists {
