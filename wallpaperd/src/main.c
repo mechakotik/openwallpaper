@@ -87,7 +87,11 @@ int main(int argc, char* argv[]) {
 
         float delta = 0;
         if(!frame_skipped && cur_time > prev_time) {
-            delta = (float)(cur_time - prev_time) / 1e9;
+            uint64_t delta_ns = cur_time - prev_time;
+            if(delta_ns > (uint64_t)frame_time * 5) {
+                delta_ns = (uint64_t)frame_time * 5;
+            }
+            delta = (float)delta_ns / 1e9;
         }
         prev_time = cur_time;
         frame_skipped = false;
