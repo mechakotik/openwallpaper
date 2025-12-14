@@ -24,7 +24,9 @@ static void print_help() {
 int main(int argc, char* argv[]) {
     wd_state state;
     wd_init_state(&state);
-    wd_parse_args(&state.args, argc, argv);
+    if(!wd_parse_args(&state.args, argc, argv)) {
+        goto handle_error;
+    }
 
     if(wd_get_option(&state.args, "help") != NULL) {
         print_help();
@@ -33,6 +35,7 @@ int main(int argc, char* argv[]) {
     }
 
     if(wd_get_wallpaper_path(&state.args) == NULL) {
+        wd_set_error("no wallpaper path specified");
         goto handle_error;
     }
     if(!wd_init_output(&state.output, &state.args)) {
@@ -57,6 +60,10 @@ int main(int argc, char* argv[]) {
     uint32_t fps = 0, frame_time = 0;
     if(wd_get_option(&state.args, "fps") != NULL) {
         fps = atoi(wd_get_option(&state.args, "fps"));
+        if(fps <= 0) {
+            wd_set_error("invalid fps value");
+            goto handle_error;
+        }
         frame_time = 1000000000 / fps;
     }
 
