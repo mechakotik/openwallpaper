@@ -6,8 +6,8 @@
 #include <stdint.h>
 
 /**
- * A type representing an object ID. It is basically wrapper around a pointer to object stored in host application
- * memory. Valid object ID is never zero, this value is reserved for different purposes.
+ * A type representing an object ID - a handle of object stored in host memory. Valid object ID is never zero, this
+ * value is reserved for different purposes.
  *
  * \see `ow_free`
  */
@@ -109,13 +109,13 @@ typedef enum {
     OW_CULL_BACK,
 } ow_cull_mode;
 
-enum {
+typedef enum {
     OW_BUTTON_LEFT = (1 << 0),
     OW_BUTTON_RIGHT = (1 << 1),
     OW_BUTTON_MIDDLE = (1 << 2),
     OW_BUTTON_X1 = (1 << 3),
     OW_BUTTON_X2 = (1 << 4),
-};
+} ow_mouse_button;
 
 /**
  * A structure specifying render pass parameters.
@@ -147,7 +147,7 @@ typedef struct {
  */
 typedef struct {
     ow_id texture;      // ID of texture to update
-    uint32_t mip_level; // Mip level to update, must be less that texture's `mip_levels`
+    uint32_t mip_level; // Mip level to update, must be less than texture's `mip_levels`
     uint32_t x;         // Left offset of destination rectangle
     uint32_t y;         // Top offset of destination rectangle
     uint32_t w;         // Width of destination rectangle
@@ -245,40 +245,184 @@ void update(float delta);
 extern void ow_log(const char* message);
 
 /**
- * Loads a file from the scene archive into module memory. Crashes scene if file is not found.
+ * Loads a file from the scene archive into module memory. Panics if file is not found.
  *
  * \param path Path to the file to load, absolute in the scene archive. A null-terminated byte string
+ * \param data Loaded data, allocated by the host application during function call, and after that owned by user
+ * \param size Size of loaded data in bytes
  */
 extern void ow_load_file(const char* path, uint8_t** data, size_t* size);
 
 /**
- * Begins a copy pass. Can be called only if no pass is currently active.
+ * Begins a copy pass. Can be called only if no pass is currently active, panics elsewhere.
  */
 extern void ow_begin_copy_pass();
+
+/**
+ * Ends a copy pass. Can be called only if a copy pass is currently active, panics elsewhere.
+ */
 extern void ow_end_copy_pass();
+
+/**
+ * Begins a render pass. Can be called only if no pass is currently active, panics elsewhere.
+ *
+ * \param info Render pass parameters
+ */
 extern void ow_begin_render_pass(const ow_pass_info* info);
+
+/**
+ * Ends a render pass. Can be called only if a render pass is currently active, panics elsewhere.
+ */
 extern void ow_end_render_pass();
 
+/**
+ * Creates a vertex or index buffer.
+ *
+ * \param type Type of the buffer
+ * \param size Buffer size in bytes
+ * \return ID of created buffer
+ */
 extern ow_id ow_create_buffer(ow_buffer_type type, uint32_t size);
+
+/**
+ * Overwrites buffer data subsegment beginning at `offset` with `size` bytes from `data`. Can be called only if copy
+ * pass is currently active, panics elsewhere.
+ *
+ * \param buffer Buffer ID to update
+ * \param offset Offset in bytes from the start of the buffer
+ * \param data Pointer to the source data
+ * \param size Size of subsegment to update in bytes
+ */
 extern void ow_update_buffer(ow_id buffer, uint32_t offset, const void* data, uint32_t size);
+
+/**
+ * Creates a texture.
+ *
+ * \param info Texture parameters
+ * \return ID of created texture
+ */
 extern ow_id ow_create_texture(const ow_texture_info* info);
+
+/**
+ * Creates a texture from a WEBP file from the scene archive. Panics if file is not found.
+ *
+ * \param path Path to the file to load, absolute in the scene archive. A null-terminated byte string
+ * \param info Texture parameters
+ * \return ID of created texture
+ */
 extern ow_id ow_create_texture_from_png(const char* path, const ow_texture_info* info);
+
+/**
+ * Updates a `dest` texture region with data from `data`
+ *
+ * \param data Pointer to the source data
+ * \param pixels_per_row Number of pixels per row in the source data
+ * \param dest Pointer to the destination texture region
+ */
 extern void ow_update_texture(const void* data, uint32_t pixels_per_row, const ow_texture_update_destination* dest);
-extern ow_id ow_generate_mipmaps(ow_id texture);
+
+/**
+ * Generates mipmaps for a texture.
+ *
+ * \param texture Texture ID to generate mipmaps for.
+ */
+extern void ow_generate_mipmaps(ow_id texture);
+
+/**
+ * Creates a sampler.
+ *
+ * \param info Sampler parameters
+ * \return ID of created sampler
+ */
 extern ow_id ow_create_sampler(const ow_sampler_info* info);
+
+/**
+ * Creates a shader from SPIR-V bytecode.
+ *
+ * \param bytecode Pointer to the bytecode
+ * \param size Size of the bytecode in bytes
+ * \param type Shader type
+ * \return ID of created shader
+ */
 extern ow_id ow_create_shader_from_bytecode(const uint8_t* bytecode, size_t size, ow_shader_type type);
+
+/**
+ * Creates a shader from a SPIR-V bytecode file from the scene archive.
+ *
+ * \param path Path to the file to load, absolute in the scene archive. A null-terminated byte string
+ * \param type Shader type
+ * \return ID of created shader
+ */
 extern ow_id ow_create_shader_from_file(const char* path, ow_shader_type type);
+
+/**
+ * Creates a graphics pipeline.
+ *
+ * \param info Pipeline parameters
+ * \return ID of created pipeline
+ */
 extern ow_id ow_create_pipeline(const ow_pipeline_info* info);
 
+/**
+ * Gets the screen size in pixels.
+ *
+ * \param width Pointer to the variable to store the width in pixels
+ * \param height Pointer to the variable to store the height in pixels
+ */
 extern void ow_get_screen_size(uint32_t* width, uint32_t* height);
+
+/**
+ * Pushes uniform data for given shader type and slot. Subsequent `ow_render_geometry` and `ow_render_geometry_indexed`
+ * calls will use this data until overwritten or render pass ends. The pushed data must respect std140 layout
+ * conventions. Can be called only if render pass is currently active, panics elsewhere.
+ *
+ * \param type Target shader type
+ * \param slot Target uniform slot
+ * \param data Pointer to the data to push
+ * \param size Size of the data in bytes
+ */
 extern void ow_push_uniform_data(ow_shader_type type, uint32_t slot, const void* data, uint32_t size);
+
+/**
+ * Renders geometry primitives.
+ *
+ * \param pipeline Pipeline ID to use
+ * \param bindings Pointer to the bindings info
+ * \param vertex_offset Offset in vertices to start rendering from
+ * \param vertex_count Number of vertices to render
+ * \param instance_count Number of instances
+ */
 extern void ow_render_geometry(ow_id pipeline, const ow_bindings_info* bindings, uint32_t vertex_offset,
     uint32_t vertex_count, uint32_t instance_count);
+
+/**
+ * Renders geometry primitives with indices from an index buffer.
+ *
+ * \param pipeline Pipeline ID to use
+ * \param bindings Pointer to the bindings info
+ * \param index_offset Offset in indices to start rendering from
+ * \param index_count Number of indices to render
+ * \param vertex_offset Offset in vertices to start rendering from
+ * \param instance_count Number of instances
+ */
 extern void ow_render_geometry_indexed(ow_id pipeline, const ow_bindings_info* bindings, uint32_t index_offset,
     uint32_t index_count, uint32_t vertex_offset, uint32_t instance_count);
 
+/**
+ * Gets cursor position and mouse buttons state. The cooordinate system for cursor position is x: [0, width]
+ * and y: [0, height] where (0, 0) is a top left corner.
+ *
+ * \param x Pointer to the variable to store the X coordinate in pixels
+ * \param y Pointer to the variable to store the Y coordinate in pixels
+ * \return Mask with pressed mouse buttons (see enum `ow_mouse_button`)
+ */
 extern uint32_t ow_get_mouse_state(float* x, float* y);
 
+/**
+ * Frees an object by ID. Panics if object is not found or is already freed. Has no effect if `id` is `0`.
+ *
+ * \param id Object ID to free
+ */
 extern void ow_free(ow_id id);
 
 #endif
