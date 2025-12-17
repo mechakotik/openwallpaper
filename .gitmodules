@@ -19,3 +19,6 @@
 [submodule "external/zlib"]
 	path = wallpaperd/external/zlib
 	url = https://github.com/madler/zlib
+[submodule "docs/doxygen-awesome-css"]
+	path = docs/doxygen-awesome-css
+	url = https://github.com/jothepro/doxygen-awesome-css.git

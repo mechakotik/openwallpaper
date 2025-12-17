@@ -1,0 +1,15 @@
+PROJECT_NAME           = openwallpaper
+OUTPUT_DIRECTORY       = .
+OPTIMIZE_OUTPUT_FOR_C  = YES
+EXTRACT_ALL            = YES
+EXTRACT_STATIC         = YES
+SHOW_INCLUDE_FILES     = NO
+INPUT                  = ../include
+FILE_PATTERNS          = *.h
+VERBATIM_HEADERS       = NO
+HTML_EXTRA_STYLESHEET  = doxygen-awesome-css/doxygen-awesome.css \
+                         custom.css
+HTML_COLORSTYLE        = LIGHT
+GENERATE_TREEVIEW      = NO
+GENERATE_LATEX         = NO
+
