@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"strconv"
 	"strings"
@@ -15,12 +16,14 @@ type (
 	Vector3 [3]float32
 )
 
-type BoolValue bool
-type IntValue int
-type FloatValue float32
-type StringValue string
-type FloatSlice []float32
-type NullString string
+type (
+	BoolValue   bool
+	IntValue    int
+	FloatValue  float32
+	StringValue string
+	FloatSlice  []float32
+	NullString  string
+)
 
 func (value *StringValue) UnmarshalJSON(raw []byte) error {
 	parsed, err := parseStringFromRaw(raw)
@@ -383,15 +386,11 @@ func (materialPass *MaterialPass) updateFrom(other MaterialPass) {
 	if materialPass.Combos == nil {
 		materialPass.Combos = make(map[string]int)
 	}
-	for key, value := range other.Combos {
-		materialPass.Combos[key] = value
-	}
+	maps.Copy(materialPass.Combos, other.Combos)
 	if materialPass.Constants == nil {
 		materialPass.Constants = make(map[string][]float32)
 	}
-	for key, value := range other.Constants {
-		materialPass.Constants[key] = value
-	}
+	maps.Copy(materialPass.Constants, other.Constants)
 	if other.Target != "" {
 		materialPass.Target = other.Target
 	}
@@ -414,15 +413,11 @@ func (material *Material) mergePass(other MaterialPass) {
 	if material.Combos == nil {
 		material.Combos = make(map[string]int)
 	}
-	for key, value := range other.Combos {
-		material.Combos[key] = value
-	}
+	maps.Copy(material.Combos, other.Combos)
 	if material.Constants == nil {
 		material.Constants = make(map[string][]float32)
 	}
-	for key, value := range other.Constants {
-		material.Constants[key] = value
-	}
+	maps.Copy(material.Constants, other.Constants)
 }
 
 func (material *Material) parseFromJSON(raw json.RawMessage) error {
@@ -944,7 +939,7 @@ const (
 
 type Particle struct {
 	Emitters           []Emitter
-	Initializers       []json.RawMessage
+	Initializers       []Initializer
 	Operators          []json.RawMessage
 	Renderers          []ParticleRender
 	ControlPoints      []ParticleControlPoint
@@ -1054,6 +1049,43 @@ func (render *ParticleRender) parseFromJSON(raw json.RawMessage) error {
 	render.Length = float32(payload.Length)
 	render.MaxLength = float32(payload.MaxLength)
 	render.Subdivision = float32(payload.Subdivision)
+	return nil
+}
+
+func (init *Initializer) parseFromJSON(raw json.RawMessage) error {
+	payload := struct {
+		ID   IntValue        `json:"id"`
+		Name StringValue     `json:"name"`
+		Min  json.RawMessage `json:"min"`
+		Max  json.RawMessage `json:"max"`
+	}{}
+
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		return fmt.Errorf("cannot parse particle initializer: %w", err)
+	}
+
+	name := strings.TrimSpace(string(payload.Name))
+	if name == "" {
+		return fmt.Errorf("particle initializer missing name")
+	}
+	init.Name = name
+
+	if bytesFromRawNullAware(payload.Min) != nil {
+		min, err := parseVector3FromRaw(payload.Min, init.Min)
+		if err != nil {
+			return fmt.Errorf("cannot parse min value for initializer %s: %w", name, err)
+		}
+		init.Min = min
+	}
+
+	if bytesFromRawNullAware(payload.Max) != nil {
+		max, err := parseVector3FromRaw(payload.Max, init.Max)
+		if err != nil {
+			return fmt.Errorf("cannot parse max value for initializer %s: %w", name, err)
+		}
+		init.Max = max
+	}
+
 	return nil
 }
 
@@ -1186,7 +1218,13 @@ func (particle *Particle) parseFromJSON(raw json.RawMessage, pkgMap *map[string]
 		})
 	}
 
-	particle.Initializers = append(particle.Initializers, payload.Initializers...)
+	for _, initRaw := range payload.Initializers {
+		var init Initializer
+		if err := init.parseFromJSON(initRaw); err != nil {
+			return err
+		}
+		particle.Initializers = append(particle.Initializers, init)
+	}
 	particle.Operators = append(particle.Operators, payload.Operators...)
 
 	for _, controlRaw := range payload.ControlPoints {

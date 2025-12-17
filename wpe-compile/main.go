@@ -632,35 +632,22 @@ func processParticleObject(object ParticleObject) {
 		return
 	}
 
-	initData := CodegenParticleInitializerData{
-		RandomizeLifetime: true,
-		MinLifetime:       8,
-		MaxLifetime:       20,
-		RandomizeSize:     true,
-		MinSize:           2,
-		MaxSize:           30,
-		RandomizeVelocity: true,
-		MinVelocity:       [3]float32{-37, -90, 0},
-		MaxVelocity:       [3]float32{-10, -50, 0},
-		RandomizeColor:    true,
-		MinColor:          [3]float32{1, 1, 1},
-		MaxColor:          [3]float32{95.0 / 255.0, 98.0 / 255.0, 100.0 / 255.0},
-	}
-
 	usePerspective := object.ParticleData.Flags&ParticleFlagPerspective != 0
+	maxCount := int(object.ParticleData.MaxCount)
+	if object.InstanceOverride.Enabled && object.InstanceOverride.Count != 0 {
+		maxCount = int(float32(maxCount) * object.InstanceOverride.Count)
+	}
 
 	particleData := CodegenParticleData{
 		ObjectID:  lastObjectID,
-		MaxCount:  int(object.ParticleData.MaxCount),
-		Init:      initData,
+		MaxCount:  maxCount,
+		Init:      buildParticleInitializerData(object.ParticleData.Initializers, object.InstanceOverride),
 		Emitters:  object.ParticleData.Emitters,
 		Origin:    object.Origin,
 		StartTime: object.ParticleData.StartTime,
 	}
 
 	codegenData.Particles = append(codegenData.Particles, particleData)
-
-	uniformSetupCode := "vertex_uniforms.mvp = matrices.model_view_projection;\n"
 
 	passData := CodegenPassData{
 		ObjectID:          lastObjectID,
@@ -674,7 +661,7 @@ func processParticleObject(object ParticleObject) {
 			Texture: fmt.Sprintf("texture%d", texture.ID),
 			Sampler: getTextureSampler(texture),
 		}},
-		UniformSetupCode: uniformSetupCode,
+		UniformSetupCode: "vertex_uniforms.mvp = matrices.model_view_projection;\n",
 		IsParticle:       true,
 		InstanceCount:    int(object.ParticleData.MaxCount),
 	}
@@ -703,6 +690,57 @@ func processParticleObject(object ParticleObject) {
 	}
 
 	codegenData.Passes = append(codegenData.Passes, passData)
+}
+
+func buildParticleInitializerData(initializers []Initializer, override ParticleInstanceOverride) CodegenParticleInitializerData {
+	data := CodegenParticleInitializerData{
+		MinColor:    [3]float32{1, 1, 1},
+		MinSize:     1,
+		MinLifetime: 1,
+	}
+
+	for _, init := range initializers {
+		name := strings.ToLower(strings.TrimSpace(init.Name))
+		switch name {
+		case "lifetimerandom":
+			data.RandomizeLifetime = true
+			data.MinLifetime = init.Min[0]
+			data.MaxLifetime = init.Max[0]
+		case "sizerandom":
+			data.RandomizeSize = true
+			data.MinSize = init.Min[0]
+			data.MaxSize = init.Max[0]
+		case "velocityrandom":
+			data.RandomizeVelocity = true
+			data.MinVelocity = [3]float32{init.Min[0], init.Min[1], init.Min[2]}
+			data.MaxVelocity = [3]float32{init.Max[0], init.Max[1], init.Max[2]}
+		case "colorrandom":
+			data.RandomizeColor = true
+			data.MinColor = [3]float32{init.Min[0] / 255, init.Min[1] / 255, init.Min[2] / 255}
+			data.MaxColor = [3]float32{init.Max[0] / 255, init.Max[1] / 255, init.Max[2] / 255}
+		}
+	}
+
+	if override.Enabled {
+		if override.Size != 0 {
+			data.MinSize *= override.Size
+			data.MaxSize *= override.Size
+		}
+		if override.OverrideColor {
+			data.RandomizeColor = false
+			data.MinColor = [3]float32{override.Color[0] * 255, override.Color[1] / 255, override.Color[2] / 255}
+		}
+		if override.OverrideColorn {
+			data.RandomizeColor = false
+			data.MinColor = override.ColorN
+		}
+		if override.Lifetime != 0 {
+			data.MinLifetime *= override.Lifetime
+			data.MaxLifetime *= override.Lifetime
+		}
+	}
+
+	return data
 }
 
 func processFinalPassthrough() {
