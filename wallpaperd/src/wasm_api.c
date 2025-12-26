@@ -339,7 +339,6 @@ uint32_t ow_create_texture_from_webp(wasm_exec_env_t exec_env, uint32_t path_ptr
     size_t image_size;
     uint8_t* image_data;
     if(!wd_read_from_zip(&state->zip, path, &image_data, &image_size)) {
-        free(image_data);
         wasm_runtime_set_exception(instance, "");
         return 0;
     }
