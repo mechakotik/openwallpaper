@@ -722,20 +722,6 @@ uint32_t ow_create_pipeline(wasm_exec_env_t exec_env, uint32_t info_ptr) {
     return result;
 }
 
-void ow_get_screen_size(wasm_exec_env_t exec_env, uint32_t width, uint32_t height) {
-    wasm_module_inst_t instance = wasm_runtime_get_module_inst(exec_env);
-    wd_state* state = wasm_runtime_get_custom_data(instance);
-    uint32_t* width_real = wasm_runtime_addr_app_to_native(instance, width);
-    uint32_t* height_real = wasm_runtime_addr_app_to_native(instance, height);
-
-    int width_int, height_int;
-    bool ok = SDL_GetWindowSizeInPixels(state->output.window, &width_int, &height_int);
-    DEBUG_CHECK(ok, "SDL_GetWindowSizeInPixels failed: %s", SDL_GetError());
-
-    *width_real = (uint32_t)width_int;
-    *height_real = (uint32_t)height_int;
-}
-
 void ow_push_uniform_data(wasm_exec_env_t exec_env, uint32_t type, uint32_t slot, uint32_t data, uint32_t size) {
     wasm_module_inst_t instance = wasm_runtime_get_module_inst(exec_env);
     wd_state* state = wasm_runtime_get_custom_data(instance);
@@ -881,6 +867,20 @@ void ow_render_geometry_indexed(wasm_exec_env_t exec_env, uint32_t pipeline, uin
     free(sdl_texture_bindings);
 }
 
+void ow_get_screen_size(wasm_exec_env_t exec_env, uint32_t width, uint32_t height) {
+    wasm_module_inst_t instance = wasm_runtime_get_module_inst(exec_env);
+    wd_state* state = wasm_runtime_get_custom_data(instance);
+    uint32_t* width_real = wasm_runtime_addr_app_to_native(instance, width);
+    uint32_t* height_real = wasm_runtime_addr_app_to_native(instance, height);
+
+    int width_int, height_int;
+    bool ok = SDL_GetWindowSizeInPixels(state->output.window, &width_int, &height_int);
+    DEBUG_CHECK(ok, "SDL_GetWindowSizeInPixels failed: %s", SDL_GetError());
+
+    *width_real = (uint32_t)width_int;
+    *height_real = (uint32_t)height_int;
+}
+
 uint32_t ow_get_mouse_state(wasm_exec_env_t exec_env, uint32_t x_ptr, uint32_t y_ptr) {
     wasm_module_inst_t instance = wasm_runtime_get_module_inst(exec_env);
     float* x_ptr_real = wasm_runtime_addr_app_to_native(instance, x_ptr);
@@ -905,6 +905,20 @@ uint32_t ow_get_mouse_state(wasm_exec_env_t exec_env, uint32_t x_ptr, uint32_t y
     }
 
     return flags;
+}
+
+uint32_t ow_get_option(wasm_exec_env_t exec_env, uint32_t name_ptr) {
+    wasm_module_inst_t instance = wasm_runtime_get_module_inst(exec_env);
+    wd_state* state = wasm_runtime_get_custom_data(instance);
+    const char* name_ptr_real = wasm_runtime_addr_app_to_native(instance, name_ptr);
+
+    for(int i = 0; i < state->args.num_wallpaper_options; i++) {
+        if(strcmp(state->args.wallpaper_options_keys[i], name_ptr_real) == 0) {
+            return state->scene.wallpaper_options_values_wasm[i];
+        }
+    }
+
+    return 0;
 }
 
 void ow_free(wasm_exec_env_t exec_env, uint32_t id) {

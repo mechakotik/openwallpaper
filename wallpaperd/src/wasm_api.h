@@ -212,7 +212,6 @@ uint32_t ow_create_shader_from_bytecode(
 uint32_t ow_create_shader_from_file(wasm_exec_env_t exec_env, uint32_t path_ptr, ow_shader_type type);
 uint32_t ow_create_pipeline(wasm_exec_env_t exec_env, uint32_t info_ptr);
 
-void ow_get_screen_size(wasm_exec_env_t exec_env, uint32_t width_ptr, uint32_t height_ptr);
 void ow_push_uniform_data(
     wasm_exec_env_t exec_env, ow_shader_type type, uint32_t slot, uint32_t data_ptr, uint32_t size);
 void ow_render_geometry(wasm_exec_env_t exec_env, uint32_t pipeline, uint32_t bindings_ptr, uint32_t vertex_offset,
@@ -220,7 +219,9 @@ void ow_render_geometry(wasm_exec_env_t exec_env, uint32_t pipeline, uint32_t bi
 void ow_render_geometry_indexed(wasm_exec_env_t exec_env, uint32_t pipeline, uint32_t bindings_ptr,
     uint32_t index_offset, uint32_t index_count, uint32_t vertex_offset, uint32_t instance_count);
 
+void ow_get_screen_size(wasm_exec_env_t exec_env, uint32_t width_ptr, uint32_t height_ptr);
 uint32_t ow_get_mouse_state(wasm_exec_env_t exec_env, uint32_t x_ptr, uint32_t y_ptr);
+uint32_t ow_get_option(wasm_exec_env_t exec_env, uint32_t name_ptr);
 
 void ow_free(wasm_exec_env_t exec_env, uint32_t id);
 

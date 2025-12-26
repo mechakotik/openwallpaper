@@ -238,10 +238,11 @@ void init();
 void update(float delta);
 
 /**
- * Loads a file from the scene archive into module memory. Panics if file is not found.
+ * Loads a file from the scene archive into module memory. Panics if file is not found. Memory for loaded data is
+ * allocated by the host application during function call, and after that owned by user.
  *
  * \param path Path to the file to load, absolute in the scene archive. A null-terminated byte string
- * \param data Loaded data, allocated by the host application during function call, and after that owned by user
+ * \param data Loaded data
  * \param size Size of loaded data in bytes
  */
 extern void ow_load_file(const char* path, uint8_t** data, size_t* size);
@@ -357,14 +358,6 @@ extern ow_id ow_create_shader_from_file(const char* path, ow_shader_type type);
 extern ow_id ow_create_pipeline(const ow_pipeline_info* info);
 
 /**
- * Gets the screen size in pixels.
- *
- * \param width Pointer to the variable to store the width in pixels
- * \param height Pointer to the variable to store the height in pixels
- */
-extern void ow_get_screen_size(uint32_t* width, uint32_t* height);
-
-/**
  * Pushes uniform data for given shader type and slot. Subsequent `ow_render_geometry` and `ow_render_geometry_indexed`
  * calls will use this data until overwritten or render pass ends. The pushed data must respect std140 layout
  * conventions. Can be called only if render pass is currently active, panics elsewhere.
@@ -402,6 +395,14 @@ extern void ow_render_geometry_indexed(ow_id pipeline, const ow_bindings_info* b
     uint32_t index_count, uint32_t vertex_offset, uint32_t instance_count);
 
 /**
+ * Gets the screen size in pixels.
+ *
+ * \param width Pointer to the variable to store the width in pixels
+ * \param height Pointer to the variable to store the height in pixels
+ */
+extern void ow_get_screen_size(uint32_t* width, uint32_t* height);
+
+/**
  * Gets cursor position and mouse buttons state. The cooordinate system for cursor position is x: [0, width]
  * and y: [0, height] where (0, 0) is a top left corner.
  *
@@ -410,6 +411,15 @@ extern void ow_render_geometry_indexed(ow_id pipeline, const ow_bindings_info* b
  * \return Mask with pressed mouse buttons (see enum `ow_mouse_button`)
  */
 extern uint32_t ow_get_mouse_state(float* x, float* y);
+
+/**
+ * Gets a wallpaper option value by name. Returns `NULL` if wallpaper option with given name is unspecified. The
+ * returned string is owned by the host application and must not be freed.
+ *
+ * \param name Name of the option to get
+ * \return Value of the option, a null-terminated byte string
+ */
+extern const char* ow_get_option(const char* name);
 
 /**
  * Frees an object by ID. Panics if object is not found or is already freed. Has no effect if `id` is `0`.

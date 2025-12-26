@@ -1,6 +1,7 @@
 #include "scene.h"
 #include <lib_export.h>
 #include <stdlib.h>
+#include <string.h>
 #include <wasm_export.h>
 #include "error.h"
 #include "state.h"
@@ -23,11 +24,12 @@ static NativeSymbol native_symbols[] = {
     {"ow_create_shader_from_bytecode", ow_create_shader_from_bytecode, "(iii)i"},
     {"ow_create_shader_from_file", ow_create_shader_from_file, "(ii)i"},
     {"ow_create_pipeline", ow_create_pipeline, "(i)i"},
-    {"ow_get_screen_size", ow_get_screen_size, "(ii)"},
     {"ow_push_uniform_data", ow_push_uniform_data, "(iiii)"},
     {"ow_render_geometry", ow_render_geometry, "(iiiii)"},
     {"ow_render_geometry_indexed", ow_render_geometry_indexed, "(iiiiii)"},
+    {"ow_get_screen_size", ow_get_screen_size, "(ii)"},
     {"ow_get_mouse_state", ow_get_mouse_state, "(ii)i"},
+    {"ow_get_option", ow_get_option, "(i)i"},
     {"ow_free", ow_free, "(i)"},
 };
 
@@ -91,6 +93,17 @@ bool wd_init_scene(wd_state* state, wd_args_state* args) {
         return false;
     }
 
+    scene->wallpaper_options_values_wasm = malloc(sizeof(uint32_t) * args->num_wallpaper_options);
+    for(int i = 0; i < args->num_wallpaper_options; i++) {
+        const char* value = args->wallpaper_options_values[i];
+        uint64_t len = strlen(value);
+        void* value_wasm_native = NULL;
+        uint32_t value_wasm =
+            wasm_runtime_module_malloc(scene->instance, sizeof(char) * (strlen(value) + 1), &value_wasm_native);
+        memcpy(value_wasm_native, value, sizeof(char) * (strlen(value) + 1));
+        scene->wallpaper_options_values_wasm[i] = value_wasm;
+    }
+
     if(!wasm_runtime_call_wasm(scene->exec_env, init_func, 0, NULL)) {
         if(!wd_is_error_set()) {
             wd_set_error("init wasm call failed: %s", wasm_runtime_get_exception(scene->instance));
@@ -113,6 +126,10 @@ bool wd_update_scene(wd_scene_state* scene, float delta) {
 }
 
 void wd_free_scene(wd_scene_state* scene) {
+    if(scene->wallpaper_options_values_wasm != NULL) {
+        free(scene->wallpaper_options_values_wasm);
+        scene->wallpaper_options_values_wasm = NULL;
+    }
     if(scene->exec_env != NULL) {
         wasm_runtime_destroy_exec_env(scene->exec_env);
         scene->exec_env = NULL;

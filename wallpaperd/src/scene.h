@@ -11,6 +11,7 @@ typedef struct wd_scene_state {
     wasm_module_inst_t instance;
     wasm_function_inst_t update_func;
     wasm_exec_env_t exec_env;
+    uint32_t* wallpaper_options_values_wasm;
 } wd_scene_state;
 
 struct wd_state;
