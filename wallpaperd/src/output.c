@@ -1,5 +1,6 @@
 #include "output.h"
 #include <SDL3/SDL.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include "SDL3/SDL_gpu.h"
@@ -37,7 +38,7 @@ bool wd_init_output(wd_output_state* output, wd_args_state* args) {
         output->output_hidden = wd_wlroots_output_hidden;
         output->free_output = wd_wlroots_output_free;
 #else
-        wd_set_error("wlroots output support is disabled, compile with -DWD_WLROOTS=ON to use it");
+        wd_set_error("wlroots output support is disabled, compile wallpaperd with -DWD_WLROOTS=ON to use it");
         return false;
 #endif
     } else {
@@ -46,18 +47,31 @@ bool wd_init_output(wd_output_state* output, wd_args_state* args) {
     }
 
     SDL_PropertiesID gpu_properties = SDL_CreateProperties();
-
     bool prefer_dgpu = (wd_get_option(args, "prefer-dgpu") != NULL);
-    SDL_SetBooleanProperty(gpu_properties, SDL_PROP_GPU_DEVICE_CREATE_PREFERLOWPOWER_BOOLEAN, !prefer_dgpu);
+    if(!SDL_SetBooleanProperty(gpu_properties, SDL_PROP_GPU_DEVICE_CREATE_PREFERLOWPOWER_BOOLEAN, !prefer_dgpu)) {
+        printf("warning: failed to set preffered GPU: %s\n", SDL_GetError());
+    }
+    if(!SDL_SetBooleanProperty(gpu_properties, SDL_PROP_GPU_DEVICE_CREATE_SHADERS_SPIRV_BOOLEAN, true)) {
+        wd_set_error("failed to enable SPIRV shaders: %s", SDL_GetError());
+        return false;
+    }
 
-    SDL_SetBooleanProperty(gpu_properties, SDL_PROP_GPU_DEVICE_CREATE_DEBUGMODE_BOOLEAN, false);
-    SDL_SetBooleanProperty(gpu_properties, SDL_PROP_GPU_DEVICE_CREATE_SHADERS_SPIRV_BOOLEAN, true);
     output->gpu = SDL_CreateGPUDeviceWithProperties(gpu_properties);
-    SDL_ClaimWindowForGPUDevice(output->gpu, output->window);
+    if(output->gpu == NULL) {
+        wd_set_error("failed to create GPU device: %s", SDL_GetError());
+        return false;
+    }
+    if(!SDL_ClaimWindowForGPUDevice(output->gpu, output->window)) {
+        wd_set_error("failed to claim window for GPU device: %s", SDL_GetError());
+        return false;
+    }
 
     if(wd_get_option(args, "fps") == NULL) {
-        SDL_SetGPUSwapchainParameters(
+        bool ok = SDL_SetGPUSwapchainParameters(
             output->gpu, output->window, SDL_GPU_SWAPCHAINCOMPOSITION_SDR, SDL_GPU_PRESENTMODE_VSYNC);
+        if(!ok) {
+            printf("warning: failed to enable vsync: %s\n", SDL_GetError());
+        }
     }
 
     return true;
