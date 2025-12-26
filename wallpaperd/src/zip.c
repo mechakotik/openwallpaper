@@ -68,5 +68,8 @@ bool wd_read_from_zip(wd_zip_state* zip, const char* path, uint8_t** result, siz
 }
 
 void wd_free_zip(wd_zip_state* zip) {
-    zip_close(zip->archive);
+    if(zip->archive != NULL) {
+        zip_close(zip->archive);
+        zip->archive = NULL;
+    }
 }
