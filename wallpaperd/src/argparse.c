@@ -73,7 +73,7 @@ bool wd_parse_args(wd_args_state* args, int argc, char* argv[]) {
         }
     }
     for(int i = 0; i < args->num_wallpaper_options; i++) {
-        if(!split_option(argv[i + args->num_wallpaper_options + 2] + 2, &args->wallpaper_options_keys[i],
+        if(!split_option(argv[i + args->num_options + 2] + 2, &args->wallpaper_options_keys[i],
                &args->wallpaper_options_values[i])) {
             return false;
         }
