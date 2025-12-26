@@ -110,8 +110,10 @@ __attribute__((export_name("init"))) void init() {
     particle_vertex_data_buffer = ow_create_buffer(OW_BUFFER_VERTEX, sizeof(particle_vertex_data));
     ow_update_buffer(particle_vertex_data_buffer, 0, particle_vertex_data, sizeof(particle_vertex_data));
 
+{{if ne (len .Particles) 0}}
     particle_vertex = ow_create_shader_from_file("assets/particle_vertex.spv", OW_SHADER_VERTEX);
     particle_fragment = ow_create_shader_from_file("assets/particle_fragment.spv", OW_SHADER_FRAGMENT);
+{{end}}
 
 {{range $idx, $buffer := .TempBuffers}}
     {

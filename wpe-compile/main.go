@@ -150,6 +150,7 @@ var (
 	args struct {
 		Input       string `arg:"positional,required"`
 		Output      string `arg:"positional,required"`
+		Particles   bool   `arg:"--particles" default:"false"`
 		KeepSources bool   `arg:"--keep-sources"`
 	}
 
@@ -205,7 +206,9 @@ func main() {
 		if imageObject, ok := object.(*ImageObject); ok {
 			processImageObject(*imageObject)
 		} else if particleObject, ok := object.(*ParticleObject); ok {
-			processParticleObject(*particleObject)
+			if args.Particles {
+				processParticleObject(*particleObject)
+			}
 		}
 	}
 	processFinalPassthrough()
