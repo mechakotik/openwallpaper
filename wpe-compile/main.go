@@ -150,6 +150,7 @@ var (
 	args struct {
 		Input       string `arg:"positional,required"`
 		Output      string `arg:"positional,required"`
+		Assets      string `arg:"env:WPE_COMPILE_ASSETS,required"`
 		Particles   bool   `arg:"--particles" default:"false"`
 		KeepSources bool   `arg:"--keep-sources"`
 	}
@@ -839,7 +840,7 @@ func getAssetBytes(path string) ([]byte, error) {
 	if bytes, exists := pkgMap[path]; exists {
 		return bytes, nil
 	}
-	asset, err := os.ReadFile("assets/" + path)
+	asset, err := os.ReadFile(args.Assets + "/" + path)
 	if err == nil {
 		return asset, nil
 	}
