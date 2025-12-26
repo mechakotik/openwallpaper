@@ -204,7 +204,7 @@ void ow_end_render_pass(wasm_exec_env_t exec_env);
 uint32_t ow_create_buffer(wasm_exec_env_t exec_env, ow_buffer_type type, uint32_t size);
 void ow_update_buffer(wasm_exec_env_t exec_env, uint32_t buffer, uint32_t offset, uint32_t data_ptr, uint32_t size);
 uint32_t ow_create_texture(wasm_exec_env_t exec_env, uint32_t info_ptr);
-uint32_t ow_create_texture_from_png(wasm_exec_env_t exec_env, uint32_t path_ptr, uint32_t info_ptr);
+uint32_t ow_create_texture_from_webp(wasm_exec_env_t exec_env, uint32_t path_ptr, uint32_t info_ptr);
 void ow_update_texture(wasm_exec_env_t exec_env, uint32_t data_ptr, uint32_t pixels_per_row, uint32_t dest_ptr);
 void ow_generate_mipmaps(wasm_exec_env_t exec_env, uint32_t texture);
 uint32_t ow_create_sampler(wasm_exec_env_t exec_env, uint32_t info_ptr);

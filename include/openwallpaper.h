@@ -310,7 +310,7 @@ extern ow_id ow_create_texture(const ow_texture_info* info);
  * \param info Texture parameters
  * \return ID of created texture
  */
-extern ow_id ow_create_texture_from_png(const char* path, const ow_texture_info* info);
+extern ow_id ow_create_texture_from_webp(const char* path, const ow_texture_info* info);
 
 /**
  * Updates a `dest` texture region with data from `data`

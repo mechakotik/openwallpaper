@@ -17,7 +17,7 @@ static NativeSymbol native_symbols[] = {
     {"ow_create_buffer", ow_create_buffer, "(ii)i"},
     {"ow_update_buffer", ow_update_buffer, "(iiii)"},
     {"ow_create_texture", ow_create_texture, "(i)i"},
-    {"ow_create_texture_from_png", ow_create_texture_from_png, "(ii)i"},
+    {"ow_create_texture_from_webp", ow_create_texture_from_webp, "(ii)i"},
     {"ow_update_texture", ow_update_texture, "(iii)"},
     {"ow_generate_mipmaps", ow_generate_mipmaps, "(i)"},
     {"ow_create_sampler", ow_create_sampler, "(i)i"},

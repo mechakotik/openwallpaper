@@ -161,7 +161,7 @@ __attribute__((export_name("init"))) void init() {
         nearest_repeat_sampler = ow_create_sampler(&sampler_info);
     }
 
-{{range $_, $texture := .Textures}}    texture{{$texture.ID}} = ow_create_texture_from_png("assets/texture{{$texture.ID}}.webp", &texture_info);
+{{range $_, $texture := .Textures}}    texture{{$texture.ID}} = ow_create_texture_from_webp("assets/texture{{$texture.ID}}.webp", &texture_info);
 {{end}}
 {{range $_, $shader := .Shaders}}{{template "shader_init" $shader}}{{end}}
 {{range $_, $pass := .Passes}}{{template "pass_init" $pass}}
