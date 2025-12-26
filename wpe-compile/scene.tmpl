@@ -2,6 +2,7 @@
 
 #include <math.h>
 #include <stdlib.h>
+#include <string.h>
 #include "openwallpaper.h"
 #include "scene_utils.h"
 
@@ -86,9 +87,22 @@ float mouse_y = 0.0f;
 float parallax_mouse_x = 0.0f;
 float parallax_mouse_y = 0.0f;
 bool parallax_initialized = false;
-int scale_mode = 2;
+int scale_mode = SCALE_MODE_ASPECT_CROP;
 
 __attribute__((export_name("init"))) void init() {
+    const char* scale_mode_opt = ow_get_option("scale-mode");
+    if(scale_mode_opt != NULL) {
+        if(strcmp(scale_mode_opt, "stretch") == 0) {
+            scale_mode = SCALE_MODE_STRETCH;
+        } else if(strcmp(scale_mode_opt, "aspect-fit") == 0) {
+            scale_mode = SCALE_MODE_ASPECT_FIT;
+        } else if(strcmp(scale_mode_opt, "aspect-crop") == 0) {
+            scale_mode = SCALE_MODE_ASPECT_CROP;
+        } else {
+            printf("warning: unknown scale mode, defaulting to aspect-crop\n");
+        }
+    }
+
     ow_begin_copy_pass();
 
     vertex_quad_buffer = ow_create_buffer(OW_BUFFER_VERTEX, sizeof(vertex_quad));
