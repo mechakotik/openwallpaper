@@ -7,6 +7,8 @@
 #define WD_OBJECTMANAGER_BUCKET_SIZE_LOG2 10
 #define WD_OBJECTMANAGER_MAX_BUCKETS 1024
 
+struct wd_state;
+
 typedef enum : uint8_t {
     WD_OBJECT_EMPTY,
     WD_OBJECT_VERTEX_BUFFER,
@@ -27,7 +29,7 @@ typedef struct wd_object_manager_state {
 
 bool wd_new_object(wd_object_manager_state* state, wd_object_type type, void* data, uint32_t* result);
 void wd_get_object(wd_object_manager_state* state, uint32_t object, wd_object_type* type, void** data);
-void wd_free_object(wd_object_manager_state* state, uint32_t object);
-void wd_free_object_manager(wd_object_manager_state* state);
+void wd_free_object(struct wd_state* state, uint32_t object);
+void wd_free_object_manager(struct wd_state* state);
 
 #endif
