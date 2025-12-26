@@ -238,13 +238,6 @@ void init();
 void update(float delta);
 
 /**
- * Prints a message to the console.
- *
- * \param message A null-terminated byte string to print
- */
-extern void ow_log(const char* message);
-
-/**
  * Loads a file from the scene archive into module memory. Panics if file is not found.
  *
  * \param path Path to the file to load, absolute in the scene archive. A null-terminated byte string

@@ -8,7 +8,6 @@
 #include "zip.h"
 
 static NativeSymbol native_symbols[] = {
-    {"ow_log", ow_log, "(i)"},
     {"ow_load_file", ow_load_file, "(iii)"},
     {"ow_begin_copy_pass", ow_begin_copy_pass, "()"},
     {"ow_end_copy_pass", ow_end_copy_pass, "()"},

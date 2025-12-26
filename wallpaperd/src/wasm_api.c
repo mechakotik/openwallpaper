@@ -25,12 +25,6 @@
         return 0;                                 \
     }
 
-void ow_log(wasm_exec_env_t exec_env, uint32_t message_ptr) {
-    wasm_module_inst_t instance = wasm_runtime_get_module_inst(exec_env);
-    const char* message_ptr_real = wasm_runtime_addr_app_to_native(instance, message_ptr);
-    printf("%s\n", message_ptr_real);
-}
-
 void ow_load_file(wasm_exec_env_t exec_env, uint32_t path_ptr, uint32_t data_ptr, uint32_t size_ptr) {
     wasm_module_inst_t instance = wasm_runtime_get_module_inst(exec_env);
     wd_state* state = wasm_runtime_get_custom_data(instance);
