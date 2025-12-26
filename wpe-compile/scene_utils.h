@@ -431,6 +431,9 @@ void spawn_particle_instance(particle_t* particle, particle_emitter_t* emitter) 
                     if(rand() % 2) {
                         offset = -offset;
                     }
+                    if((emitter->sign[i] > 0 && offset < 0.0f) || (emitter->sign[i] < 0 && offset > 0.0f)) {
+                        offset = -offset;
+                    }
                     instance->position[i] = emitter->origin[i] + offset;
                 }
                 if(dist <= 1.0f) {
