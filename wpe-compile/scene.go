@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"math"
 	"os"
 	"strconv"
 	"strings"
@@ -905,9 +906,21 @@ type ParticleInitializer struct {
 	MaxColor    [3]float32
 }
 
+type OscillatePositionOperator struct {
+	Enabled      bool
+	Mask         Vector3
+	FrequencyMin float32
+	FrequencyMax float32
+	ScaleMin     float32
+	ScaleMax     float32
+	PhaseMin     float32
+	PhaseMax     float32
+}
+
 type ParticleOperator struct {
-	Movement bool
-	Gravity  Vector3
+	Movement          bool
+	Gravity           Vector3
+	OscillatePosition OscillatePositionOperator
 }
 
 type EmitterFlags uint32
@@ -1154,8 +1167,15 @@ func (init *ParticleInitializer) parseFromJSON(raw json.RawMessage) error {
 
 func (operator *ParticleOperator) parseFromJSON(raw json.RawMessage) error {
 	payload := struct {
-		Name    string          `json:"name"`
-		Gravity json.RawMessage `json:"gravity"`
+		Name         string          `json:"name"`
+		Gravity      json.RawMessage `json:"gravity"`
+		FrequencyMin json.RawMessage `json:"frequencymin"`
+		FrequencyMax json.RawMessage `json:"frequencymax"`
+		ScaleMin     json.RawMessage `json:"scalemin"`
+		ScaleMax     json.RawMessage `json:"scalemax"`
+		PhaseMin     json.RawMessage `json:"phasemin"`
+		PhaseMax     json.RawMessage `json:"phasemax"`
+		Mask         json.RawMessage `json:"mask"`
 	}{}
 
 	if err := json.Unmarshal(raw, &payload); err != nil {
@@ -1177,6 +1197,67 @@ func (operator *ParticleOperator) parseFromJSON(raw json.RawMessage) error {
 			operator.Movement = true
 			operator.Gravity = gravity
 		}
+	case "oscillateposition":
+		op := OscillatePositionOperator{
+			Enabled:      true,
+			Mask:         Vector3{1, 1, 0},
+			FrequencyMax: 5,
+			ScaleMax:     1,
+			PhaseMax:     float32(2 * math.Pi),
+		}
+		if bytesFromRawNullAware(payload.FrequencyMin) != nil {
+			frequencyMin, err := parseFloat64FromRaw(payload.FrequencyMin)
+			if err != nil {
+				return fmt.Errorf("cannot parse frequencymin for oscillateposition operator: %w", err)
+			}
+			op.FrequencyMin = float32(frequencyMin)
+		}
+		if bytesFromRawNullAware(payload.FrequencyMax) != nil {
+			frequencyMax, err := parseFloat64FromRaw(payload.FrequencyMax)
+			if err != nil {
+				return fmt.Errorf("cannot parse frequencymax for oscillateposition operator: %w", err)
+			}
+			op.FrequencyMax = float32(frequencyMax)
+		}
+		if op.FrequencyMax == 0 {
+			op.FrequencyMax = op.FrequencyMin
+		}
+		if bytesFromRawNullAware(payload.ScaleMin) != nil {
+			scaleMin, err := parseFloat64FromRaw(payload.ScaleMin)
+			if err != nil {
+				return fmt.Errorf("cannot parse scalemin for oscillateposition operator: %w", err)
+			}
+			op.ScaleMin = float32(scaleMin)
+		}
+		if bytesFromRawNullAware(payload.ScaleMax) != nil {
+			scaleMax, err := parseFloat64FromRaw(payload.ScaleMax)
+			if err != nil {
+				return fmt.Errorf("cannot parse scalemax for oscillateposition operator: %w", err)
+			}
+			op.ScaleMax = float32(scaleMax)
+		}
+		if bytesFromRawNullAware(payload.PhaseMin) != nil {
+			phaseMin, err := parseFloat64FromRaw(payload.PhaseMin)
+			if err != nil {
+				return fmt.Errorf("cannot parse phasemin for oscillateposition operator: %w", err)
+			}
+			op.PhaseMin = float32(phaseMin)
+		}
+		if bytesFromRawNullAware(payload.PhaseMax) != nil {
+			phaseMax, err := parseFloat64FromRaw(payload.PhaseMax)
+			if err != nil {
+				return fmt.Errorf("cannot parse phasemax for oscillateposition operator: %w", err)
+			}
+			op.PhaseMax = float32(phaseMax)
+		}
+		if bytesFromRawNullAware(payload.Mask) != nil {
+			mask, err := parseVector3FromRaw(payload.Mask, op.Mask)
+			if err != nil {
+				return fmt.Errorf("cannot parse mask for oscillateposition operator: %w", err)
+			}
+			op.Mask = mask
+		}
+		operator.OscillatePosition = op
 	default:
 		fmt.Printf("warning: unknown particle operator %s\n", name)
 	}

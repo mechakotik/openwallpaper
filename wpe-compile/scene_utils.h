@@ -357,6 +357,9 @@ typedef struct {
     float position[3];
     float velocity[3];
     float acceleration[3];
+    float oscillate_frequency[3];
+    float oscillate_scale[3];
+    float oscillate_phase[3];
 
     float rotation;
     float angular_velocity[3];
@@ -410,6 +413,14 @@ typedef struct {
 typedef struct {
     bool movement;
     float gravity[3];
+    bool oscillate_position;
+    float oscillate_mask[3];
+    float oscillate_frequency_min;
+    float oscillate_frequency_max;
+    float oscillate_scale_min;
+    float oscillate_scale_max;
+    float oscillate_phase_min;
+    float oscillate_phase_max;
 } particle_operator_t;
 
 typedef struct {
@@ -483,6 +494,27 @@ void spawn_particle_instance(particle_t* particle, particle_emitter_t* emitter) 
         instance->velocity[i] =
             particle->init.min_velocity[i] + (particle->init.max_velocity[i] - particle->init.min_velocity[i]) * factor;
     }
+    for(int i = 0; i < 3; i++) {
+        instance->oscillate_frequency[i] = 0.0f;
+        instance->oscillate_scale[i] = 0.0f;
+        instance->oscillate_phase[i] = 0.0f;
+    }
+    if(particle->operator.oscillate_position) {
+        float frequency_max = particle->operator.oscillate_frequency_max;
+        if(frequency_max == 0.0f) {
+            frequency_max = particle->operator.oscillate_frequency_min;
+        }
+        float phase_max = particle->operator.oscillate_phase_max + 2.0f *(float) M_PI;
+        for(int i = 0; i < 3; i++) {
+            if(fabsf(particle->operator.oscillate_mask[i]) < 0.01f) {
+                continue;
+            }
+            instance->oscillate_frequency[i] = rand_float(particle->operator.oscillate_frequency_min, frequency_max);
+            instance->oscillate_scale[i] =
+                rand_float(particle->operator.oscillate_scale_min, particle->operator.oscillate_scale_max);
+            instance->oscillate_phase[i] = rand_float(particle->operator.oscillate_phase_min, phase_max);
+        }
+    }
 
     instance->lifetime = rand_float(particle->init.min_lifetime, particle->init.max_lifetime);
 
@@ -511,6 +543,22 @@ void update_particle_instance(particle_t* particle, particle_instance_t* instanc
         for(int i = 0; i < 3; i++) {
             instance->velocity[i] += particle->operator.gravity[i] * delta;
             instance->position[i] += instance->velocity[i] * delta;
+        }
+    }
+    if(particle->operator.oscillate_position) {
+        float time = instance->age - delta;
+        if(time < 0.0f) {
+            time = 0.0f;
+        }
+        for(int i = 0; i < 3; i++) {
+            if(fabsf(particle->operator.oscillate_mask[i]) < 0.01f) {
+                continue;
+            }
+            float frequency = instance->oscillate_frequency[i];
+            float scale = instance->oscillate_scale[i];
+            float phase = instance->oscillate_phase[i];
+            float delta_pos = -1.0f * scale * frequency * sinf(frequency * time + phase) * delta;
+            instance->position[i] += delta_pos;
         }
     }
 }
