@@ -414,6 +414,8 @@ typedef struct {
 typedef struct {
     bool movement;
     float gravity[3];
+    float drag;
+    float speed;
     bool oscillate_position;
     float oscillate_mask[3];
     float oscillate_frequency_min;
@@ -560,8 +562,14 @@ void update_particle_instance(particle_t* particle, particle_instance_t* instanc
     }
 
     if(particle->operator.movement) {
+        float movement_speed = particle->operator.speed;
+        if(fabsf(movement_speed) < 0.0001f) {
+            movement_speed = 1.0f;
+        }
+        float drag_coeff = -2.0f * particle->operator.drag;
         for(int i = 0; i < 3; i++) {
-            instance->velocity[i] += particle->operator.gravity[i] * delta;
+            float acceleration = particle->operator.gravity[i] + drag_coeff * instance->velocity[i];
+            instance->velocity[i] += acceleration * movement_speed * delta;
             instance->position[i] += instance->velocity[i] * delta;
         }
     }

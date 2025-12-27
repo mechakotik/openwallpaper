@@ -294,12 +294,14 @@ ow_id shader{{.ID}}_fragment;
             },
         },
         .operator = {
-            .movement = {{.Operator.Movement}},
+            .movement = {{.Operator.Movement.Enabled}},
             .gravity = {
-                {{index .Operator.Gravity 0}},
-                {{index .Operator.Gravity 1}},
-                {{index .Operator.Gravity 2}},
+                {{index .Operator.Movement.Gravity 0}},
+                {{index .Operator.Movement.Gravity 1}},
+                {{index .Operator.Movement.Gravity 2}},
             },
+            .drag = {{.Operator.Movement.Drag}},
+            .speed = {{.Operator.Movement.Speed}},
             .oscillate_position = {{.Operator.OscillatePosition.Enabled}},
             .oscillate_mask = {
                 {{index .Operator.OscillatePosition.Mask 0}},

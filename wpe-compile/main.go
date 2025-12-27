@@ -645,6 +645,13 @@ func processParticleObject(object ParticleObject) {
 			init.MinSize *= override.Size
 			init.MaxSize *= override.Size
 		}
+		if override.Speed != 0 {
+			object.ParticleData.Operator.Movement.Speed *= override.Speed
+			for i := range init.MinVelocity {
+				init.MinVelocity[i] *= override.Speed
+				init.MaxVelocity[i] *= override.Speed
+			}
+		}
 		if override.Rate != 0 {
 			for _, emitter := range object.ParticleData.Emitters {
 				emitter.Rate *= override.Rate

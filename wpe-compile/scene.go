@@ -906,6 +906,13 @@ type ParticleInitializer struct {
 	MaxColor    [3]float32
 }
 
+type MovementOperator struct {
+	Enabled bool
+	Drag    float32
+	Speed   float32
+	Gravity Vector3
+}
+
 type OscillatePositionOperator struct {
 	Enabled      bool
 	Mask         Vector3
@@ -924,8 +931,7 @@ type AlphaFadeOperator struct {
 }
 
 type ParticleOperator struct {
-	Movement          bool
-	Gravity           Vector3
+	Movement          MovementOperator
 	OscillatePosition OscillatePositionOperator
 	AlphaFade         AlphaFadeOperator
 }
@@ -1176,6 +1182,7 @@ func (operator *ParticleOperator) parseFromJSON(raw json.RawMessage) error {
 	payload := struct {
 		Name         string          `json:"name"`
 		Gravity      json.RawMessage `json:"gravity"`
+		Drag         json.RawMessage `json:"drag"`
 		FrequencyMin json.RawMessage `json:"frequencymin"`
 		FrequencyMax json.RawMessage `json:"frequencymax"`
 		ScaleMin     json.RawMessage `json:"scalemin"`
@@ -1198,13 +1205,20 @@ func (operator *ParticleOperator) parseFromJSON(raw json.RawMessage) error {
 
 	switch name {
 	case "movement":
+		operator.Movement.Enabled = true
 		if bytesFromRawNullAware(payload.Gravity) != nil {
-			gravity, err := parseVector3FromRaw(payload.Gravity, operator.Gravity)
+			gravity, err := parseVector3FromRaw(payload.Gravity, operator.Movement.Gravity)
 			if err != nil {
-				return fmt.Errorf("cannot parse gravity value for gravity operator: %w", err)
+				return fmt.Errorf("cannot parse gravity value for movement operator: %w", err)
 			}
-			operator.Movement = true
-			operator.Gravity = gravity
+			operator.Movement.Gravity = gravity
+		}
+		if bytesFromRawNullAware(payload.Drag) != nil {
+			drag, err := parseFloat64FromRaw(payload.Drag)
+			if err != nil {
+				return fmt.Errorf("cannot parse drag value for movement operator: %w", err)
+			}
+			operator.Movement.Drag = float32(drag)
 		}
 	case "oscillateposition":
 		op := OscillatePositionOperator{
