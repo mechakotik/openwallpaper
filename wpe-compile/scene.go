@@ -887,22 +887,27 @@ type ParticleControlPoint struct {
 	Offset Vector3
 }
 
-type ParticleRender struct {
+type ParticleRenderer struct {
 	Name        string
 	Length      float32
 	MaxLength   float32
 	Subdivision float32
 }
 
-type Initializer struct {
-	Name string
-	Max  Vector3
-	Min  Vector3
+type ParticleInitializer struct {
+	MinLifetime float32
+	MaxLifetime float32
+	MinSize     float32
+	MaxSize     float32
+	MinVelocity [3]float32
+	MaxVelocity [3]float32
+	MinColor    [3]float32
+	MaxColor    [3]float32
 }
 
 type EmitterFlags uint32
 
-type Emitter struct {
+type ParticleEmitter struct {
 	Directions          Vector3
 	DistanceMax         Vector3
 	DistanceMin         Vector3
@@ -940,10 +945,10 @@ const (
 )
 
 type Particle struct {
-	Emitters           []Emitter
-	Initializers       []Initializer
+	Emitters           []ParticleEmitter
+	Initializer        ParticleInitializer
 	Operators          []json.RawMessage
-	Renderers          []ParticleRender
+	Renderers          []ParticleRenderer
 	ControlPoints      []ParticleControlPoint
 	Material           Material
 	Children           []ParticleChild
@@ -957,7 +962,7 @@ type Particle struct {
 type ParticleInstanceOverride struct {
 	Enabled        bool
 	OverrideColor  bool
-	OverrideColorn bool
+	OverrideColorN bool
 	Alpha          float32
 	Count          float32
 	Lifetime       float32
@@ -1008,7 +1013,7 @@ func (override *ParticleInstanceOverride) parseFromJSON(raw json.RawMessage) err
 		override.OverrideColor = true
 	} else if payload.ColorN != (Vector3{}) {
 		override.ColorN = payload.ColorN
-		override.OverrideColorn = true
+		override.OverrideColorN = true
 	}
 	return nil
 }
@@ -1029,7 +1034,7 @@ func (controlPoint *ParticleControlPoint) parseFromJSON(raw json.RawMessage) err
 	return nil
 }
 
-func (render *ParticleRender) parseFromJSON(raw json.RawMessage) error {
+func (render *ParticleRenderer) parseFromJSON(raw json.RawMessage) error {
 	payload := struct {
 		Name        StringValue `json:"name"`
 		Length      FloatValue  `json:"length"`
@@ -1054,9 +1059,8 @@ func (render *ParticleRender) parseFromJSON(raw json.RawMessage) error {
 	return nil
 }
 
-func (init *Initializer) parseFromJSON(raw json.RawMessage) error {
+func (init *ParticleInitializer) parseFromJSON(raw json.RawMessage) error {
 	payload := struct {
-		ID   IntValue        `json:"id"`
 		Name StringValue     `json:"name"`
 		Min  json.RawMessage `json:"min"`
 		Max  json.RawMessage `json:"max"`
@@ -1070,28 +1074,80 @@ func (init *Initializer) parseFromJSON(raw json.RawMessage) error {
 	if name == "" {
 		return fmt.Errorf("particle initializer missing name")
 	}
-	init.Name = name
 
-	if bytesFromRawNullAware(payload.Min) != nil {
-		min, err := parseVector3FromRaw(payload.Min, init.Min)
-		if err != nil {
-			return fmt.Errorf("cannot parse min value for initializer %s: %w", name, err)
+	switch name {
+	case "lifetimerandom":
+		if bytesFromRawNullAware(payload.Min) != nil {
+			min, err := parseFloat64FromRaw(payload.Min)
+			if err != nil {
+				return fmt.Errorf("cannot parse min value for lifetimerandom initializer: %w", err)
+			}
+			init.MinLifetime = float32(min)
 		}
-		init.Min = min
-	}
-
-	if bytesFromRawNullAware(payload.Max) != nil {
-		max, err := parseVector3FromRaw(payload.Max, init.Max)
-		if err != nil {
-			return fmt.Errorf("cannot parse max value for initializer %s: %w", name, err)
+		if bytesFromRawNullAware(payload.Max) != nil {
+			max, err := parseFloat64FromRaw(payload.Max)
+			if err != nil {
+				return fmt.Errorf("cannot parse max value for lifetimerandom initializer: %w", err)
+			}
+			init.MaxLifetime = float32(max)
 		}
-		init.Max = max
+	case "sizerandom":
+		if bytesFromRawNullAware(payload.Min) != nil {
+			min, err := parseFloat64FromRaw(payload.Min)
+			if err != nil {
+				return fmt.Errorf("cannot parse min value for sizerandom initializer: %w", err)
+			}
+			init.MinSize = float32(min)
+		}
+		if bytesFromRawNullAware(payload.Max) != nil {
+			max, err := parseFloat64FromRaw(payload.Max)
+			if err != nil {
+				return fmt.Errorf("cannot parse max value for sizerandom initializer: %w", err)
+			}
+			init.MaxSize = float32(max)
+		}
+	case "velocityrandom":
+		if bytesFromRawNullAware(payload.Min) != nil {
+			min, err := parseVector3FromRaw(payload.Min, init.MinVelocity)
+			if err != nil {
+				return fmt.Errorf("cannot parse min value for velocityrandom initializer: %w", err)
+			}
+			init.MinVelocity = min
+		}
+		if bytesFromRawNullAware(payload.Max) != nil {
+			max, err := parseVector3FromRaw(payload.Max, init.MaxVelocity)
+			if err != nil {
+				return fmt.Errorf("cannot parse max value for velocityrandom initializer: %w", err)
+			}
+			init.MaxVelocity = max
+		}
+	case "colorrandom":
+		if bytesFromRawNullAware(payload.Min) != nil {
+			min, err := parseVector3FromRaw(payload.Min, init.MinColor)
+			if err != nil {
+				return fmt.Errorf("cannot parse min value for colorrandom initializer: %w", err)
+			}
+			for i := range 3 {
+				init.MinColor[i] = min[i] / 255
+			}
+		}
+		if bytesFromRawNullAware(payload.Max) != nil {
+			max, err := parseVector3FromRaw(payload.Max, init.MaxColor)
+			if err != nil {
+				return fmt.Errorf("cannot parse max value for colorrandom initializer: %w", err)
+			}
+			for i := range 3 {
+				init.MaxColor[i] = max[i] / 255
+			}
+		}
+	default:
+		fmt.Printf("warning: unknown particle initializer %s\n", name)
 	}
 
 	return nil
 }
 
-func (emitter *Emitter) parseFromJSON(raw json.RawMessage) error {
+func (emitter *ParticleEmitter) parseFromJSON(raw json.RawMessage) error {
 	payload := struct {
 		Directions          Vector3     `json:"directions"`
 		DistanceMax         Vector3     `json:"distancemax"`
@@ -1200,7 +1256,7 @@ func (particle *Particle) parseFromJSON(raw json.RawMessage, pkgMap *map[string]
 	}
 
 	for _, emitterRaw := range payload.Emitters {
-		var emitter Emitter
+		var emitter ParticleEmitter
 		if err := emitter.parseFromJSON(emitterRaw); err != nil {
 			return err
 		}
@@ -1208,24 +1264,32 @@ func (particle *Particle) parseFromJSON(raw json.RawMessage, pkgMap *map[string]
 	}
 
 	for _, rendererRaw := range payload.Renderers {
-		var renderer ParticleRender
+		var renderer ParticleRenderer
 		if err := renderer.parseFromJSON(rendererRaw); err != nil {
 			return err
 		}
 		particle.Renderers = append(particle.Renderers, renderer)
 	}
 	if len(particle.Renderers) == 0 {
-		particle.Renderers = append(particle.Renderers, ParticleRender{
+		particle.Renderers = append(particle.Renderers, ParticleRenderer{
 			Name: "sprite",
 		})
 	}
 
+	particle.Initializer = ParticleInitializer{
+		MinLifetime: 20,
+		MaxLifetime: 20,
+		MinSize:     1,
+		MaxSize:     1,
+		MinVelocity: [3]float32{0, 0, 0},
+		MaxVelocity: [3]float32{0, 0, 0},
+		MinColor:    [3]float32{1, 1, 1},
+		MaxColor:    [3]float32{1, 1, 1},
+	}
 	for _, initRaw := range payload.Initializers {
-		var init Initializer
-		if err := init.parseFromJSON(initRaw); err != nil {
+		if err := particle.Initializer.parseFromJSON(initRaw); err != nil {
 			return err
 		}
-		particle.Initializers = append(particle.Initializers, init)
 	}
 	particle.Operators = append(particle.Operators, payload.Operators...)
 

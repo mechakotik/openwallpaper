@@ -397,16 +397,12 @@ typedef struct {
 } particle_emitter_t;
 
 typedef struct {
-    bool randomize_lifetime;
     float min_lifetime;
     float max_lifetime;
-    bool randomize_size;
     float min_size;
     float max_size;
-    bool randomize_velocity;
     float min_velocity[3];
     float max_velocity[3];
-    bool randomize_color;
     float min_color[3];
     float max_color[3];
 } particle_initializer_t;
@@ -473,37 +469,21 @@ void spawn_particle_instance(particle_t* particle, particle_emitter_t* emitter) 
             break;
     }
 
-    instance->size = particle->init.min_size;
-    if(particle->init.randomize_size) {
-        instance->size = rand_float(particle->init.min_size, particle->init.max_size);
-    }
+    instance->size = rand_float(particle->init.min_size, particle->init.max_size);
     instance->size /= 2.0f;
 
+    float factor = rand_float(0.0f, 1.0f);
     for(int i = 0; i < 3; i++) {
-        instance->velocity[i] = particle->init.min_velocity[i];
-    }
-    if(particle->init.randomize_velocity) {
-        float factor = rand_float(0.0f, 1.0f);
-        for(int i = 0; i < 3; i++) {
-            instance->velocity[i] = particle->init.min_velocity[i] +
-                                    (particle->init.max_velocity[i] - particle->init.min_velocity[i]) * factor;
-        }
+        instance->velocity[i] =
+            particle->init.min_velocity[i] + (particle->init.max_velocity[i] - particle->init.min_velocity[i]) * factor;
     }
 
-    instance->lifetime = particle->init.min_lifetime;
-    if(particle->init.randomize_lifetime) {
-        instance->lifetime = rand_float(particle->init.min_lifetime, particle->init.max_lifetime);
-    }
+    instance->lifetime = rand_float(particle->init.min_lifetime, particle->init.max_lifetime);
 
+    factor = rand_float(0.0f, 1.0f);
     for(int i = 0; i < 3; i++) {
-        instance->color[i] = particle->init.min_color[i];
-    }
-    if(particle->init.randomize_color) {
-        float factor = rand_float(0.0f, 1.0f);
-        for(int i = 0; i < 3; i++) {
-            instance->color[i] =
-                particle->init.min_color[i] + (particle->init.max_color[i] - particle->init.min_color[i]) * factor;
-        }
+        instance->color[i] =
+            particle->init.min_color[i] + (particle->init.max_color[i] - particle->init.min_color[i]) * factor;
     }
 
     instance->alpha = 1.0f;

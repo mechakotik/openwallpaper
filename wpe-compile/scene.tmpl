@@ -268,13 +268,10 @@ ow_id shader{{.ID}}_fragment;
     particle{{.ObjectID}} = (particle_t){
         .emitters = calloc({{len .Emitters}}, sizeof(particle_emitter_t)),
         .init = {
-            .randomize_lifetime = {{.Init.RandomizeLifetime}},
             .min_lifetime = {{.Init.MinLifetime}},
             .max_lifetime = {{.Init.MaxLifetime}},
-            .randomize_size = {{.Init.RandomizeSize}},
             .min_size = {{.Init.MinSize}},
             .max_size = {{.Init.MaxSize}},
-            .randomize_velocity = {{.Init.RandomizeVelocity}},
             .min_velocity = {
                 {{index .Init.MinVelocity 0}},
                 {{index .Init.MinVelocity 1}},
@@ -285,7 +282,6 @@ ow_id shader{{.ID}}_fragment;
                 {{index .Init.MaxVelocity 1}},
                 {{index .Init.MaxVelocity 2}},
             },
-            .randomize_color = {{.Init.RandomizeColor}},
             .min_color = {
                 {{index .Init.MinColor 0}},
                 {{index .Init.MinColor 1}},
