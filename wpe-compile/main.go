@@ -815,6 +815,8 @@ func generateUniformSetupCode(ctx UniformCodegenContext) string {
 		} else if uniform.Name == "g_Color" {
 			code += fmt.Sprintf("        %s.g_Color = (glsl_vec3){.at = {%f, %f, %f}};\n",
 				ctx.StructName, ctx.Color[0], ctx.Color[1], ctx.Color[2])
+		} else if uniform.Name == "g_Alpha" {
+			code += fmt.Sprintf("        %s.g_Alpha = (glsl_float){.at = %f};\n", ctx.StructName, ctx.Alpha)
 		} else if uniform.Name == "g_UserAlpha" {
 			code += fmt.Sprintf("        %s.g_UserAlpha = (glsl_float){.at = %f};\n", ctx.StructName, ctx.Alpha)
 		} else if uniform.Name == "g_Brightness" {

@@ -176,6 +176,7 @@ func parseFloat64FromRaw(raw json.RawMessage) (float64, error) {
 	err = json.Unmarshal(raw, &text)
 	if err == nil {
 		text = strings.TrimSpace(text)
+		text = strings.Trim(text, ",")
 		if text == "" {
 			return 0, errors.New("empty string for float value")
 		}
@@ -245,6 +246,7 @@ func parseFloatSliceFromRaw(raw json.RawMessage) ([]float32, error) {
 		parts := strings.Fields(text)
 		result := make([]float32, len(parts))
 		for index, part := range parts {
+			part = strings.Trim(part, ",")
 			value, parseErr := strconv.ParseFloat(part, 64)
 			if parseErr != nil {
 				return nil, fmt.Errorf("cannot parse float from string %q: %w", part, parseErr)

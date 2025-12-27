@@ -423,11 +423,15 @@ func insertIntermediateAttributes(source string, attributes []AttributeInfo, sid
 func preprocessSamplers(source string) (string, []string) {
 	reSampler := regexp.MustCompile(`uniform\s*sampler2D\s*([a-z|A-Z|0-9|_]*)\s*;`)
 	samplers := []string{}
+	header := ""
 	source = reSampler.ReplaceAllStringFunc(source, func(match string) string {
 		submatches := reSampler.FindStringSubmatch(match)
 		samplers = append(samplers, string(submatches[1]))
-		return fmt.Sprintf("layout(set = 2, binding = %d) uniform sampler2D %s;", len(samplers)-1, string(submatches[1]))
+		header += fmt.Sprintf("layout(set = 2, binding = %d) uniform sampler2D %s;\n", len(samplers)-1, string(submatches[1]))
+		return ""
 	})
+
+	source = strings.Replace(source, "#version 450", "#version 450\n"+header, 1)
 	return source, samplers
 }
 
@@ -531,6 +535,8 @@ func getGLSLTypeSizeAndAlignment(typeName string) (int, int) {
 		return 12, 16
 	case "vec4":
 		return 16, 16
+	case "mat3":
+		return 48, 16
 	case "mat4":
 		return 64, 16
 	default:

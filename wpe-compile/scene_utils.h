@@ -23,6 +23,10 @@ typedef struct {
 } glsl_vec4;
 
 typedef struct {
+    float at[3][4];
+} glsl_mat3;
+
+typedef struct {
     float at[4][4];
 } glsl_mat4;
 
