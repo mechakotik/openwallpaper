@@ -367,6 +367,7 @@ typedef struct {
 
     float color[3];
     float alpha;
+    float initial_alpha;
     float size;
     float frame;
 
@@ -421,6 +422,9 @@ typedef struct {
     float oscillate_scale_max;
     float oscillate_phase_min;
     float oscillate_phase_max;
+    bool alpha_fade;
+    float alpha_fade_in_time;
+    float alpha_fade_out_time;
 } particle_operator_t;
 
 typedef struct {
@@ -444,6 +448,21 @@ void init_particle(particle_t* particle) {
 
 float rand_float(float min, float max) {
     return min + (max - min) * (float)rand() / RAND_MAX;
+}
+
+float fade_value(float life, float start, float end, float start_value, float end_value) {
+    if(life <= start) {
+        return start_value;
+    }
+    if(life > end) {
+        return end_value;
+    }
+    float span = end - start;
+    if(fabsf(span) < 0.00001f) {
+        return end_value;
+    }
+    float pass = (life - start) / span;
+    return start_value + (end_value - start_value) * pass;
 }
 
 void spawn_particle_instance(particle_t* particle, particle_emitter_t* emitter) {
@@ -525,6 +544,7 @@ void spawn_particle_instance(particle_t* particle, particle_emitter_t* emitter) 
     }
 
     instance->alpha = 1.0f;
+    instance->initial_alpha = instance->alpha;
     instance->age = 0.0f;
 }
 
@@ -560,6 +580,23 @@ void update_particle_instance(particle_t* particle, particle_instance_t* instanc
             float delta_pos = -1.0f * scale * frequency * sinf(frequency * time + phase) * delta;
             instance->position[i] += delta_pos;
         }
+    }
+
+    if(particle->operator.alpha_fade && instance->lifetime > 0.0f) {
+        float life = instance->age / instance->lifetime;
+        float fade = 1.0f;
+        if(life <= particle->operator.alpha_fade_in_time) {
+            fade = fade_value(life, 0.0f, particle->operator.alpha_fade_in_time, 0.0f, 1.0f);
+        } else if(life > particle->operator.alpha_fade_out_time) {
+            fade =
+                1.0f - fade_value(life, particle->operator.alpha_fade_out_time, 1.0f, 0.0f, 1.0f);
+        }
+        if(fade < 0.0f) {
+            fade = 0.0f;
+        } else if(fade > 1.0f) {
+            fade = 1.0f;
+        }
+        instance->alpha = instance->initial_alpha * fade;
     }
 }
 

@@ -917,10 +917,17 @@ type OscillatePositionOperator struct {
 	PhaseMax     float32
 }
 
+type AlphaFadeOperator struct {
+	Enabled     bool
+	FadeInTime  float32
+	FadeOutTime float32
+}
+
 type ParticleOperator struct {
 	Movement          bool
 	Gravity           Vector3
 	OscillatePosition OscillatePositionOperator
+	AlphaFade         AlphaFadeOperator
 }
 
 type EmitterFlags uint32
@@ -1176,6 +1183,8 @@ func (operator *ParticleOperator) parseFromJSON(raw json.RawMessage) error {
 		PhaseMin     json.RawMessage `json:"phasemin"`
 		PhaseMax     json.RawMessage `json:"phasemax"`
 		Mask         json.RawMessage `json:"mask"`
+		FadeInTime   json.RawMessage `json:"fadeintime"`
+		FadeOutTime  json.RawMessage `json:"fadeouttime"`
 	}{}
 
 	if err := json.Unmarshal(raw, &payload); err != nil {
@@ -1258,6 +1267,27 @@ func (operator *ParticleOperator) parseFromJSON(raw json.RawMessage) error {
 			op.Mask = mask
 		}
 		operator.OscillatePosition = op
+	case "alphafade":
+		op := AlphaFadeOperator{
+			Enabled:     true,
+			FadeInTime:  0.5,
+			FadeOutTime: 0.5,
+		}
+		if bytesFromRawNullAware(payload.FadeInTime) != nil {
+			fadeInTime, err := parseFloat64FromRaw(payload.FadeInTime)
+			if err != nil {
+				return fmt.Errorf("cannot parse fadeintime for alphafade operator: %w", err)
+			}
+			op.FadeInTime = float32(fadeInTime)
+		}
+		if bytesFromRawNullAware(payload.FadeOutTime) != nil {
+			fadeOutTime, err := parseFloat64FromRaw(payload.FadeOutTime)
+			if err != nil {
+				return fmt.Errorf("cannot parse fadeouttime for alphafade operator: %w", err)
+			}
+			op.FadeOutTime = float32(fadeOutTime)
+		}
+		operator.AlphaFade = op
 	default:
 		fmt.Printf("warning: unknown particle operator %s\n", name)
 	}
