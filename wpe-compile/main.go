@@ -455,8 +455,8 @@ func processImageEffect(object ImageObject, effect ImageEffect, tempBuffers *[2]
 	for idx, fbo := range effect.FBOs {
 		if object.Fullscreen {
 			fbos[fbo.Name] = getTempScreenBuffer(TempScreenBufferParameters{
-				ScaleX: float32(fbo.Scale),
-				ScaleY: float32(fbo.Scale),
+				ScaleX: 1 / float32(fbo.Scale),
+				ScaleY: 1 / float32(fbo.Scale),
 				Number: idx,
 			})
 		} else {
@@ -924,7 +924,10 @@ func getTempScreenBuffer(params TempScreenBufferParameters) int {
 
 func scalesEqual(scale1, scale2 float32) bool {
 	diff := scale1 - scale2
-	return 0.01 <= diff && diff <= 0.99
+	if diff < 0 {
+		diff = -diff
+	}
+	return diff < 0.01
 }
 
 func compileShader(shaderName string, boundTextures []bool, defines map[string]int) (CompiledShader, error) {
