@@ -905,6 +905,11 @@ type ParticleInitializer struct {
 	MaxColor    [3]float32
 }
 
+type ParticleOperator struct {
+	Movement bool
+	Gravity  Vector3
+}
+
 type EmitterFlags uint32
 
 type ParticleEmitter struct {
@@ -947,7 +952,7 @@ const (
 type Particle struct {
 	Emitters           []ParticleEmitter
 	Initializer        ParticleInitializer
-	Operators          []json.RawMessage
+	Operator           ParticleOperator
 	Renderers          []ParticleRenderer
 	ControlPoints      []ParticleControlPoint
 	Material           Material
@@ -1147,6 +1152,38 @@ func (init *ParticleInitializer) parseFromJSON(raw json.RawMessage) error {
 	return nil
 }
 
+func (operator *ParticleOperator) parseFromJSON(raw json.RawMessage) error {
+	payload := struct {
+		Name    string          `json:"name"`
+		Gravity json.RawMessage `json:"gravity"`
+	}{}
+
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		return fmt.Errorf("cannot parse particle operator: %w", err)
+	}
+
+	name := strings.TrimSpace(string(payload.Name))
+	if name == "" {
+		return fmt.Errorf("particle operator missing name")
+	}
+
+	switch name {
+	case "movement":
+		if bytesFromRawNullAware(payload.Gravity) != nil {
+			gravity, err := parseVector3FromRaw(payload.Gravity, operator.Gravity)
+			if err != nil {
+				return fmt.Errorf("cannot parse gravity value for gravity operator: %w", err)
+			}
+			operator.Movement = true
+			operator.Gravity = gravity
+		}
+	default:
+		fmt.Printf("warning: unknown particle operator %s\n", name)
+	}
+
+	return nil
+}
+
 func (emitter *ParticleEmitter) parseFromJSON(raw json.RawMessage) error {
 	payload := struct {
 		Directions          Vector3     `json:"directions"`
@@ -1291,7 +1328,12 @@ func (particle *Particle) parseFromJSON(raw json.RawMessage, pkgMap *map[string]
 			return err
 		}
 	}
-	particle.Operators = append(particle.Operators, payload.Operators...)
+
+	for _, operatorRaw := range payload.Operators {
+		if err := particle.Operator.parseFromJSON(operatorRaw); err != nil {
+			return err
+		}
+	}
 
 	for _, controlRaw := range payload.ControlPoints {
 		var controlPoint ParticleControlPoint

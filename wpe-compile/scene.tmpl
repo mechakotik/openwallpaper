@@ -293,6 +293,14 @@ ow_id shader{{.ID}}_fragment;
                 {{index .Init.MaxColor 2}},
             },
         },
+        .operator = {
+            .movement = {{.Operator.Movement}},
+            .gravity = {
+                {{index .Operator.Gravity 0}},
+                {{index .Operator.Gravity 1}},
+                {{index .Operator.Gravity 2}},
+            },
+        },
         .max_count = {{.MaxCount}},
         .emitter_count = {{len .Emitters}},
         .origin = {

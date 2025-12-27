@@ -116,6 +116,7 @@ type CodegenParticleData struct {
 	ObjectID  int
 	MaxCount  int
 	Init      ParticleInitializer
+	Operator  ParticleOperator
 	Emitters  []ParticleEmitter
 	Origin    [3]float32
 	StartTime float32
@@ -655,6 +656,7 @@ func processParticleObject(object ParticleObject) {
 		ObjectID:  lastObjectID,
 		MaxCount:  maxCount,
 		Init:      init,
+		Operator:  object.ParticleData.Operator,
 		Emitters:  object.ParticleData.Emitters,
 		Origin:    object.Origin,
 		StartTime: object.ParticleData.StartTime,

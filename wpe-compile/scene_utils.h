@@ -408,11 +408,17 @@ typedef struct {
 } particle_initializer_t;
 
 typedef struct {
+    bool movement;
+    float gravity[3];
+} particle_operator_t;
+
+typedef struct {
     particle_instance_t* instances;
     particle_instance_data_t* instance_data;
     ow_id instance_buffer;
     particle_emitter_t* emitters;
     particle_initializer_t init;
+    particle_operator_t operator;
     int max_count;
     int emitter_count;
     float origin[3];
@@ -501,8 +507,11 @@ void update_particle_instance(particle_t* particle, particle_instance_t* instanc
         return;
     }
 
-    for(int i = 0; i < 3; i++) {
-        instance->position[i] += instance->velocity[i] * delta;
+    if(particle->operator.movement) {
+        for(int i = 0; i < 3; i++) {
+            instance->velocity[i] += particle->operator.gravity[i] * delta;
+            instance->position[i] += instance->velocity[i] * delta;
+        }
     }
 }
 
