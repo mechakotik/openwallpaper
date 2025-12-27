@@ -90,6 +90,13 @@ static glsl_mat4 mat4_identity() {
     return res;
 }
 
+static glsl_mat4 mat4_scale_xy(float sx, float sy) {
+    glsl_mat4 m = mat4_identity();
+    m.at[0][0] = sx;
+    m.at[1][1] = sy;
+    return m;
+}
+
 static glsl_mat4 mat4_multiply(glsl_mat4 a, glsl_mat4 b) {
     glsl_mat4 res;
     for(int col = 0; col < 4; ++col) {
@@ -222,22 +229,39 @@ static transform_matrices_t compute_transform_matrices(transform_parameters_t pa
 
     float vp_scale_x = 2.0f / cam_width;
     float vp_scale_y = 2.0f / cam_height;
-
     glsl_mat4 vp = mat4_identity();
+
     if(params.perspective) {
-        const float camera_distance = 1000.0f;
-        float aspect = screen_aspect;
-        if(params.scale_mode == SCALE_MODE_STRETCH) {
-            aspect = scene_aspect;
-        }
-        float fov_radians = params.fov * M_PI / 180.0f;
+        float fov_radians = params.fov * (float)M_PI / 180.0f;
+        float camera_distance = (cam_height * 0.5f) / tanf(fov_radians * 0.5f);
         glsl_vec3 eye = {{params.scene_width * 0.5f, params.scene_height * 0.5f, camera_distance}};
-        glsl_vec3 center = eye;
-        center.at[2] -= 1.0f;
+        glsl_vec3 center = {{params.scene_width * 0.5f, params.scene_height * 0.5f, 0.0f}};
         glsl_vec3 up = {{0.0f, 1.0f, 0.0f}};
         glsl_mat4 view = mat4_look_at(eye, center, up);
-        glsl_mat4 proj = mat4_perspective(fov_radians, aspect, params.near_z, params.far_z);
-        vp = mat4_multiply(proj, view);
+        glsl_mat4 proj = mat4_perspective(fov_radians, scene_aspect, params.near_z, params.far_z);
+        float sx = 1.0f;
+        float sy = 1.0f;
+
+        if(params.scale_mode == SCALE_MODE_ASPECT_FIT) {
+            if(screen_aspect > scene_aspect) {
+                sx = scene_aspect / screen_aspect;
+            } else {
+                sy = screen_aspect / scene_aspect;
+            }
+        } else if(params.scale_mode == SCALE_MODE_ASPECT_CROP) {
+            if(screen_aspect > scene_aspect) {
+                sy = screen_aspect / scene_aspect;
+            } else {
+                sx = scene_aspect / screen_aspect;
+            }
+        } else {
+            sx = 1.0f;
+            sy = 1.0f;
+        }
+
+        glsl_mat4 aspect_fix = mat4_scale_xy(sx, sy);
+        glsl_mat4 pv = mat4_multiply(proj, view);
+        vp = mat4_multiply(aspect_fix, pv);
     } else {
         vp.at[0][0] = vp_scale_x;
         vp.at[0][1] = 0.0f;
@@ -429,9 +453,9 @@ void spawn_particle_instance(particle_t* particle, particle_emitter_t* emitter) 
             for(int it = 0; it < 10; it++) {
                 float dist = 0.0f;
                 for(int i = 0; i < 3; i++) {
-                    float offset =
-                        rand_float(emitter->distance_min[i], emitter->distance_max[i]) * emitter->directions[i];
+                    float offset = rand_float(emitter->distance_min[i], emitter->distance_max[i]);
                     dist += (offset / emitter->distance_max[i]) * (offset / emitter->distance_max[i]);
+                    offset *= emitter->directions[i];
                     if(rand() % 2) {
                         offset = -offset;
                     }

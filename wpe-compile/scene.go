@@ -1570,7 +1570,7 @@ func parseSceneGeneral(raw json.RawMessage) (SceneGeneral, error) {
 		CameraParallaxDelay     FloatValue      `json:"cameraparallaxdelay"`
 		CameraParallaxMouse     FloatValue      `json:"cameraparallaxmouseinfluence"`
 		Zoom                    FloatValue      `json:"zoom"`
-		FOV                     FloatValue      `json:"fov"`
+		FOV                     FloatValue      `json:"perspectiveoverridefov"`
 		NearZ                   FloatValue      `json:"nearz"`
 		FarZ                    FloatValue      `json:"farz"`
 		OrthogonalProjectionRaw json.RawMessage `json:"orthogonalprojection"`
@@ -1579,7 +1579,7 @@ func parseSceneGeneral(raw json.RawMessage) (SceneGeneral, error) {
 	general := SceneGeneral{
 		Ortho:         OrthogonalProjection{Width: 1920, Height: 1080},
 		Zoom:          1,
-		FOV:           50,
+		FOV:           90,
 		NearZ:         0.01,
 		FarZ:          10000,
 		AmbientColor:  Vector3{0.2, 0.2, 0.2},
