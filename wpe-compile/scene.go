@@ -1325,7 +1325,10 @@ func (emitter *ParticleEmitter) parseFromJSON(raw json.RawMessage) error {
 		Flags               IntValue    `json:"flags"`
 		Name                StringValue `json:"name"`
 		Rate                FloatValue  `json:"rate"`
-	}{}
+	}{
+		Directions: Vector3{1, 1, 1},
+		Rate:       5,
+	}
 
 	if err := json.Unmarshal(raw, &payload); err != nil {
 		return fmt.Errorf("cannot parse particle emitter: %w", err)
