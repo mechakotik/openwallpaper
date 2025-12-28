@@ -608,10 +608,12 @@ func processParticleObject(object ParticleObject) {
 		return
 	}
 
-	lastObjectID++
-
 	if len(object.ParticleData.Material.Textures) == 0 {
 		fmt.Printf("warning: skipping particle object %s because it has no texture\n", object.Name)
+		return
+	}
+	if len(object.ParticleData.Renderers) != 1 || object.ParticleData.Renderers[0].Name != "sprite" {
+		fmt.Printf("warning: skipping particle object %s because of unsupported renderer %s\n", object.Name, object.ParticleData.Renderers[0].Name)
 		return
 	}
 
@@ -622,6 +624,7 @@ func processParticleObject(object ParticleObject) {
 		return
 	}
 
+	lastObjectID++
 	usePerspective := object.ParticleData.Flags&ParticleFlagPerspective != 0
 	maxCount := int(object.ParticleData.MaxCount)
 	init := object.ParticleData.Initializer
