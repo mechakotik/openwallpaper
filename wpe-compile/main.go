@@ -671,13 +671,25 @@ func processParticleObject(object ParticleObject) {
 
 	codegenData.Particles = append(codegenData.Particles, particleData)
 
+	blendMode := "OW_BLEND_ALPHA"
+	switch object.ParticleData.Material.Blending {
+	case "translucent":
+		blendMode = "OW_BLEND_ALPHA"
+	case "additive":
+		blendMode = "OW_BLEND_ADD"
+	case "normal", "disabled":
+		blendMode = "OW_BLEND_NONE"
+	default:
+		fmt.Printf("warning: unknown blend mode %s, using default\n", object.ParticleData.Material.Blending)
+	}
+
 	passData := CodegenPassData{
 		ObjectID:          lastObjectID,
 		PassID:            0,
 		ColorTarget:       "screen_buffer",
 		ColorTargetFormat: "OW_TEXTURE_RGBA8_UNORM",
 		ClearColor:        false,
-		BlendMode:         "OW_BLEND_ADD",
+		BlendMode:         blendMode,
 		TextureBindings: []CodegenTextureBindingData{{
 			Slot:    0,
 			Texture: fmt.Sprintf("texture%d", texture.ID),
