@@ -233,7 +233,7 @@ static transform_matrices_t compute_transform_matrices(transform_parameters_t pa
 
     if(params.perspective) {
         float fov_radians = params.fov * (float)M_PI / 180.0f;
-        float camera_distance = (cam_height * 0.5f) / tanf(fov_radians * 0.5f);
+        float camera_distance = (params.scene_height * 0.5f) / tanf(fov_radians * 0.5f);
         glsl_vec3 eye = {{params.scene_width * 0.5f, params.scene_height * 0.5f, camera_distance}};
         glsl_vec3 center = {{params.scene_width * 0.5f, params.scene_height * 0.5f, 0.0f}};
         glsl_vec3 up = {{0.0f, 1.0f, 0.0f}};
@@ -590,14 +590,13 @@ void update_particle_instance(particle_t* particle, particle_instance_t* instanc
         }
     }
 
-    if(particle->operator.alpha_fade && instance->lifetime > 0.0f) {
+    if(particle->operator.alpha_fade && instance->lifetime> 0.0f) {
         float life = instance->age / instance->lifetime;
         float fade = 1.0f;
         if(life <= particle->operator.alpha_fade_in_time) {
             fade = fade_value(life, 0.0f, particle->operator.alpha_fade_in_time, 0.0f, 1.0f);
         } else if(life > particle->operator.alpha_fade_out_time) {
-            fade =
-                1.0f - fade_value(life, particle->operator.alpha_fade_out_time, 1.0f, 0.0f, 1.0f);
+            fade = 1.0f - fade_value(life, particle->operator.alpha_fade_out_time, 1.0f, 0.0f, 1.0f);
         }
         if(fade < 0.0f) {
             fade = 0.0f;
