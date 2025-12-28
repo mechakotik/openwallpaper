@@ -413,6 +413,19 @@ typedef struct {
     float max_velocity[3];
     float min_color[3];
     float max_color[3];
+    bool turbulent_velocity;
+    bool turbulent_noise_initialized;
+    float turbulent_scale;
+    float turbulent_timescale;
+    float turbulent_offset;
+    float turbulent_speed_min;
+    float turbulent_speed_max;
+    float turbulent_phase_min;
+    float turbulent_phase_max;
+    float turbulent_forward[3];
+    float turbulent_right[3];
+    float turbulent_up[3];
+    float turbulent_noise_pos[3];
 } particle_initializer_t;
 
 typedef struct {
@@ -483,7 +496,270 @@ float fade_value(float life, float start, float end, float start_value, float en
     return start_value + (end_value - start_value) * pass;
 }
 
-void spawn_particle_instance(particle_t* particle, particle_emitter_t* emitter) {
+static float clampf(float value, float min, float max) {
+    if(value < min) {
+        return min;
+    }
+    if(value > max) {
+        return max;
+    }
+    return value;
+}
+
+static float vec3_lengthf(const float v[3]) {
+    return sqrtf(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
+}
+
+static void vec3_normalizef(float v[3]) {
+    float len = vec3_lengthf(v);
+    if(len > 0.0001f) {
+        float inv = 1.0f / len;
+        v[0] *= inv;
+        v[1] *= inv;
+        v[2] *= inv;
+    }
+}
+
+static float vec3_dotf(const float a[3], const float b[3]) {
+    return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+}
+
+static void vec3_crossf(const float a[3], const float b[3], float out[3]) {
+    out[0] = a[1] * b[2] - a[2] * b[1];
+    out[1] = a[2] * b[0] - a[0] * b[2];
+    out[2] = a[0] * b[1] - a[1] * b[0];
+}
+
+static void vec3_copy(const float src[3], float dst[3]) {
+    dst[0] = src[0];
+    dst[1] = src[1];
+    dst[2] = src[2];
+}
+
+static void axis_angle_rotate(const float v[3], const float axis_in[3], float angle, float out[3]) {
+    float axis[3];
+    vec3_copy(axis_in, axis);
+    vec3_normalizef(axis);
+    float c = cosf(angle);
+    float s = sinf(angle);
+    float dot = vec3_dotf(axis, v);
+    float cross[3];
+    vec3_crossf(axis, v, cross);
+    out[0] = v[0] * c + cross[0] * s + axis[0] * dot * (1.0f - c);
+    out[1] = v[1] * c + cross[1] * s + axis[1] * dot * (1.0f - c);
+    out[2] = v[2] * c + cross[2] * s + axis[2] * dot * (1.0f - c);
+}
+
+static const int PERLIN_PERM[512] = {151, 160, 137, 91, 90, 15, 131, 13, 201, 95, 96, 53, 194, 233, 7, 225, 140, 36,
+    103, 30, 69, 142, 8, 99, 37, 240, 21, 10, 23, 190, 6, 148, 247, 120, 234, 75, 0, 26, 197, 62, 94, 252, 219, 203,
+    117, 35, 11, 32, 57, 177, 33, 88, 237, 149, 56, 87, 174, 20, 125, 136, 171, 168, 68, 175, 74, 165, 71, 134, 139, 48,
+    27, 166, 77, 146, 158, 231, 83, 111, 229, 122, 60, 211, 133, 230, 220, 105, 92, 41, 55, 46, 245, 40, 244, 102, 143,
+    54, 65, 25, 63, 161, 1, 216, 80, 73, 209, 76, 132, 187, 208, 89, 18, 169, 200, 196, 135, 130, 116, 188, 159, 86,
+    164, 100, 109, 198, 173, 186, 3, 64, 52, 217, 226, 250, 124, 123, 5, 202, 38, 147, 118, 126, 255, 82, 85, 212, 207,
+    206, 59, 227, 47, 16, 58, 17, 182, 189, 28, 42, 223, 183, 170, 213, 119, 248, 152, 2, 44, 154, 163, 70, 221, 153,
+    101, 155, 167, 43, 172, 9, 129, 22, 39, 253, 19, 98, 108, 110, 79, 113, 224, 232, 178, 185, 112, 104, 218, 246, 97,
+    228, 251, 34, 242, 193, 238, 210, 144, 12, 191, 179, 162, 241, 81, 51, 145, 235, 249, 14, 239, 107, 49, 192, 214,
+    31, 181, 199, 106, 157, 184, 84, 204, 176, 115, 121, 50, 45, 127, 4, 150, 254, 138, 236, 205, 93, 222, 114, 67, 29,
+    24, 72, 243, 141, 128, 195, 78, 66, 215, 61, 156, 180, 151, 160, 137, 91, 90, 15, 131, 13, 201, 95, 96, 53, 194,
+    233, 7, 225, 140, 36, 103, 30, 69, 142, 8, 99, 37, 240, 21, 10, 23, 190, 6, 148, 247, 120, 234, 75, 0, 26, 197, 62,
+    94, 252, 219, 203, 117, 35, 11, 32, 57, 177, 33, 88, 237, 149, 56, 87, 174, 20, 125, 136, 171, 168, 68, 175, 74,
+    165, 71, 134, 139, 48, 27, 166, 77, 146, 158, 231, 83, 111, 229, 122, 60, 211, 133, 230, 220, 105, 92, 41, 55, 46,
+    245, 40, 244, 102, 143, 54, 65, 25, 63, 161, 1, 216, 80, 73, 209, 76, 132, 187, 208, 89, 18, 169, 200, 196, 135,
+    130, 116, 188, 159, 86, 164, 100, 109, 198, 173, 186, 3, 64, 52, 217, 226, 250, 124, 123, 5, 202, 38, 147, 118, 126,
+    255, 82, 85, 212, 207, 206, 59, 227, 47, 16, 58, 17, 182, 189, 28, 42, 223, 183, 170, 213, 119, 248, 152, 2, 44,
+    154, 163, 70, 221, 153, 101, 155, 167, 43, 172, 9, 129, 22, 39, 253, 19, 98, 108, 110, 79, 113, 224, 232, 178, 185,
+    112, 104, 218, 246, 97, 228, 251, 34, 242, 193, 238, 210, 144, 12, 191, 179, 162, 241, 81, 51, 145, 235, 249, 14,
+    239, 107, 49, 192, 214, 31, 181, 199, 106, 157, 184, 84, 204, 176, 115, 121, 50, 45, 127, 4, 150, 254, 138, 236,
+    205, 93, 222, 114, 67, 29, 24, 72, 243, 141, 128, 195, 78, 66, 215, 61, 156, 180};
+
+static float perlin_grad(int hash, float x, float y, float z) {
+    switch(hash & 0xF) {
+        case 0x0:
+            return x + y;
+        case 0x1:
+            return -x + y;
+        case 0x2:
+            return x - y;
+        case 0x3:
+            return -x - y;
+        case 0x4:
+            return x + z;
+        case 0x5:
+            return -x + z;
+        case 0x6:
+            return x - z;
+        case 0x7:
+            return -x - z;
+        case 0x8:
+            return y + z;
+        case 0x9:
+            return -y + z;
+        case 0xA:
+            return y - z;
+        case 0xB:
+            return -y - z;
+        case 0xC:
+            return y + x;
+        case 0xD:
+            return -y + z;
+        case 0xE:
+            return y - x;
+        case 0xF:
+            return -y - z;
+        default:
+            return 0.0f;
+    }
+}
+
+static float perlin_fade(float t) {
+    return t * t * t * (t * (t * 6.0f - 15.0f) + 10.0f);
+}
+
+static float perlin_lerp(float t, float a, float b) {
+    return a + t * (b - a);
+}
+
+static float perlin_noise(float x, float y, float z) {
+    int X = ((int)floorf(x)) & 255;
+    int Y = ((int)floorf(y)) & 255;
+    int Z = ((int)floorf(z)) & 255;
+
+    x -= floorf(x);
+    y -= floorf(y);
+    z -= floorf(z);
+
+    float u = perlin_fade(x);
+    float v = perlin_fade(y);
+    float w = perlin_fade(z);
+
+    int A = PERLIN_PERM[X] + Y;
+    int AA = PERLIN_PERM[A] + Z;
+    int AB = PERLIN_PERM[A + 1] + Z;
+    int B = PERLIN_PERM[X + 1] + Y;
+    int BA = PERLIN_PERM[B] + Z;
+    int BB = PERLIN_PERM[B + 1] + Z;
+
+    return perlin_lerp(w,
+        perlin_lerp(v, perlin_lerp(u, perlin_grad(PERLIN_PERM[AA], x, y, z), perlin_grad(PERLIN_PERM[BA], x - 1, y, z)),
+            perlin_lerp(u, perlin_grad(PERLIN_PERM[AB], x, y - 1, z), perlin_grad(PERLIN_PERM[BB], x - 1, y - 1, z))),
+        perlin_lerp(v,
+            perlin_lerp(
+                u, perlin_grad(PERLIN_PERM[AA + 1], x, y, z - 1), perlin_grad(PERLIN_PERM[BA + 1], x - 1, y, z - 1)),
+            perlin_lerp(u, perlin_grad(PERLIN_PERM[AB + 1], x, y - 1, z - 1),
+                perlin_grad(PERLIN_PERM[BB + 1], x - 1, y - 1, z - 1))));
+}
+
+static void perlin_noise_vec3(const float p[3], float out[3]) {
+    out[0] = perlin_noise(p[0], p[1], p[2]);
+    out[1] = perlin_noise(p[0] + 89.2f, p[1] + 33.1f, p[2] + 57.3f);
+    out[2] = perlin_noise(p[0] + 100.3f, p[1] + 120.1f, p[2] + 142.2f);
+}
+
+static void curl_noise_vec3(const float p[3], float out[3]) {
+    const float e = 1e-4f;
+    float dx[3] = {e, 0.0f, 0.0f};
+    float dy[3] = {0.0f, e, 0.0f};
+    float dz[3] = {0.0f, 0.0f, e};
+
+    float x0[3] = {p[0] - dx[0], p[1] - dx[1], p[2] - dx[2]};
+    float x1[3] = {p[0] + dx[0], p[1] + dx[1], p[2] + dx[2]};
+    float y0[3] = {p[0] - dy[0], p[1] - dy[1], p[2] - dy[2]};
+    float y1[3] = {p[0] + dy[0], p[1] + dy[1], p[2] + dy[2]};
+    float z0[3] = {p[0] - dz[0], p[1] - dz[1], p[2] - dz[2]};
+    float z1[3] = {p[0] + dz[0], p[1] + dz[1], p[2] + dz[2]};
+
+    float nx0[3];
+    perlin_noise_vec3(x0, nx0);
+    float nx1[3];
+    perlin_noise_vec3(x1, nx1);
+    float ny0[3];
+    perlin_noise_vec3(y0, ny0);
+    float ny1[3];
+    perlin_noise_vec3(y1, ny1);
+    float nz0[3];
+    perlin_noise_vec3(z0, nz0);
+    float nz1[3];
+    perlin_noise_vec3(z1, nz1);
+
+    out[0] = (ny1[2] - ny0[2]) - (nz1[1] - nz0[1]);
+    out[1] = (nz1[0] - nz0[0]) - (nx1[2] - nx0[2]);
+    out[2] = (nx1[1] - nx0[1]) - (ny1[0] - ny0[0]);
+
+    out[0] /= (2.0f * e);
+    out[1] /= (2.0f * e);
+    out[2] /= (2.0f * e);
+}
+
+static void generate_turbulent_velocity(particle_initializer_t* init, float duration, float out_velocity[3]) {
+    float speed = rand_float(init->turbulent_speed_min, init->turbulent_speed_max);
+
+    if(!init->turbulent_noise_initialized) {
+        init->turbulent_noise_pos[0] = rand_float(0.0f, 10.0f);
+        init->turbulent_noise_pos[1] = rand_float(0.0f, 10.0f);
+        init->turbulent_noise_pos[2] = rand_float(0.0f, 10.0f);
+        init->turbulent_noise_initialized = true;
+    }
+
+    float position[3];
+    vec3_copy(init->turbulent_noise_pos, position);
+
+    float step_duration = duration;
+    if(step_duration > 10.0f) {
+        position[0] += speed;
+        step_duration = 0.0f;
+    }
+
+    float direction[3] = {1.0f, 0.0f, 0.0f};
+    float time_scale = init->turbulent_timescale;
+    if(fabsf(time_scale) < 0.0001f) {
+        time_scale = 1.0f;
+    }
+
+    do {
+        curl_noise_vec3(position, direction);
+        vec3_normalizef(direction);
+        float step = 0.005f / time_scale;
+        position[0] += direction[0] * step;
+        position[1] += direction[1] * step;
+        position[2] += direction[2] * step;
+        step_duration -= 0.01f;
+    } while(step_duration > 0.01f);
+
+    float forward_len = vec3_lengthf(init->turbulent_forward);
+    float dir_len = vec3_lengthf(direction);
+    if(forward_len > 0.0001f && dir_len > 0.0001f) {
+        float dot = vec3_dotf(direction, init->turbulent_forward) / (forward_len * dir_len);
+        dot = clampf(dot, -1.0f, 1.0f);
+        float angle_ratio = acosf(dot) / (float)M_PI;
+        float clamp_scale = init->turbulent_scale * 0.5f;
+        if(clamp_scale < 0.0f) {
+            clamp_scale = 0.0f;
+        }
+        if(angle_ratio > clamp_scale && clamp_scale < 1.0f) {
+            float axis[3];
+            vec3_crossf(direction, init->turbulent_forward, axis);
+            if(vec3_lengthf(axis) > 0.0001f) {
+                float rotate_angle = (angle_ratio - angle_ratio * clamp_scale) * (float)M_PI;
+                axis_angle_rotate(direction, axis, rotate_angle, direction);
+            }
+        }
+    }
+
+    float rotated[3];
+    if(vec3_lengthf(init->turbulent_right) > 0.0001f && fabsf(init->turbulent_offset) > 0.0001f) {
+        axis_angle_rotate(direction, init->turbulent_right, init->turbulent_offset, rotated);
+    } else {
+        vec3_copy(direction, rotated);
+    }
+
+    out_velocity[0] = rotated[0] * speed;
+    out_velocity[1] = rotated[1] * speed;
+    out_velocity[2] = rotated[2] * speed;
+
+    vec3_copy(position, init->turbulent_noise_pos);
+}
+
+void spawn_particle_instance(particle_t* particle, particle_emitter_t* emitter, float duration) {
     if(particle->alive_count == particle->max_count) {
         return;
     }
@@ -531,6 +807,13 @@ void spawn_particle_instance(particle_t* particle, particle_emitter_t* emitter) 
     for(int i = 0; i < 3; i++) {
         instance->velocity[i] =
             particle->init.min_velocity[i] + (particle->init.max_velocity[i] - particle->init.min_velocity[i]) * factor;
+    }
+    if(particle->init.turbulent_velocity) {
+        float turbulent_velocity[3];
+        generate_turbulent_velocity(&particle->init, duration, turbulent_velocity);
+        for(int i = 0; i < 3; i++) {
+            instance->velocity[i] += turbulent_velocity[i];
+        }
     }
     for(int i = 0; i < 3; i++) {
         instance->oscillate_frequency[i] = 0.0f;
@@ -669,7 +952,7 @@ void update_particle(particle_t* particle, float delta) {
         particle->emitters[i].timer += delta;
         while(particle->emitters[i].timer >= particle->emitters[i].interval) {
             particle->emitters[i].timer -= particle->emitters[i].interval;
-            spawn_particle_instance(particle, &particle->emitters[i]);
+            spawn_particle_instance(particle, &particle->emitters[i], particle->emitters[i].interval);
         }
     }
     for(int i = 0; i < particle->max_count; i++) {

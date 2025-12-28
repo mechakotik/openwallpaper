@@ -896,14 +896,25 @@ type ParticleRenderer struct {
 }
 
 type ParticleInitializer struct {
-	MinLifetime float32
-	MaxLifetime float32
-	MinSize     float32
-	MaxSize     float32
-	MinVelocity [3]float32
-	MaxVelocity [3]float32
-	MinColor    [3]float32
-	MaxColor    [3]float32
+	MinLifetime        float32
+	MaxLifetime        float32
+	MinSize            float32
+	MaxSize            float32
+	MinVelocity        [3]float32
+	MaxVelocity        [3]float32
+	MinColor           [3]float32
+	MaxColor           [3]float32
+	TurbulentVelocity  bool
+	TurbulentScale     float32
+	TurbulentTimeScale float32
+	TurbulentOffset    float32
+	TurbulentSpeedMin  float32
+	TurbulentSpeedMax  float32
+	TurbulentPhaseMin  float32
+	TurbulentPhaseMax  float32
+	TurbulentForward   [3]float32
+	TurbulentRight     [3]float32
+	TurbulentUp        [3]float32
 }
 
 type MovementOperator struct {
@@ -1100,9 +1111,19 @@ func (render *ParticleRenderer) parseFromJSON(raw json.RawMessage) error {
 
 func (init *ParticleInitializer) parseFromJSON(raw json.RawMessage) error {
 	payload := struct {
-		Name StringValue     `json:"name"`
-		Min  json.RawMessage `json:"min"`
-		Max  json.RawMessage `json:"max"`
+		Name      StringValue     `json:"name"`
+		Min       json.RawMessage `json:"min"`
+		Max       json.RawMessage `json:"max"`
+		Scale     json.RawMessage `json:"scale"`
+		TimeScale json.RawMessage `json:"timescale"`
+		Offset    json.RawMessage `json:"offset"`
+		SpeedMin  json.RawMessage `json:"speedmin"`
+		SpeedMax  json.RawMessage `json:"speedmax"`
+		PhaseMin  json.RawMessage `json:"phasemin"`
+		PhaseMax  json.RawMessage `json:"phasemax"`
+		Forward   Vector3         `json:"forward"`
+		Right     Vector3         `json:"right"`
+		Up        Vector3         `json:"up"`
 	}{}
 
 	if err := json.Unmarshal(raw, &payload); err != nil {
@@ -1178,6 +1199,66 @@ func (init *ParticleInitializer) parseFromJSON(raw json.RawMessage) error {
 			for i := range 3 {
 				init.MaxColor[i] = max[i] / 255
 			}
+		}
+	case "turbulentvelocityrandom":
+		init.TurbulentVelocity = true
+		if bytesFromRawNullAware(payload.Scale) != nil {
+			scale, err := parseFloat64FromRaw(payload.Scale)
+			if err != nil {
+				return fmt.Errorf("cannot parse scale value for turbulentvelocityrandom initializer: %w", err)
+			}
+			init.TurbulentScale = float32(scale)
+		}
+		if bytesFromRawNullAware(payload.TimeScale) != nil {
+			timeScale, err := parseFloat64FromRaw(payload.TimeScale)
+			if err != nil {
+				return fmt.Errorf("cannot parse timescale value for turbulentvelocityrandom initializer: %w", err)
+			}
+			init.TurbulentTimeScale = float32(timeScale)
+		}
+		if bytesFromRawNullAware(payload.Offset) != nil {
+			offset, err := parseFloat64FromRaw(payload.Offset)
+			if err != nil {
+				return fmt.Errorf("cannot parse offset value for turbulentvelocityrandom initializer: %w", err)
+			}
+			init.TurbulentOffset = float32(offset)
+		}
+		if bytesFromRawNullAware(payload.SpeedMin) != nil {
+			speedMin, err := parseFloat64FromRaw(payload.SpeedMin)
+			if err != nil {
+				return fmt.Errorf("cannot parse speedmin value for turbulentvelocityrandom initializer: %w", err)
+			}
+			init.TurbulentSpeedMin = float32(speedMin)
+		}
+		if bytesFromRawNullAware(payload.SpeedMax) != nil {
+			speedMax, err := parseFloat64FromRaw(payload.SpeedMax)
+			if err != nil {
+				return fmt.Errorf("cannot parse speedmax value for turbulentvelocityrandom initializer: %w", err)
+			}
+			init.TurbulentSpeedMax = float32(speedMax)
+		}
+		if bytesFromRawNullAware(payload.PhaseMin) != nil {
+			phaseMin, err := parseFloat64FromRaw(payload.PhaseMin)
+			if err != nil {
+				return fmt.Errorf("cannot parse phasemin value for turbulentvelocityrandom initializer: %w", err)
+			}
+			init.TurbulentPhaseMin = float32(phaseMin)
+		}
+		if bytesFromRawNullAware(payload.PhaseMax) != nil {
+			phaseMax, err := parseFloat64FromRaw(payload.PhaseMax)
+			if err != nil {
+				return fmt.Errorf("cannot parse phasemax value for turbulentvelocityrandom initializer: %w", err)
+			}
+			init.TurbulentPhaseMax = float32(phaseMax)
+		}
+		if payload.Forward != (Vector3{}) {
+			init.TurbulentForward = payload.Forward
+		}
+		if payload.Right != (Vector3{}) {
+			init.TurbulentRight = payload.Right
+		}
+		if payload.Up != (Vector3{}) {
+			init.TurbulentUp = payload.Up
 		}
 	default:
 		fmt.Printf("warning: unknown particle initializer %s\n", name)
@@ -1482,14 +1563,24 @@ func (particle *Particle) parseFromJSON(raw json.RawMessage, pkgMap *map[string]
 	}
 
 	particle.Initializer = ParticleInitializer{
-		MinLifetime: 20,
-		MaxLifetime: 20,
-		MinSize:     1,
-		MaxSize:     1,
-		MinVelocity: [3]float32{0, 0, 0},
-		MaxVelocity: [3]float32{0, 0, 0},
-		MinColor:    [3]float32{1, 1, 1},
-		MaxColor:    [3]float32{1, 1, 1},
+		MinLifetime:        20,
+		MaxLifetime:        20,
+		MinSize:            1,
+		MaxSize:            1,
+		MinVelocity:        [3]float32{0, 0, 0},
+		MaxVelocity:        [3]float32{0, 0, 0},
+		MinColor:           [3]float32{1, 1, 1},
+		MaxColor:           [3]float32{1, 1, 1},
+		TurbulentScale:     1,
+		TurbulentTimeScale: 1,
+		TurbulentOffset:    0,
+		TurbulentSpeedMin:  100,
+		TurbulentSpeedMax:  250,
+		TurbulentPhaseMin:  0,
+		TurbulentPhaseMax:  0.1,
+		TurbulentForward:   [3]float32{0, 1, 0},
+		TurbulentRight:     [3]float32{0, 0, 1},
+		TurbulentUp:        [3]float32{1, 0, 0},
 	}
 	for _, initRaw := range payload.Initializers {
 		if err := particle.Initializer.parseFromJSON(initRaw); err != nil {
