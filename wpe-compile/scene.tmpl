@@ -28,7 +28,7 @@ typedef struct {
 } particle_vertex_uniforms_t;
 
 typedef struct {
-    glsl_vec2 spritesheet_size;
+    glsl_ivec2 spritesheet_size;
 } particle_fragment_uniforms_t;
 
 vertex_data_t vertex_quad[4] = {
@@ -56,7 +56,7 @@ ow_vertex_attribute particle_vertex_attributes[6] = {
     { .slot = 1, .location = 2, .type = OW_ATTRIBUTE_FLOAT, .offset = sizeof(float) * 3 },
     { .slot = 1, .location = 3, .type = OW_ATTRIBUTE_FLOAT, .offset = sizeof(float) * 4 },
     { .slot = 1, .location = 4, .type = OW_ATTRIBUTE_FLOAT4, .offset = sizeof(float) * 5 },
-    { .slot = 1, .location = 5, .type = OW_ATTRIBUTE_FLOAT, .offset = sizeof(float) * 9 },
+    { .slot = 1, .location = 5, .type = OW_ATTRIBUTE_INT, .offset = sizeof(float) * 9 },
 };
 
 ow_id screen_buffer = 0;
@@ -318,6 +318,12 @@ ow_id shader{{.ID}}_fragment;
             .alpha_fade_in_time = {{.Operator.AlphaFade.FadeInTime}},
             .alpha_fade_out_time = {{.Operator.AlphaFade.FadeOutTime}},
         },
+        .spritesheet_cols = {{.SpritesheetCols}},
+        .spritesheet_rows = {{.SpritesheetRows}},
+        .spritesheet_frames = {{.SpritesheetFrames}},
+        .spritesheet_duration = {{.SpritesheetDuration}},
+        .sequence_multiplier = {{.SequenceMultiplier}},
+        .animation_mode = {{.AnimationMode}},
         .max_count = {{.MaxCount}},
         .emitter_count = {{len .Emitters}},
         .origin = {
@@ -469,6 +475,7 @@ ow_id shader{{.ID}}_fragment;
 
         particle_vertex_uniforms_t vertex_uniforms = {0};
         particle_fragment_uniforms_t fragment_uniforms = {0};
+        fragment_uniforms.spritesheet_size = (glsl_ivec2){ .at = { {{.SpritesheetCols}}, {{.SpritesheetRows}} } };
 {{else}}
         ow_bindings_info bindings_info = {
             .vertex_buffers = &vertex_quad_buffer,

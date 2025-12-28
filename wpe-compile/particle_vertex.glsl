@@ -5,11 +5,11 @@ layout(location = 1) in vec3 a_position;
 layout(location = 2) in float a_rotation;
 layout(location = 3) in float a_size;
 layout(location = 4) in vec4 a_color;
-layout(location = 5) in float a_frame;
+layout(location = 5) in int a_frame;
 
 layout(location = 0) out vec2 v_uv;
 layout(location = 1) out vec4 v_color;
-layout(location = 2) out float v_frame;
+layout(location = 2) out flat int v_frame;
 
 layout(std140, set = 1, binding = 0) uniform uniforms_t {
     mat4 mvp;

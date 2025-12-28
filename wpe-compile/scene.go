@@ -975,6 +975,14 @@ const (
 	ParticleFlagPerspective
 )
 
+type ParticleAnimationMode int
+
+const (
+	ParticleAnimationSequence ParticleAnimationMode = iota
+	ParticleAnimationRandomFrame
+	ParticleAnimationOnce
+)
+
 type Particle struct {
 	Emitters           []ParticleEmitter
 	Initializer        ParticleInitializer
@@ -983,7 +991,7 @@ type Particle struct {
 	ControlPoints      []ParticleControlPoint
 	Material           Material
 	Children           []ParticleChild
-	AnimationMode      uint32
+	AnimationMode      ParticleAnimationMode
 	SequenceMultiplier float32
 	MaxCount           uint32
 	StartTime          float32
@@ -1396,6 +1404,38 @@ func (child *ParticleChild) parseFromJSON(raw json.RawMessage, pkgMap *map[strin
 	return nil
 }
 
+func parseParticleAnimationMode(raw json.RawMessage) ParticleAnimationMode {
+	if len(raw) == 0 {
+		return ParticleAnimationSequence
+	}
+
+	if name, err := parseStringFromRaw(raw); err == nil {
+		switch strings.ToLower(name) {
+		case "randomframe":
+			return ParticleAnimationRandomFrame
+		case "once":
+			return ParticleAnimationOnce
+		case "loop", "sequence":
+			return ParticleAnimationSequence
+		default:
+			return ParticleAnimationSequence
+		}
+	}
+
+	if value, err := parseIntFromRaw(raw); err == nil {
+		switch value {
+		case 1:
+			return ParticleAnimationRandomFrame
+		case 2:
+			return ParticleAnimationOnce
+		default:
+			return ParticleAnimationSequence
+		}
+	}
+
+	return ParticleAnimationSequence
+}
+
 func (particle *Particle) parseFromJSON(raw json.RawMessage, pkgMap *map[string][]byte) error {
 	payload := struct {
 		Emitters           []json.RawMessage `json:"emitter"`
@@ -1406,7 +1446,7 @@ func (particle *Particle) parseFromJSON(raw json.RawMessage, pkgMap *map[string]
 		Children           []json.RawMessage `json:"children"`
 		Material           StringValue       `json:"material"`
 		AnimationMode      json.RawMessage   `json:"animationmode"`
-		SequenceMultiplier FloatValue        `json:"sequencemultiplier"`
+		SequenceMultiplier *FloatValue       `json:"sequencemultiplier"`
 		MaxCount           IntValue          `json:"maxcount"`
 		StartTime          FloatValue        `json:"starttime"`
 		Flags              IntValue          `json:"flags"`
@@ -1492,12 +1532,12 @@ func (particle *Particle) parseFromJSON(raw json.RawMessage, pkgMap *map[string]
 		return fmt.Errorf("cannot parse particle material %s: %w", string(payload.Material), err)
 	}
 
-	if len(payload.AnimationMode) > 0 {
-		if value, parseErr := parseIntFromRaw(payload.AnimationMode); parseErr == nil {
-			particle.AnimationMode = uint32(value)
-		}
+	particle.AnimationMode = parseParticleAnimationMode(payload.AnimationMode)
+
+	particle.SequenceMultiplier = 1.0
+	if payload.SequenceMultiplier != nil {
+		particle.SequenceMultiplier = float32(*payload.SequenceMultiplier)
 	}
-	particle.SequenceMultiplier = float32(payload.SequenceMultiplier)
 	particle.MaxCount = uint32(payload.MaxCount)
 	particle.StartTime = float32(payload.StartTime)
 	particle.Flags = ParticleFlags(payload.Flags)

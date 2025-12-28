@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/binary"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"image"
@@ -10,6 +11,7 @@ import (
 	_ "image/gif"
 	_ "image/jpeg"
 	_ "image/png"
+	"math"
 	"strconv"
 
 	"github.com/chai2010/webp"
@@ -17,14 +19,18 @@ import (
 )
 
 type WebpResult struct {
-	Data          []byte
-	Width         int
-	Height        int
-	ClampUV       bool
-	Interpolation bool
+	Data                []byte
+	Width               int
+	Height              int
+	ClampUV             bool
+	Interpolation       bool
+	SpritesheetCols     int
+	SpritesheetRows     int
+	SpritesheetFrames   int
+	SpritesheetDuration float32
 }
 
-func texToWebp(texBytes []byte) (WebpResult, error) {
+func texToWebp(texBytes []byte, metadataBytes []byte) (WebpResult, error) {
 	reader := bytes.NewReader(texBytes)
 
 	magic1, err := readCString(reader, 16)
@@ -70,17 +76,29 @@ func texToWebp(texBytes []byte) (WebpResult, error) {
 		return WebpResult{}, errors.New("video textures (MP4) are not supported by texToWebp")
 	}
 
-	mipmapCount, err := readInt32(reader)
-	if err != nil {
-		return WebpResult{}, fmt.Errorf("read mipmapCount failed: %w", err)
+	var firstMipmap texMipmap
+	firstMipmapSet := false
+	for imgIdx := 0; imgIdx < int(imageCount); imgIdx++ {
+		mipmapCount, err := readInt32(reader)
+		if err != nil {
+			return WebpResult{}, fmt.Errorf("read mipmapCount failed: %w", err)
+		}
+		if mipmapCount <= 0 {
+			return WebpResult{}, errors.New("first image has no mipmaps")
+		}
+		for mipIdx := 0; mipIdx < int(mipmapCount); mipIdx++ {
+			mipmap, err := readMipmap(reader, containerVersion)
+			if err != nil {
+				return WebpResult{}, fmt.Errorf("read mipmap failed: %w", err)
+			}
+			if !firstMipmapSet {
+				firstMipmap = mipmap
+				firstMipmapSet = true
+			}
+		}
 	}
-	if mipmapCount <= 0 {
-		return WebpResult{}, errors.New("first image has no mipmaps")
-	}
-
-	firstMipmap, err := readMipmap(reader, containerVersion)
-	if err != nil {
-		return WebpResult{}, fmt.Errorf("read first mipmap failed: %w", err)
+	if !firstMipmapSet {
+		return WebpResult{}, errors.New("texture has no mipmaps")
 	}
 
 	rgbaPixels, effectiveWidth, effectiveHeight, err := decodeMipmapToRGBA(firstMipmap, header, header.Format, imageFormat)
@@ -93,12 +111,29 @@ func texToWebp(texBytes []byte) (WebpResult, error) {
 		return WebpResult{}, fmt.Errorf("encode webp failed: %w", err)
 	}
 
+	frames, err := parseTexAnimationFrames(reader, header)
+	if err != nil {
+		return WebpResult{}, err
+	}
+
+	sheetCols, sheetRows, sheetFrames, sheetDuration := inferSpritesheet(frames, header.ImageWidth, header.ImageHeight)
+	if metaCols, metaRows, metaFrames, metaDuration, ok := parseSpritesheetMetadata(metadataBytes, header.ImageWidth, header.ImageHeight); ok {
+		sheetCols = metaCols
+		sheetRows = metaRows
+		sheetFrames = metaFrames
+		sheetDuration = metaDuration
+	}
+
 	result := WebpResult{
-		Data:          webpBytes,
-		Width:         firstMipmap.Width,
-		Height:        firstMipmap.Height,
-		ClampUV:       header.Flags&texFlagClampUVs != 0,
-		Interpolation: header.Flags&texFlagNoInterpolation == 0,
+		Data:                webpBytes,
+		Width:               firstMipmap.Width,
+		Height:              firstMipmap.Height,
+		ClampUV:             header.Flags&texFlagClampUVs != 0,
+		Interpolation:       header.Flags&texFlagNoInterpolation == 0,
+		SpritesheetCols:     sheetCols,
+		SpritesheetRows:     sheetRows,
+		SpritesheetFrames:   sheetFrames,
+		SpritesheetDuration: sheetDuration,
 	}
 
 	return result, nil
@@ -132,6 +167,13 @@ type texHeader struct {
 	ImageWidth    int
 	ImageHeight   int
 	UnkInt0       uint32
+}
+
+type texFrame struct {
+	FrameNumber int
+	FrameTime   float32
+	Width       float32
+	Height      float32
 }
 
 type texImageContainerVersion int
@@ -392,6 +434,148 @@ func readMipmapV4(r *bytes.Reader) (texMipmap, error) {
 	}, nil
 }
 
+func parseTexAnimationFrames(r *bytes.Reader, header texHeader) ([]texFrame, error) {
+	if header.Flags&texFlagIsGif == 0 {
+		return nil, nil
+	}
+	if r.Len() == 0 {
+		return nil, nil
+	}
+
+	magic, err := readCString(r, 9)
+	if err != nil {
+		return nil, fmt.Errorf("read TEXS magic failed: %w", err)
+	}
+	if magic != "TEXS0002" && magic != "TEXS0003" {
+		return nil, nil
+	}
+
+	frameCountRaw, err := readUint32(r)
+	if err != nil {
+		return nil, fmt.Errorf("read frame count failed: %w", err)
+	}
+
+	if magic == "TEXS0003" {
+		if _, err := readUint32(r); err != nil {
+			return nil, fmt.Errorf("read TEXS0003 width failed: %w", err)
+		}
+		if _, err := readUint32(r); err != nil {
+			return nil, fmt.Errorf("read TEXS0003 height failed: %w", err)
+		}
+	}
+
+	frameCount := int(frameCountRaw)
+	frames := make([]texFrame, 0, frameCount)
+
+	for range frameCount {
+		frameNumber, err := readUint32(r)
+		if err != nil {
+			return nil, fmt.Errorf("read frame number failed: %w", err)
+		}
+		frameTime, err := readFloat32(r)
+		if err != nil {
+			return nil, fmt.Errorf("read frame time failed: %w", err)
+		}
+		if _, err := readFloat32(r); err != nil {
+			return nil, fmt.Errorf("read frame x failed: %w", err)
+		}
+		if _, err := readFloat32(r); err != nil {
+			return nil, fmt.Errorf("read frame y failed: %w", err)
+		}
+		width1, err := readFloat32(r)
+		if err != nil {
+			return nil, fmt.Errorf("read frame width failed: %w", err)
+		}
+		if _, err := readFloat32(r); err != nil {
+			return nil, fmt.Errorf("read frame width2 failed: %w", err)
+		}
+		if _, err := readFloat32(r); err != nil {
+			return nil, fmt.Errorf("read frame height2 failed: %w", err)
+		}
+		height1, err := readFloat32(r)
+		if err != nil {
+			return nil, fmt.Errorf("read frame height failed: %w", err)
+		}
+
+		frames = append(frames, texFrame{
+			FrameNumber: int(frameNumber),
+			FrameTime:   frameTime,
+			Width:       width1,
+			Height:      height1,
+		})
+	}
+
+	return frames, nil
+}
+
+func inferSpritesheet(frames []texFrame, textureWidth, textureHeight int) (int, int, int, float32) {
+	if len(frames) == 0 || textureWidth <= 0 || textureHeight <= 0 {
+		return 0, 0, 0, 0
+	}
+
+	frameWidth := frames[0].Width
+	frameHeight := frames[0].Height
+	if frameWidth <= 0.0 || frameHeight <= 0.0 {
+		return 0, 0, 0, 0
+	}
+
+	cols := int(math.Round(float64(textureWidth) / float64(frameWidth)))
+	rows := int(math.Round(float64(textureHeight) / float64(frameHeight)))
+	frameCount := len(frames)
+
+	if cols <= 0 || rows <= 0 || cols*rows < frameCount {
+		return 0, 0, 0, 0
+	}
+
+	var duration float32
+	for _, frame := range frames {
+		duration += frame.FrameTime
+	}
+
+	return cols, rows, frameCount, duration
+}
+
+func parseSpritesheetMetadata(metadataBytes []byte, textureWidth, textureHeight int) (int, int, int, float32, bool) {
+	if len(metadataBytes) == 0 || textureWidth <= 0 || textureHeight <= 0 {
+		return 0, 0, 0, 0, false
+	}
+
+	payload := struct {
+		SpritesheetSequences []struct {
+			Frames   int     `json:"frames"`
+			Width    float32 `json:"width"`
+			Height   float32 `json:"height"`
+			Duration float32 `json:"duration"`
+		} `json:"spritesheetsequences"`
+	}{}
+
+	if err := json.Unmarshal(metadataBytes, &payload); err != nil {
+		return 0, 0, 0, 0, false
+	}
+	if len(payload.SpritesheetSequences) == 0 {
+		return 0, 0, 0, 0, false
+	}
+
+	sequence := payload.SpritesheetSequences[0]
+	if sequence.Frames <= 0 || sequence.Width <= 0.0 || sequence.Height <= 0.0 {
+		return 0, 0, 0, 0, false
+	}
+
+	cols := int(math.Round(float64(textureWidth) / float64(sequence.Width)))
+	rows := int(math.Round(float64(textureHeight) / float64(sequence.Height)))
+
+	if cols <= 0 || rows <= 0 || cols*rows < sequence.Frames {
+		return 0, 0, 0, 0, false
+	}
+
+	duration := sequence.Duration
+	if duration <= 0.0 {
+		duration = 1.0
+	}
+
+	return cols, rows, sequence.Frames, duration, true
+}
+
 func decodeMipmapToRGBA(mipmap texMipmap, header texHeader, format texFormat, imageFormat freeImageFormat) ([]byte, int, int, error) {
 	data := mipmap.Data
 
@@ -546,6 +730,14 @@ func encodeRGBAtoWebP(rgba []byte, width, height int) ([]byte, error) {
 
 func readUint32(r *bytes.Reader) (uint32, error) {
 	var value uint32
+	if err := binary.Read(r, binary.LittleEndian, &value); err != nil {
+		return 0, err
+	}
+	return value, nil
+}
+
+func readFloat32(r *bytes.Reader) (float32, error) {
+	var value float32
 	if err := binary.Read(r, binary.LittleEndian, &value); err != nil {
 		return 0, err
 	}

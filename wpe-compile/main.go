@@ -24,12 +24,16 @@ type CompiledShader struct {
 }
 
 type ImportedTexture struct {
-	ID            int
-	Name          string
-	Width         int
-	Height        int
-	ClampUV       bool
-	Interpolation bool
+	ID                  int
+	Name                string
+	Width               int
+	Height              int
+	ClampUV             bool
+	Interpolation       bool
+	SpritesheetCols     int
+	SpritesheetRows     int
+	SpritesheetFrames   int
+	SpritesheetDuration float32
 }
 
 type UniformCMapping struct {
@@ -98,6 +102,8 @@ type CodegenPassData struct {
 	Transform         CodegenTransformData
 	IsParticle        bool
 	InstanceCount     int
+	SpritesheetCols   float32
+	SpritesheetRows   float32
 }
 
 type TempBufferParameters struct {
@@ -113,13 +119,19 @@ type TempScreenBufferParameters struct {
 }
 
 type CodegenParticleData struct {
-	ObjectID  int
-	MaxCount  int
-	Init      ParticleInitializer
-	Operator  ParticleOperator
-	Emitters  []ParticleEmitter
-	Origin    [3]float32
-	StartTime float32
+	ObjectID            int
+	MaxCount            int
+	Init                ParticleInitializer
+	Operator            ParticleOperator
+	Emitters            []ParticleEmitter
+	Origin              [3]float32
+	StartTime           float32
+	SequenceMultiplier  float32
+	AnimationMode       ParticleAnimationMode
+	SpritesheetCols     int
+	SpritesheetRows     int
+	SpritesheetFrames   int
+	SpritesheetDuration float32
 }
 
 type CodegenData struct {
@@ -663,13 +675,19 @@ func processParticleObject(object ParticleObject) {
 	}
 
 	particleData := CodegenParticleData{
-		ObjectID:  lastObjectID,
-		MaxCount:  maxCount,
-		Init:      init,
-		Operator:  object.ParticleData.Operator,
-		Emitters:  object.ParticleData.Emitters,
-		Origin:    object.Origin,
-		StartTime: object.ParticleData.StartTime,
+		ObjectID:            lastObjectID,
+		MaxCount:            maxCount,
+		Init:                init,
+		Operator:            object.ParticleData.Operator,
+		Emitters:            object.ParticleData.Emitters,
+		Origin:              object.Origin,
+		StartTime:           object.ParticleData.StartTime,
+		SequenceMultiplier:  object.ParticleData.SequenceMultiplier,
+		AnimationMode:       object.ParticleData.AnimationMode,
+		SpritesheetCols:     texture.SpritesheetCols,
+		SpritesheetRows:     texture.SpritesheetRows,
+		SpritesheetFrames:   texture.SpritesheetFrames,
+		SpritesheetDuration: texture.SpritesheetDuration,
 	}
 
 	codegenData.Particles = append(codegenData.Particles, particleData)
@@ -700,7 +718,9 @@ func processParticleObject(object ParticleObject) {
 		}},
 		UniformSetupCode: "vertex_uniforms.mvp = matrices.model_view_projection;\n",
 		IsParticle:       true,
-		InstanceCount:    int(object.ParticleData.MaxCount),
+		InstanceCount:    maxCount,
+		SpritesheetCols:  float32(texture.SpritesheetCols),
+		SpritesheetRows:  float32(texture.SpritesheetRows),
 	}
 
 	passData.Transform = CodegenTransformData{
@@ -846,18 +866,25 @@ func importTexture(textureName string) (ImportedTexture, error) {
 		return ImportedTexture{}, err
 	}
 
-	converted, err := texToWebp(textureBytes)
+	metadataPath := "materials/" + textureName + ".tex-json"
+	metadataBytes, _ := getAssetBytes(metadataPath)
+
+	converted, err := texToWebp(textureBytes, metadataBytes)
 	if err != nil {
 		return ImportedTexture{}, err
 	}
 
 	textureMap[textureName] = ImportedTexture{
-		ID:            len(textureMap),
-		Name:          textureName,
-		Width:         converted.Width,
-		Height:        converted.Height,
-		ClampUV:       converted.ClampUV,
-		Interpolation: converted.Interpolation,
+		ID:                  len(textureMap),
+		Name:                textureName,
+		Width:               converted.Width,
+		Height:              converted.Height,
+		ClampUV:             converted.ClampUV,
+		Interpolation:       converted.Interpolation,
+		SpritesheetCols:     converted.SpritesheetCols,
+		SpritesheetRows:     converted.SpritesheetRows,
+		SpritesheetFrames:   converted.SpritesheetFrames,
+		SpritesheetDuration: converted.SpritesheetDuration,
 	}
 
 	outputMap[fmt.Sprintf("assets/texture%d.webp", textureMap[textureName].ID)] = converted.Data
