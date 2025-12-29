@@ -961,12 +961,21 @@ type SizeChangeOperator struct {
 	EndValue   float32
 }
 
+type ColorChangeOperator struct {
+	Enabled    bool
+	StartTime  float32
+	EndTime    float32
+	StartValue Vector3
+	EndValue   Vector3
+}
+
 type ParticleOperator struct {
 	Movement          MovementOperator
 	AngularMovement   AngularMovementOperator
 	OscillatePosition OscillatePositionOperator
 	AlphaFade         AlphaFadeOperator
 	SizeChange        SizeChangeOperator
+	ColorChange       ColorChangeOperator
 }
 
 type EmitterFlags uint32
@@ -1497,6 +1506,43 @@ func (operator *ParticleOperator) parseFromJSON(raw json.RawMessage) error {
 			op.EndValue = float32(endValue)
 		}
 		operator.SizeChange = op
+	case "colorchange":
+		op := ColorChangeOperator{
+			Enabled:    true,
+			StartTime:  0,
+			EndTime:    1,
+			StartValue: Vector3{1, 1, 1},
+			EndValue:   Vector3{1, 1, 1},
+		}
+		if bytesFromRawNullAware(payload.StartTime) != nil {
+			startTime, err := parseFloat64FromRaw(payload.StartTime)
+			if err != nil {
+				return fmt.Errorf("cannot parse starttime for colorchange operator: %w", err)
+			}
+			op.StartTime = float32(startTime)
+		}
+		if bytesFromRawNullAware(payload.EndTime) != nil {
+			endTime, err := parseFloat64FromRaw(payload.EndTime)
+			if err != nil {
+				return fmt.Errorf("cannot parse endtime for colorchange operator: %w", err)
+			}
+			op.EndTime = float32(endTime)
+		}
+		if bytesFromRawNullAware(payload.StartValue) != nil {
+			startValue, err := parseVector3FromRaw(payload.StartValue, op.StartValue)
+			if err != nil {
+				return fmt.Errorf("cannot parse startvalue for colorchange operator: %w", err)
+			}
+			op.StartValue = startValue
+		}
+		if bytesFromRawNullAware(payload.EndValue) != nil {
+			endValue, err := parseVector3FromRaw(payload.EndValue, op.EndValue)
+			if err != nil {
+				return fmt.Errorf("cannot parse endvalue for colorchange operator: %w", err)
+			}
+			op.EndValue = endValue
+		}
+		operator.ColorChange = op
 	case "alphafade":
 		op := AlphaFadeOperator{
 			Enabled:     true,

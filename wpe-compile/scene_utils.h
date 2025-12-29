@@ -370,6 +370,7 @@ typedef struct {
     float angular_acceleration[3];
 
     float color[3];
+    float initial_color[3];
     float alpha;
     float initial_alpha;
     float size;
@@ -456,6 +457,11 @@ typedef struct {
     float size_change_end_time;
     float size_change_start_value;
     float size_change_end_value;
+    bool color_change;
+    float color_change_start_time;
+    float color_change_end_time;
+    float color_change_start_value[3];
+    float color_change_end_value[3];
     bool alpha_fade;
     float alpha_fade_in_time;
     float alpha_fade_out_time;
@@ -869,8 +875,10 @@ void spawn_particle_instance(particle_t* particle, particle_emitter_t* emitter, 
 
     factor = rand_float(0.0f, 1.0f);
     for(int i = 0; i < 3; i++) {
-        instance->color[i] =
+        float color =
             particle->init.min_color[i] + (particle->init.max_color[i] - particle->init.min_color[i]) * factor;
+        instance->color[i] = color;
+        instance->initial_color[i] = color;
     }
 
     instance->alpha = rand_float(particle->init.min_alpha, particle->init.max_alpha);
@@ -942,6 +950,16 @@ void update_particle_instance(particle_t* particle, particle_instance_t* instanc
             fade_value(life, particle->operator.size_change_start_time, particle->operator.size_change_end_time,
                 particle->operator.size_change_start_value, particle->operator.size_change_end_value);
         instance->size = instance->initial_size * multiplier;
+    }
+
+    if(particle->operator.color_change && instance->lifetime> 0.0f) {
+        float life = instance->age / instance->lifetime;
+        for(int i = 0; i < 3; i++) {
+            float multiplier =
+                fade_value(life, particle->operator.color_change_start_time, particle->operator.color_change_end_time,
+                    particle->operator.color_change_start_value[i], particle->operator.color_change_end_value[i]);
+            instance->color[i] = instance->initial_color[i] * multiplier;
+        }
     }
 
     if(particle->operator.alpha_fade && instance->lifetime> 0.0f) {
