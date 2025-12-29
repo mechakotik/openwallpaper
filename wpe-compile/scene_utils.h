@@ -373,6 +373,7 @@ typedef struct {
     float alpha;
     float initial_alpha;
     float size;
+    float initial_size;
     int frame;
 
     float lifetime;
@@ -450,6 +451,11 @@ typedef struct {
     float oscillate_scale_max;
     float oscillate_phase_min;
     float oscillate_phase_max;
+    bool size_change;
+    float size_change_start_time;
+    float size_change_end_time;
+    float size_change_start_value;
+    float size_change_end_value;
     bool alpha_fade;
     float alpha_fade_in_time;
     float alpha_fade_out_time;
@@ -810,6 +816,7 @@ void spawn_particle_instance(particle_t* particle, particle_emitter_t* emitter, 
 
     instance->size = rand_float(particle->init.min_size, particle->init.max_size);
     instance->size /= 2.0f;
+    instance->initial_size = instance->size;
     instance->frame = -1;
 
     float factor = rand_float(0.0f, 1.0f);
@@ -927,6 +934,14 @@ void update_particle_instance(particle_t* particle, particle_instance_t* instanc
                 instance->rotation[i] += two_pi;
             }
         }
+    }
+
+    if(particle->operator.size_change && instance->lifetime> 0.0f) {
+        float life = instance->age / instance->lifetime;
+        float multiplier =
+            fade_value(life, particle->operator.size_change_start_time, particle->operator.size_change_end_time,
+                particle->operator.size_change_start_value, particle->operator.size_change_end_value);
+        instance->size = instance->initial_size * multiplier;
     }
 
     if(particle->operator.alpha_fade && instance->lifetime> 0.0f) {

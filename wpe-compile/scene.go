@@ -953,11 +953,20 @@ type AlphaFadeOperator struct {
 	FadeOutTime float32
 }
 
+type SizeChangeOperator struct {
+	Enabled    bool
+	StartTime  float32
+	EndTime    float32
+	StartValue float32
+	EndValue   float32
+}
+
 type ParticleOperator struct {
 	Movement          MovementOperator
 	AngularMovement   AngularMovementOperator
 	OscillatePosition OscillatePositionOperator
 	AlphaFade         AlphaFadeOperator
+	SizeChange        SizeChangeOperator
 }
 
 type EmitterFlags uint32
@@ -1342,6 +1351,10 @@ func (operator *ParticleOperator) parseFromJSON(raw json.RawMessage) error {
 		Mask         json.RawMessage `json:"mask"`
 		FadeInTime   json.RawMessage `json:"fadeintime"`
 		FadeOutTime  json.RawMessage `json:"fadeouttime"`
+		StartTime    json.RawMessage `json:"starttime"`
+		EndTime      json.RawMessage `json:"endtime"`
+		StartValue   json.RawMessage `json:"startvalue"`
+		EndValue     json.RawMessage `json:"endvalue"`
 	}{}
 
 	if err := json.Unmarshal(raw, &payload); err != nil {
@@ -1447,6 +1460,43 @@ func (operator *ParticleOperator) parseFromJSON(raw json.RawMessage) error {
 			op.Mask = mask
 		}
 		operator.OscillatePosition = op
+	case "sizechange":
+		op := SizeChangeOperator{
+			Enabled:    true,
+			StartTime:  0,
+			EndTime:    1,
+			StartValue: 1,
+			EndValue:   0,
+		}
+		if bytesFromRawNullAware(payload.StartTime) != nil {
+			startTime, err := parseFloat64FromRaw(payload.StartTime)
+			if err != nil {
+				return fmt.Errorf("cannot parse starttime for sizechange operator: %w", err)
+			}
+			op.StartTime = float32(startTime)
+		}
+		if bytesFromRawNullAware(payload.EndTime) != nil {
+			endTime, err := parseFloat64FromRaw(payload.EndTime)
+			if err != nil {
+				return fmt.Errorf("cannot parse endtime for sizechange operator: %w", err)
+			}
+			op.EndTime = float32(endTime)
+		}
+		if bytesFromRawNullAware(payload.StartValue) != nil {
+			startValue, err := parseFloat64FromRaw(payload.StartValue)
+			if err != nil {
+				return fmt.Errorf("cannot parse startvalue for sizechange operator: %w", err)
+			}
+			op.StartValue = float32(startValue)
+		}
+		if bytesFromRawNullAware(payload.EndValue) != nil {
+			endValue, err := parseFloat64FromRaw(payload.EndValue)
+			if err != nil {
+				return fmt.Errorf("cannot parse endvalue for sizechange operator: %w", err)
+			}
+			op.EndValue = float32(endValue)
+		}
+		operator.SizeChange = op
 	case "alphafade":
 		op := AlphaFadeOperator{
 			Enabled:     true,
