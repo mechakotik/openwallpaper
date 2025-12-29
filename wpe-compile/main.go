@@ -78,6 +78,9 @@ type CodegenTransformData struct {
 	ScaleX                 float32
 	ScaleY                 float32
 	ScaleZ                 float32
+	AngleX                 float32
+	AngleY                 float32
+	AngleZ                 float32
 	ParallaxDepthX         float32
 	ParallaxDepthY         float32
 	ParallaxEnabled        bool
@@ -419,6 +422,9 @@ func processImageObjectInit(object ImageObject, tempBuffers *[2]int) (CodegenPas
 		ScaleX:                 float32(object.Scale[0]),
 		ScaleY:                 float32(object.Scale[1]),
 		ScaleZ:                 float32(object.Scale[2]),
+		AngleX:                 float32(object.Angles[0]),
+		AngleY:                 float32(object.Angles[1]),
+		AngleZ:                 float32(object.Angles[2]),
 		ParallaxDepthX:         float32(object.ParallaxDepth[0]),
 		ParallaxDepthY:         float32(object.ParallaxDepth[1]),
 		ParallaxEnabled:        scene.General.Parallax,
@@ -583,6 +589,9 @@ func processImageEffect(object ImageObject, effect ImageEffect, tempBuffers *[2]
 			ScaleX:                 float32(object.Scale[0]),
 			ScaleY:                 float32(object.Scale[1]),
 			ScaleZ:                 float32(object.Scale[2]),
+			AngleX:                 float32(object.Angles[0]),
+			AngleY:                 float32(object.Angles[1]),
+			AngleZ:                 float32(object.Angles[2]),
 			ParallaxDepthX:         float32(object.ParallaxDepth[0]),
 			ParallaxDepthY:         float32(object.ParallaxDepth[1]),
 			ParallaxEnabled:        scene.General.Parallax,
@@ -755,6 +764,9 @@ func processParticleObject(object ParticleObject) {
 		ScaleX:                 float32(object.Scale[0]),
 		ScaleY:                 float32(object.Scale[1]),
 		ScaleZ:                 float32(object.Scale[2]),
+		AngleX:                 float32(object.Angles[0]),
+		AngleY:                 float32(object.Angles[1]),
+		AngleZ:                 float32(object.Angles[2]),
 		ParallaxDepthX:         float32(object.ParallaxDepth[0]),
 		ParallaxDepthY:         float32(object.ParallaxDepth[1]),
 		ParallaxEnabled:        scene.General.Parallax,

@@ -51,6 +51,9 @@ typedef struct {
     float scale_x;
     float scale_y;
     float scale_z;
+    float angle_x;
+    float angle_y;
+    float angle_z;
     float parallax_depth_x;
     float parallax_depth_y;
     int parallax_enabled;
@@ -339,13 +342,47 @@ static transform_matrices_t compute_transform_matrices(transform_parameters_t pa
     float sy = 0.5f * params.size_y * params.scale_y;
     float sz = params.scale_z;
 
-    glsl_mat4 model = mat4_identity();
-    model.at[0][0] = sx;
-    model.at[1][1] = sy;
-    model.at[2][2] = sz;
-    model.at[3][0] = tx;
-    model.at[3][1] = ty;
-    model.at[3][2] = tz;
+    float rx = params.angle_x;
+    float ry = params.angle_y;
+    float rz = params.angle_z;
+
+    glsl_mat4 translation = mat4_identity();
+    translation.at[3][0] = tx;
+    translation.at[3][1] = ty;
+    translation.at[3][2] = tz;
+
+    glsl_mat4 scale = mat4_identity();
+    scale.at[0][0] = sx;
+    scale.at[1][1] = sy;
+    scale.at[2][2] = sz;
+
+    float cx = cosf(rx);
+    float sx_rot = sinf(rx);
+    float cy = cosf(ry);
+    float sy_rot = sinf(ry);
+    float cz = cosf(rz);
+    float sz_rot = sinf(rz);
+
+    glsl_mat4 rot_x = mat4_identity();
+    rot_x.at[1][1] = cx;
+    rot_x.at[1][2] = -sx_rot;
+    rot_x.at[2][1] = sx_rot;
+    rot_x.at[2][2] = cx;
+
+    glsl_mat4 rot_y = mat4_identity();
+    rot_y.at[0][0] = cy;
+    rot_y.at[0][2] = sy_rot;
+    rot_y.at[2][0] = -sy_rot;
+    rot_y.at[2][2] = cy;
+
+    glsl_mat4 rot_z = mat4_identity();
+    rot_z.at[0][0] = cz;
+    rot_z.at[0][1] = sz_rot;
+    rot_z.at[1][0] = -sz_rot;
+    rot_z.at[1][1] = cz;
+
+    glsl_mat4 rotation = mat4_multiply(rot_y, mat4_multiply(rot_x, rot_z));
+    glsl_mat4 model = mat4_multiply(translation, mat4_multiply(rotation, scale));
 
     res.model = model;
     res.view_projection = vp;
