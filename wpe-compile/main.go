@@ -145,10 +145,14 @@ type CodegenData struct {
 }
 
 var (
+	env struct {
+		Assets string
+		WasmCC string
+	}
+
 	args struct {
 		Input       string `arg:"positional,required"`
 		Output      string `arg:"positional,required"`
-		Assets      string `arg:"env:WPE_COMPILE_ASSETS,required"`
 		Particles   bool   `arg:"--particles" default:"false"`
 		KeepSources bool   `arg:"--keep-sources"`
 	}
@@ -179,6 +183,14 @@ var particleFragmentGLSL []byte
 
 func main() {
 	arg.MustParse(&args)
+	env.Assets = os.Getenv("WPE_COMPILE_ASSETS")
+	env.WasmCC = os.Getenv("WPE_COMPILE_WASM_CC")
+	if env.Assets == "" {
+		panic("WPE_COMPILE_ASSETS is not set")
+	}
+	if env.WasmCC == "" {
+		panic("WPE_COMPILE_WASM_CC is not set")
+	}
 
 	pkgFile, err := os.ReadFile(args.Input)
 	if err != nil {
@@ -244,7 +256,7 @@ func main() {
 		panic("write scene_utils.h failed" + err.Error())
 	}
 
-	logBytes, err := exec.Command("/opt/wasi-sdk/bin/clang", tempDir+"/scene.c", "-o", tempDir+"/scene.wasm", "-I../include", "-Wl,--allow-undefined").CombinedOutput()
+	logBytes, err := exec.Command(env.WasmCC, tempDir+"/scene.c", "-o", tempDir+"/scene.wasm", "-I../include", "-Wl,--allow-undefined").CombinedOutput()
 	if err != nil {
 		panic("compiling scene module failed: " + string(logBytes))
 	}
@@ -848,7 +860,7 @@ func getAssetBytes(path string) ([]byte, error) {
 	if bytes, exists := pkgMap[path]; exists {
 		return bytes, nil
 	}
-	asset, err := os.ReadFile(args.Assets + "/" + path)
+	asset, err := os.ReadFile(env.Assets + "/" + path)
 	if err == nil {
 		return asset, nil
 	}

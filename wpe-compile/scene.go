@@ -298,7 +298,7 @@ func loadBytesFromPackage(pkgMap *map[string][]byte, path string) ([]byte, error
 	if data, exists := (*pkgMap)["assets/"+path]; exists {
 		return data, nil
 	}
-	data, err := os.ReadFile("assets/" + path)
+	data, err := os.ReadFile(env.Assets + "/" + path)
 	if err == nil {
 		return data, nil
 	}
