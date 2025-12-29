@@ -908,6 +908,8 @@ type ParticleInitializer struct {
 	MaxAngularVelocity [3]float32
 	MinColor           [3]float32
 	MaxColor           [3]float32
+	MinAlpha           float32
+	MaxAlpha           float32
 	TurbulentVelocity  bool
 	TurbulentScale     float32
 	TurbulentTimeScale float32
@@ -1176,6 +1178,23 @@ func (init *ParticleInitializer) parseFromJSON(raw json.RawMessage) error {
 				return fmt.Errorf("cannot parse max value for sizerandom initializer: %w", err)
 			}
 			init.MaxSize = float32(max)
+		}
+	case "alpharandom":
+		init.MinAlpha = 0.0
+		init.MaxAlpha = 1.0
+		if bytesFromRawNullAware(payload.Min) != nil {
+			min, err := parseFloat64FromRaw(payload.Min)
+			if err != nil {
+				return fmt.Errorf("cannot parse min value for alpharandom initializer: %w", err)
+			}
+			init.MinAlpha = float32(min)
+		}
+		if bytesFromRawNullAware(payload.Max) != nil {
+			max, err := parseFloat64FromRaw(payload.Max)
+			if err != nil {
+				return fmt.Errorf("cannot parse max value for alpharandom initializer: %w", err)
+			}
+			init.MaxAlpha = float32(max)
 		}
 	case "velocityrandom":
 		if bytesFromRawNullAware(payload.Min) != nil {
@@ -1633,6 +1652,8 @@ func (particle *Particle) parseFromJSON(raw json.RawMessage, pkgMap *map[string]
 		MaxAngularVelocity: [3]float32{0, 0, 5},
 		MinColor:           [3]float32{1, 1, 1},
 		MaxColor:           [3]float32{1, 1, 1},
+		MinAlpha:           1,
+		MaxAlpha:           1,
 		TurbulentScale:     1,
 		TurbulentTimeScale: 1,
 		TurbulentOffset:    0,

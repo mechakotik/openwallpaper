@@ -417,6 +417,8 @@ typedef struct {
     float max_angular_velocity[3];
     float min_color[3];
     float max_color[3];
+    float min_alpha;
+    float max_alpha;
     bool turbulent_velocity;
     bool turbulent_noise_initialized;
     float turbulent_scale;
@@ -864,7 +866,7 @@ void spawn_particle_instance(particle_t* particle, particle_emitter_t* emitter, 
             particle->init.min_color[i] + (particle->init.max_color[i] - particle->init.min_color[i]) * factor;
     }
 
-    instance->alpha = 1.0f;
+    instance->alpha = rand_float(particle->init.min_alpha, particle->init.max_alpha);
     instance->initial_alpha = instance->alpha;
     instance->age = 0.0f;
 }

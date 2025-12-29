@@ -312,6 +312,8 @@ ow_id shader{{.ID}}_fragment;
                 {{index .Init.MaxColor 1}},
                 {{index .Init.MaxColor 2}},
             },
+            .min_alpha = {{.Init.MinAlpha}},
+            .max_alpha = {{.Init.MaxAlpha}},
             .turbulent_velocity = {{.Init.TurbulentVelocity}},
             .turbulent_scale = {{.Init.TurbulentScale}},
             .turbulent_timescale = {{.Init.TurbulentTimeScale}},

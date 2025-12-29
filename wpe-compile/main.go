@@ -668,6 +668,10 @@ func processParticleObject(object ParticleObject) {
 			init.MinLifetime *= override.Lifetime
 			init.MaxLifetime *= override.Lifetime
 		}
+		if override.Alpha != 0 {
+			init.MinAlpha *= override.Alpha
+			init.MaxAlpha *= override.Alpha
+		}
 		if override.Size != 0 {
 			init.MinSize *= override.Size
 			init.MaxSize *= override.Size
