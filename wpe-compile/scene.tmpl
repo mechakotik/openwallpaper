@@ -53,10 +53,10 @@ ow_vertex_attribute vertex_attributes[2] = {
 ow_vertex_attribute particle_vertex_attributes[6] = {
     { .slot = 0, .location = 0, .type = OW_ATTRIBUTE_FLOAT2, .offset = 0 },
     { .slot = 1, .location = 1, .type = OW_ATTRIBUTE_FLOAT3, .offset = 0 },
-    { .slot = 1, .location = 2, .type = OW_ATTRIBUTE_FLOAT, .offset = sizeof(float) * 3 },
-    { .slot = 1, .location = 3, .type = OW_ATTRIBUTE_FLOAT, .offset = sizeof(float) * 4 },
-    { .slot = 1, .location = 4, .type = OW_ATTRIBUTE_FLOAT4, .offset = sizeof(float) * 5 },
-    { .slot = 1, .location = 5, .type = OW_ATTRIBUTE_INT, .offset = sizeof(float) * 9 },
+    { .slot = 1, .location = 2, .type = OW_ATTRIBUTE_FLOAT3, .offset = sizeof(float) * 3 },
+    { .slot = 1, .location = 3, .type = OW_ATTRIBUTE_FLOAT, .offset = sizeof(float) * 6 },
+    { .slot = 1, .location = 4, .type = OW_ATTRIBUTE_FLOAT4, .offset = sizeof(float) * 7 },
+    { .slot = 1, .location = 5, .type = OW_ATTRIBUTE_INT, .offset = sizeof(float) * 11 },
 };
 
 ow_id screen_buffer = 0;
@@ -282,6 +282,26 @@ ow_id shader{{.ID}}_fragment;
                 {{index .Init.MaxVelocity 1}},
                 {{index .Init.MaxVelocity 2}},
             },
+            .min_rotation = {
+                {{index .Init.MinRotation 0}},
+                {{index .Init.MinRotation 1}},
+                {{index .Init.MinRotation 2}},
+            },
+            .max_rotation = {
+                {{index .Init.MaxRotation 0}},
+                {{index .Init.MaxRotation 1}},
+                {{index .Init.MaxRotation 2}},
+            },
+            .min_angular_velocity = {
+                {{index .Init.MinAngularVelocity 0}},
+                {{index .Init.MinAngularVelocity 1}},
+                {{index .Init.MinAngularVelocity 2}},
+            },
+            .max_angular_velocity = {
+                {{index .Init.MaxAngularVelocity 0}},
+                {{index .Init.MaxAngularVelocity 1}},
+                {{index .Init.MaxAngularVelocity 2}},
+            },
             .min_color = {
                 {{index .Init.MinColor 0}},
                 {{index .Init.MinColor 1}},
@@ -325,6 +345,13 @@ ow_id shader{{.ID}}_fragment;
             },
             .drag = {{.Operator.Movement.Drag}},
             .speed = {{.Operator.Movement.Speed}},
+            .angular_movement = {{.Operator.AngularMovement.Enabled}},
+            .angular_drag = {{.Operator.AngularMovement.Drag}},
+            .angular_force = {
+                {{index .Operator.AngularMovement.Force 0}},
+                {{index .Operator.AngularMovement.Force 1}},
+                {{index .Operator.AngularMovement.Force 2}},
+            },
             .oscillate_position = {{.Operator.OscillatePosition.Enabled}},
             .oscillate_mask = {
                 {{index .Operator.OscillatePosition.Mask 0}},

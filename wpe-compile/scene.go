@@ -902,6 +902,10 @@ type ParticleInitializer struct {
 	MaxSize            float32
 	MinVelocity        [3]float32
 	MaxVelocity        [3]float32
+	MinRotation        [3]float32
+	MaxRotation        [3]float32
+	MinAngularVelocity [3]float32
+	MaxAngularVelocity [3]float32
 	MinColor           [3]float32
 	MaxColor           [3]float32
 	TurbulentVelocity  bool
@@ -924,6 +928,12 @@ type MovementOperator struct {
 	Gravity Vector3
 }
 
+type AngularMovementOperator struct {
+	Enabled bool
+	Drag    float32
+	Force   Vector3
+}
+
 type OscillatePositionOperator struct {
 	Enabled      bool
 	Mask         Vector3
@@ -943,6 +953,7 @@ type AlphaFadeOperator struct {
 
 type ParticleOperator struct {
 	Movement          MovementOperator
+	AngularMovement   AngularMovementOperator
 	OscillatePosition OscillatePositionOperator
 	AlphaFade         AlphaFadeOperator
 }
@@ -1200,6 +1211,36 @@ func (init *ParticleInitializer) parseFromJSON(raw json.RawMessage) error {
 				init.MaxColor[i] = max[i] / 255
 			}
 		}
+	case "rotationrandom":
+		if bytesFromRawNullAware(payload.Min) != nil {
+			min, err := parseVector3FromRaw(payload.Min, init.MinRotation)
+			if err != nil {
+				return fmt.Errorf("cannot parse min value for rotationrandom initializer: %w", err)
+			}
+			init.MinRotation = min
+		}
+		if bytesFromRawNullAware(payload.Max) != nil {
+			max, err := parseVector3FromRaw(payload.Max, init.MaxRotation)
+			if err != nil {
+				return fmt.Errorf("cannot parse max value for rotationrandom initializer: %w", err)
+			}
+			init.MaxRotation = max
+		}
+	case "angularvelocityrandom":
+		if bytesFromRawNullAware(payload.Min) != nil {
+			min, err := parseVector3FromRaw(payload.Min, init.MinAngularVelocity)
+			if err != nil {
+				return fmt.Errorf("cannot parse min value for angularvelocityrandom initializer: %w", err)
+			}
+			init.MinAngularVelocity = min
+		}
+		if bytesFromRawNullAware(payload.Max) != nil {
+			max, err := parseVector3FromRaw(payload.Max, init.MaxAngularVelocity)
+			if err != nil {
+				return fmt.Errorf("cannot parse max value for angularvelocityrandom initializer: %w", err)
+			}
+			init.MaxAngularVelocity = max
+		}
 	case "turbulentvelocityrandom":
 		init.TurbulentVelocity = true
 		if bytesFromRawNullAware(payload.Scale) != nil {
@@ -1272,6 +1313,7 @@ func (operator *ParticleOperator) parseFromJSON(raw json.RawMessage) error {
 		Name         string          `json:"name"`
 		Gravity      json.RawMessage `json:"gravity"`
 		Drag         json.RawMessage `json:"drag"`
+		Force        json.RawMessage `json:"force"`
 		FrequencyMin json.RawMessage `json:"frequencymin"`
 		FrequencyMax json.RawMessage `json:"frequencymax"`
 		ScaleMin     json.RawMessage `json:"scalemin"`
@@ -1308,6 +1350,22 @@ func (operator *ParticleOperator) parseFromJSON(raw json.RawMessage) error {
 				return fmt.Errorf("cannot parse drag value for movement operator: %w", err)
 			}
 			operator.Movement.Drag = float32(drag)
+		}
+	case "angularmovement":
+		operator.AngularMovement.Enabled = true
+		if bytesFromRawNullAware(payload.Drag) != nil {
+			drag, err := parseFloat64FromRaw(payload.Drag)
+			if err != nil {
+				return fmt.Errorf("cannot parse drag value for angularmovement operator: %w", err)
+			}
+			operator.AngularMovement.Drag = float32(drag)
+		}
+		if bytesFromRawNullAware(payload.Force) != nil {
+			force, err := parseVector3FromRaw(payload.Force, operator.AngularMovement.Force)
+			if err != nil {
+				return fmt.Errorf("cannot parse force value for angularmovement operator: %w", err)
+			}
+			operator.AngularMovement.Force = force
 		}
 	case "oscillateposition":
 		op := OscillatePositionOperator{
@@ -1569,6 +1627,10 @@ func (particle *Particle) parseFromJSON(raw json.RawMessage, pkgMap *map[string]
 		MaxSize:            1,
 		MinVelocity:        [3]float32{0, 0, 0},
 		MaxVelocity:        [3]float32{0, 0, 0},
+		MinRotation:        [3]float32{0, 0, 0},
+		MaxRotation:        [3]float32{0, 0, float32(2 * math.Pi)},
+		MinAngularVelocity: [3]float32{0, 0, -5},
+		MaxAngularVelocity: [3]float32{0, 0, 5},
 		MinColor:           [3]float32{1, 1, 1},
 		MaxColor:           [3]float32{1, 1, 1},
 		TurbulentScale:     1,

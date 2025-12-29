@@ -365,7 +365,7 @@ typedef struct {
     float oscillate_scale[3];
     float oscillate_phase[3];
 
-    float rotation;
+    float rotation[3];
     float angular_velocity[3];
     float angular_acceleration[3];
 
@@ -381,7 +381,7 @@ typedef struct {
 
 typedef struct {
     float position[3];
-    float rotation;
+    float rotation[3];
     float size;
     float color[4];
     int frame;
@@ -411,6 +411,10 @@ typedef struct {
     float max_size;
     float min_velocity[3];
     float max_velocity[3];
+    float min_rotation[3];
+    float max_rotation[3];
+    float min_angular_velocity[3];
+    float max_angular_velocity[3];
     float min_color[3];
     float max_color[3];
     bool turbulent_velocity;
@@ -433,6 +437,9 @@ typedef struct {
     float gravity[3];
     float drag;
     float speed;
+    bool angular_movement;
+    float angular_drag;
+    float angular_force[3];
     bool oscillate_position;
     float oscillate_mask[3];
     float oscillate_frequency_min;
@@ -808,6 +815,7 @@ void spawn_particle_instance(particle_t* particle, particle_emitter_t* emitter, 
         instance->velocity[i] =
             particle->init.min_velocity[i] + (particle->init.max_velocity[i] - particle->init.min_velocity[i]) * factor;
     }
+
     if(particle->init.turbulent_velocity) {
         float turbulent_velocity[3];
         generate_turbulent_velocity(&particle->init, duration, turbulent_velocity);
@@ -815,11 +823,22 @@ void spawn_particle_instance(particle_t* particle, particle_emitter_t* emitter, 
             instance->velocity[i] += turbulent_velocity[i];
         }
     }
+
     for(int i = 0; i < 3; i++) {
         instance->oscillate_frequency[i] = 0.0f;
         instance->oscillate_scale[i] = 0.0f;
         instance->oscillate_phase[i] = 0.0f;
     }
+
+    for(int i = 0; i < 3; i++) {
+        instance->rotation[i] = rand_float(particle->init.min_rotation[i], particle->init.max_rotation[i]);
+    }
+
+    for(int i = 0; i < 3; i++) {
+        instance->angular_velocity[i] =
+            rand_float(particle->init.min_angular_velocity[i], particle->init.max_angular_velocity[i]);
+    }
+
     if(particle->operator.oscillate_position) {
         float frequency_max = particle->operator.oscillate_frequency_max;
         if(frequency_max == 0.0f) {
@@ -887,6 +906,24 @@ void update_particle_instance(particle_t* particle, particle_instance_t* instanc
             float phase = instance->oscillate_phase[i];
             float delta_pos = -1.0f * scale * frequency * sinf(frequency * time + phase) * delta;
             instance->position[i] += delta_pos;
+        }
+    }
+    if(particle->operator.angular_movement) {
+        for(int i = 0; i < 3; i++) {
+            float acceleration =
+                -particle->operator.angular_drag * instance->angular_velocity[i] + particle->operator.angular_force[i];
+            instance->angular_velocity[i] += acceleration * delta;
+        }
+        const float pi = (float)M_PI;
+        const float two_pi = (float)(2.0 * M_PI);
+        for(int i = 0; i < 3; i++) {
+            instance->rotation[i] += instance->angular_velocity[i] * delta;
+            while(instance->rotation[i] > pi) {
+                instance->rotation[i] -= two_pi;
+            }
+            while(instance->rotation[i] < -pi) {
+                instance->rotation[i] += two_pi;
+            }
         }
     }
 
@@ -973,7 +1010,12 @@ void update_particle_instance_data(particle_t* particle) {
                     particle->instances[i].position[1],
                     particle->instances[i].position[2],
                 },
-            .rotation = particle->instances[i].rotation,
+            .rotation =
+                {
+                    particle->instances[i].rotation[0],
+                    particle->instances[i].rotation[1],
+                    particle->instances[i].rotation[2],
+                },
             .size = particle->instances[i].size,
             .color =
                 {
