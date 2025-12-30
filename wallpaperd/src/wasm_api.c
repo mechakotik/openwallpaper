@@ -111,7 +111,7 @@ void ow_end_render_pass(wasm_exec_env_t exec_env) {
 }
 
 static uint32_t create_shader_from_bytecode(
-    wasm_exec_env_t exec_env, const uint8_t* bytecode, size_t size, ow_shader_type type) {
+    wasm_exec_env_t exec_env, const uint8_t* bytecode, size_t size, bool fragment) {
     wasm_module_inst_t instance = wasm_runtime_get_module_inst(exec_env);
     wd_state* state = wasm_runtime_get_custom_data(instance);
 
@@ -119,8 +119,7 @@ static uint32_t create_shader_from_bytecode(
     info.bytecode = bytecode;
     info.bytecode_size = size;
     info.entrypoint = "main";
-    info.shader_stage =
-        (type == OW_SHADER_VERTEX ? SDL_SHADERCROSS_SHADERSTAGE_VERTEX : SDL_SHADERCROSS_SHADERSTAGE_FRAGMENT);
+    info.shader_stage = (fragment ? SDL_SHADERCROSS_SHADERSTAGE_FRAGMENT : SDL_SHADERCROSS_SHADERSTAGE_VERTEX);
 
     SDL_ShaderCross_GraphicsShaderMetadata* metadata = SDL_ShaderCross_ReflectGraphicsSPIRV(bytecode, size, 0);
     DEBUG_CHECK_RET0(metadata != NULL, "SDL_ShaderCross_ReflectGraphicsSPIRV failed: %s", SDL_GetError());
@@ -130,7 +129,7 @@ static uint32_t create_shader_from_bytecode(
     free(metadata);
     DEBUG_CHECK_RET0(shader != NULL, "SDL_ShaderCross_CompileGraphicsShaderFromSPIRV failed: %s", SDL_GetError());
 
-    wd_object_type object_type = (type == OW_SHADER_VERTEX ? WD_OBJECT_VERTEX_SHADER : WD_OBJECT_FRAGMENT_SHADER);
+    wd_object_type object_type = (fragment ? WD_OBJECT_FRAGMENT_SHADER : WD_OBJECT_VERTEX_SHADER);
     uint32_t result;
     if(!wd_new_object(&state->object_manager, object_type, shader, &result)) {
         wasm_runtime_set_exception(instance, "");
@@ -140,14 +139,7 @@ static uint32_t create_shader_from_bytecode(
     return result;
 }
 
-uint32_t ow_create_shader_from_bytecode(
-    wasm_exec_env_t exec_env, uint32_t bytecode_ptr, uint32_t size, ow_shader_type type) {
-    wasm_module_inst_t instance = wasm_runtime_get_module_inst(exec_env);
-    const uint8_t* bytecode_ptr_real = wasm_runtime_addr_app_to_native(instance, bytecode_ptr);
-    return create_shader_from_bytecode(exec_env, bytecode_ptr_real, size, type);
-}
-
-uint32_t ow_create_shader_from_file(wasm_exec_env_t exec_env, uint32_t path_ptr, ow_shader_type type) {
+static uint32_t create_shader_from_file(wasm_exec_env_t exec_env, uint32_t path_ptr, bool fragment) {
     wasm_module_inst_t instance = wasm_runtime_get_module_inst(exec_env);
     wd_state* state = wasm_runtime_get_custom_data(instance);
     const char* path_ptr_real = wasm_runtime_addr_app_to_native(instance, path_ptr);
@@ -159,9 +151,29 @@ uint32_t ow_create_shader_from_file(wasm_exec_env_t exec_env, uint32_t path_ptr,
         return 0;
     }
 
-    uint32_t result = create_shader_from_bytecode(exec_env, bytecode, size, type);
+    uint32_t result = create_shader_from_bytecode(exec_env, bytecode, size, fragment);
     free(bytecode);
     return result;
+}
+
+uint32_t ow_create_vertex_shader_from_bytecode(wasm_exec_env_t exec_env, uint32_t bytecode_ptr, uint32_t size) {
+    wasm_module_inst_t instance = wasm_runtime_get_module_inst(exec_env);
+    const uint8_t* bytecode_ptr_real = wasm_runtime_addr_app_to_native(instance, bytecode_ptr);
+    return create_shader_from_bytecode(exec_env, bytecode_ptr_real, size, false);
+}
+
+uint32_t ow_create_vertex_shader_from_file(wasm_exec_env_t exec_env, uint32_t path_ptr) {
+    return create_shader_from_file(exec_env, path_ptr, false);
+}
+
+uint32_t ow_create_fragment_shader_from_bytecode(wasm_exec_env_t exec_env, uint32_t bytecode_ptr, uint32_t size) {
+    wasm_module_inst_t instance = wasm_runtime_get_module_inst(exec_env);
+    const uint8_t* bytecode_ptr_real = wasm_runtime_addr_app_to_native(instance, bytecode_ptr);
+    return create_shader_from_bytecode(exec_env, bytecode_ptr_real, size, true);
+}
+
+uint32_t ow_create_fragment_shader_from_file(wasm_exec_env_t exec_env, uint32_t path_ptr) {
+    return create_shader_from_file(exec_env, path_ptr, true);
 }
 
 uint32_t ow_create_vertex_buffer(wasm_exec_env_t exec_env, uint32_t size) {
@@ -726,24 +738,20 @@ uint32_t ow_create_pipeline(wasm_exec_env_t exec_env, uint32_t info_ptr) {
     return result;
 }
 
-void ow_push_uniform_data(wasm_exec_env_t exec_env, uint32_t type, uint32_t slot, uint32_t data, uint32_t size) {
+void ow_push_vertex_uniform_data(wasm_exec_env_t exec_env, uint32_t slot, uint32_t data, uint32_t size) {
     wasm_module_inst_t instance = wasm_runtime_get_module_inst(exec_env);
     wd_state* state = wasm_runtime_get_custom_data(instance);
     void* data_real = wasm_runtime_addr_app_to_native(instance, data);
     DEBUG_CHECK(slot < 4, "only 4 uniform data slots are available for one shader type");
+    SDL_PushGPUVertexUniformData(state->output.command_buffer, slot, data_real, size);
+}
 
-    switch(type) {
-        case OW_SHADER_VERTEX:
-            SDL_PushGPUVertexUniformData(state->output.command_buffer, slot, data_real, size);
-            break;
-        case OW_SHADER_FRAGMENT:
-            SDL_PushGPUFragmentUniformData(state->output.command_buffer, slot, data_real, size);
-            break;
-        default:
-            wd_set_error("unknown shader type %d", type);
-            wasm_runtime_set_exception(instance, "");
-            return;
-    }
+void ow_push_fragment_uniform_data(wasm_exec_env_t exec_env, uint32_t slot, uint32_t data, uint32_t size) {
+    wasm_module_inst_t instance = wasm_runtime_get_module_inst(exec_env);
+    wd_state* state = wasm_runtime_get_custom_data(instance);
+    void* data_real = wasm_runtime_addr_app_to_native(instance, data);
+    DEBUG_CHECK(slot < 4, "only 4 uniform data slots are available for one shader type");
+    SDL_PushGPUFragmentUniformData(state->output.command_buffer, slot, data_real, size);
 }
 
 void ow_render_geometry(wasm_exec_env_t exec_env, uint32_t pipeline, uint32_t bindings_ptr, uint32_t vertex_offset,

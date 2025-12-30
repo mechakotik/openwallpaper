@@ -50,15 +50,26 @@ typedef struct {
 } ow_sampler_id;
 
 /**
- * A handle pointing to shader stored in host memory. Existing shader's id is never zero, this value is reserved to act
- * as non-existent object.
+ * A handle pointing to vertex shader stored in host memory. Existing vertex shader's id is never zero, this value is
+ * reserved to act as non-existent object.
  *
- * \see `ow_free_shader`
+ * \see `ow_free_vertex_shader`
  */
 
 typedef struct {
     uint32_t id;
-} ow_shader_id;
+} ow_vertex_shader_id;
+
+/**
+ * A handle pointing to fragment shader stored in host memory. Existing fragment shader's id is never zero, this value
+ * is reserved to act as non-existent object.
+ *
+ * \see `ow_free_fragment_shader`
+ */
+
+typedef struct {
+    uint32_t id;
+} ow_fragment_shader_id;
 
 /**
  * A handle pointing to GPU pipeline state object stored in host memory. Existing pipeline's id is never zero, this
@@ -90,11 +101,6 @@ typedef enum {
     OW_FILTER_NEAREST,
     OW_FILTER_LINEAR,
 } ow_filter_mode;
-
-typedef enum {
-    OW_SHADER_VERTEX,
-    OW_SHADER_FRAGMENT,
-} ow_shader_type;
 
 typedef enum {
     OW_BUFFER_VERTEX,
@@ -253,8 +259,8 @@ typedef struct {
     const ow_vertex_attribute* vertex_attributes;  ///< A pointer to an array of vertex attributes
     uint32_t vertex_attributes_count;              ///< The number of vertex attributes in the array
     ow_texture_format color_target_format;         ///< The pixel format of the color target texture
-    ow_shader_id vertex_shader;                    ///< ID of vertex shader to use
-    ow_shader_id fragment_shader;                  ///< ID of fragment shader to use
+    ow_vertex_shader_id vertex_shader;             ///< ID of vertex shader to use
+    ow_fragment_shader_id fragment_shader;         ///< ID of fragment shader to use
     ow_blend_mode blend_mode;                      ///< The blend mode to use
     ow_depth_test_mode depth_test_mode;            ///< The depth test mode to use
     bool depth_write;                              ///< If `true`, depth test will update the depth target texture
@@ -410,23 +416,38 @@ extern void ow_generate_mipmaps(ow_texture_id texture);
 extern ow_sampler_id ow_create_sampler(const ow_sampler_info* info);
 
 /**
- * Creates a shader from SPIR-V bytecode.
+ * Creates a vertex shader from SPIR-V bytecode.
  *
  * \param bytecode Pointer to the bytecode
  * \param size Size of the bytecode in bytes
- * \param type Shader type
- * \return ID of created shader
+ * \return ID of created vertex shader
  */
-extern ow_shader_id ow_create_shader_from_bytecode(const uint8_t* bytecode, size_t size, ow_shader_type type);
+extern ow_vertex_shader_id ow_create_vertex_shader_from_bytecode(const uint8_t* bytecode, size_t size);
 
 /**
- * Creates a shader from a SPIR-V bytecode file from the scene archive. Panics if file is not found.
+ * Creates a vertex shader from a SPIR-V bytecode file from the scene archive. Panics if file is not found.
  *
  * \param path Path to the file to load, absolute in the scene archive. A null-terminated byte string
- * \param type Shader type
- * \return ID of created shader
+ * \return ID of created vertex shader
  */
-extern ow_shader_id ow_create_shader_from_file(const char* path, ow_shader_type type);
+extern ow_vertex_shader_id ow_create_vertex_shader_from_file(const char* path);
+
+/**
+ * Creates a fragment shader from SPIR-V bytecode.
+ *
+ * \param bytecode Pointer to the bytecode
+ * \param size Size of the bytecode in bytes
+ * \return ID of created fragment shader
+ */
+extern ow_fragment_shader_id ow_create_fragment_shader_from_bytecode(const uint8_t* bytecode, size_t size);
+
+/**
+ * Creates a fragment shader from a SPIR-V bytecode file from the scene archive. Panics if file is not found.
+ *
+ * \param path Path to the file to load, absolute in the scene archive. A null-terminated byte string
+ * \return ID of created fragment shader
+ */
+extern ow_fragment_shader_id ow_create_fragment_shader_from_file(const char* path);
 
 /**
  * Creates a graphics pipeline.
@@ -437,16 +458,26 @@ extern ow_shader_id ow_create_shader_from_file(const char* path, ow_shader_type 
 extern ow_pipeline_id ow_create_pipeline(const ow_pipeline_info* info);
 
 /**
- * Pushes uniform data for given shader type and slot. Subsequent `ow_render_geometry` and `ow_render_geometry_indexed`
+ * Pushes vertex shader uniform data for given slot. Subsequent `ow_render_geometry` and `ow_render_geometry_indexed`
  * calls will use this data until overwritten or render pass ends. The pushed data must respect std140 layout
  * conventions. Can be called only if render pass is currently active, panics elsewhere.
  *
- * \param type Target shader type
  * \param slot Target uniform slot
  * \param data Pointer to the data to push
  * \param size Size of the data in bytes
  */
-extern void ow_push_uniform_data(ow_shader_type type, uint32_t slot, const void* data, uint32_t size);
+extern void ow_push_vertex_uniform_data(uint32_t slot, const void* data, uint32_t size);
+
+/**
+ * Pushes fragment shader uniform data for given slot. Subsequent `ow_render_geometry` and `ow_render_geometry_indexed`
+ * calls will use this data until overwritten or render pass ends. The pushed data must respect std140 layout
+ * conventions. Can be called only if render pass is currently active, panics elsewhere.
+ *
+ * \param slot Target uniform slot
+ * \param data Pointer to the data to push
+ * \param size Size of the data in bytes
+ */
+extern void ow_push_fragment_uniform_data(uint32_t slot, const void* data, uint32_t size);
 
 /**
  * Renders geometry primitives.
@@ -526,12 +557,29 @@ extern void ow_free_index_buffer(ow_index_buffer_id id);
 extern void ow_free_texture(ow_texture_id id);
 
 /**
- * Frees a sampler by ID. Panics if pipeline is not found or is already freed. Does nothing if `id` is `0`.
+ * Frees a sampler by ID. Panics if sampler is not found or is already freed. Does nothing if `id` is `0`.
  *
  * \param id Sampler ID to free
  * \see ow_create_sampler
  */
 extern void ow_free_sampler(ow_sampler_id id);
+
+/**
+ * Frees a vertex shader by ID. Panics if vertex shader is not found or is already freed. Does nothing if `id` is `0`.
+ *
+ * \param id Sampler ID to free
+ * \see ow_create_sampler
+ */
+extern void ow_free_vertex_shader(ow_vertex_shader_id id);
+
+/**
+ * Frees a fragment shader by ID. Panics if fragment shader is not found or is already freed. Does nothing if `id` is
+ * `0`.
+ *
+ * \param id Sampler ID to free
+ * \see ow_create_sampler
+ */
+extern void ow_free_fragment_shader(ow_fragment_shader_id id);
 
 /**
  * Frees a pipeline ID. Panics if pipeline is not found or is already freed. Does nothing if `id` is `0`.

@@ -74,8 +74,8 @@ ow_sampler_id linear_repeat_sampler;
 ow_sampler_id nearest_clamp_sampler;
 ow_sampler_id nearest_repeat_sampler;
 
-ow_shader_id particle_vertex;
-ow_shader_id particle_fragment;
+ow_vertex_shader_id particle_vertex;
+ow_fragment_shader_id particle_fragment;
 
 ow_texture_info texture_info = {
     .mip_levels = 1,
@@ -112,8 +112,8 @@ __attribute__((export_name("init"))) void init() {
     ow_update_vertex_buffer(particle_vertex_data_buffer, 0, particle_vertex_data, sizeof(particle_vertex_data));
 
 {{if ne (len .Particles) 0}}
-    particle_vertex = ow_create_shader_from_file("assets/particle_vertex.spv", OW_SHADER_VERTEX);
-    particle_fragment = ow_create_shader_from_file("assets/particle_fragment.spv", OW_SHADER_FRAGMENT);
+    particle_vertex = ow_create_vertex_shader_from_file("assets/particle_vertex.spv");
+    particle_fragment = ow_create_fragment_shader_from_file("assets/particle_fragment.spv");
 {{end}}
 
 {{range $idx, $buffer := .TempBuffers}}
@@ -254,15 +254,15 @@ __attribute__((export_name("update"))) void update(float delta) {
 {{end}}
 
 {{define "shader_header"}}// {{.NameInfo}}
-ow_shader_id shader{{.ID}}_vertex;
-ow_shader_id shader{{.ID}}_fragment;
+ow_vertex_shader_id shader{{.ID}}_vertex;
+ow_fragment_shader_id shader{{.ID}}_fragment;
 
 {{.VertexUniformsStruct}}
 {{.FragmentUniformsStruct}}
 {{end}}
 
-{{define "shader_init"}}    shader{{.ID}}_vertex = ow_create_shader_from_file("assets/shader{{.ID}}_vertex.spv", OW_SHADER_VERTEX);
-    shader{{.ID}}_fragment = ow_create_shader_from_file("assets/shader{{.ID}}_fragment.spv", OW_SHADER_FRAGMENT);
+{{define "shader_init"}}    shader{{.ID}}_vertex = ow_create_vertex_shader_from_file("assets/shader{{.ID}}_vertex.spv");
+    shader{{.ID}}_fragment = ow_create_fragment_shader_from_file("assets/shader{{.ID}}_fragment.spv");
 {{end}}
 
 {{define "particle_init"}}    {
@@ -565,8 +565,8 @@ ow_shader_id shader{{.ID}}_fragment;
 {{template "transform_setup" .Transform}}
 
 {{.UniformSetupCode}}
-        ow_push_uniform_data(OW_SHADER_VERTEX, 0, &vertex_uniforms, sizeof(vertex_uniforms));
-        ow_push_uniform_data(OW_SHADER_FRAGMENT, 0, &fragment_uniforms, sizeof(fragment_uniforms));
+        ow_push_vertex_uniform_data(0, &vertex_uniforms, sizeof(vertex_uniforms));
+        ow_push_fragment_uniform_data(0, &fragment_uniforms, sizeof(fragment_uniforms));
 
         ow_render_geometry(object{{.ObjectID}}_pass{{.PassID}}_pipeline, &bindings_info, 0, 4, {{.InstanceCount}});
         ow_end_render_pass();

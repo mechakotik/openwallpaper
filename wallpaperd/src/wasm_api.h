@@ -25,11 +25,6 @@ typedef enum {
 } ow_filter_mode;
 
 typedef enum {
-    OW_SHADER_VERTEX,
-    OW_SHADER_FRAGMENT,
-} ow_shader_type;
-
-typedef enum {
     OW_ATTRIBUTE_INT,
     OW_ATTRIBUTE_INT2,
     OW_ATTRIBUTE_INT3,
@@ -200,13 +195,14 @@ uint32_t ow_create_texture_from_webp(wasm_exec_env_t exec_env, uint32_t path_ptr
 void ow_update_texture(wasm_exec_env_t exec_env, uint32_t data_ptr, uint32_t pixels_per_row, uint32_t dest_ptr);
 void ow_generate_mipmaps(wasm_exec_env_t exec_env, uint32_t texture);
 uint32_t ow_create_sampler(wasm_exec_env_t exec_env, uint32_t info_ptr);
-uint32_t ow_create_shader_from_bytecode(
-    wasm_exec_env_t exec_env, uint32_t bytecode_ptr, uint32_t size, ow_shader_type type);
-uint32_t ow_create_shader_from_file(wasm_exec_env_t exec_env, uint32_t path_ptr, ow_shader_type type);
+uint32_t ow_create_vertex_shader_from_bytecode(wasm_exec_env_t exec_env, uint32_t bytecode_ptr, uint32_t size);
+uint32_t ow_create_vertex_shader_from_file(wasm_exec_env_t exec_env, uint32_t path_ptr);
+uint32_t ow_create_fragment_shader_from_bytecode(wasm_exec_env_t exec_env, uint32_t bytecode_ptr, uint32_t size);
+uint32_t ow_create_fragment_shader_from_file(wasm_exec_env_t exec_env, uint32_t path_ptr);
 uint32_t ow_create_pipeline(wasm_exec_env_t exec_env, uint32_t info_ptr);
 
-void ow_push_uniform_data(
-    wasm_exec_env_t exec_env, ow_shader_type type, uint32_t slot, uint32_t data_ptr, uint32_t size);
+void ow_push_vertex_uniform_data(wasm_exec_env_t exec_env, uint32_t slot, uint32_t data_ptr, uint32_t size);
+void ow_push_fragment_uniform_data(wasm_exec_env_t exec_env, uint32_t slot, uint32_t data_ptr, uint32_t size);
 void ow_render_geometry(wasm_exec_env_t exec_env, uint32_t pipeline, uint32_t bindings_ptr, uint32_t vertex_offset,
     uint32_t vertex_count, uint32_t instance_count);
 void ow_render_geometry_indexed(wasm_exec_env_t exec_env, uint32_t pipeline, uint32_t bindings_ptr,
