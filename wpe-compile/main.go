@@ -806,7 +806,7 @@ func processFinalPassthrough() {
 		ObjectID:          9999,
 		PassID:            0,
 		ShaderID:          shader.ID,
-		ColorTarget:       "0",
+		ColorTarget:       "(ow_texture_id){0}",
 		ColorTargetFormat: "OW_TEXTURE_SWAPCHAIN",
 		ClearColor:        true,
 		BlendMode:         "OW_BLEND_NONE",

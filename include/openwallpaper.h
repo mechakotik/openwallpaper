@@ -6,12 +6,70 @@
 #include <stdint.h>
 
 /**
- * A type representing an object ID - a handle of object stored in host memory. Valid object ID is never zero, this
- * value is reserved for different purposes.
+ * A handle pointing to vertex buffer stored in host memory. Existing vertex buffer's id is never zero, this
+ * value is reserved to act as non-existent object.
  *
- * \see `ow_free`
+ * \see `ow_free_vertex_buffer`
  */
-typedef uint32_t ow_id;
+
+typedef struct {
+    uint32_t id;
+} ow_vertex_buffer_id;
+
+/**
+ * A handle pointing to index buffer stored in host memory. Existing index buffer's id is never zero, this
+ * value is reserved to act as non-existent object.
+ *
+ * \see `ow_free_index_buffer`
+ */
+
+typedef struct {
+    uint32_t id;
+} ow_index_buffer_id;
+
+/**
+ * A handle pointing to GPU texture stored in host memory. Existing texture's id is never zero, this value is reserved
+ * to act as non-existent object.
+ *
+ * \see `ow_free_texture`
+ */
+
+typedef struct {
+    uint32_t id;
+} ow_texture_id;
+
+/**
+ * A handle pointing to GPU sampler stored in host memory. Existing sampler's id is never zero, this value is reserved
+ * to act as non-existent object.
+ *
+ * \see `ow_free_sampler`
+ */
+
+typedef struct {
+    uint32_t id;
+} ow_sampler_id;
+
+/**
+ * A handle pointing to shader stored in host memory. Existing shader's id is never zero, this value is reserved to act
+ * as non-existent object.
+ *
+ * \see `ow_free_shader`
+ */
+
+typedef struct {
+    uint32_t id;
+} ow_shader_id;
+
+/**
+ * A handle pointing to GPU pipeline state object stored in host memory. Existing pipeline's id is never zero, this
+ * value is reserved to act as non-existent object.
+ *
+ * \see `ow_free_pipeline`
+ */
+
+typedef struct {
+    uint32_t id;
+} ow_pipeline_id;
 
 typedef enum {
     OW_TEXTURE_SWAPCHAIN,
@@ -121,12 +179,12 @@ typedef enum {
  * A structure specifying render pass parameters.
  */
 typedef struct {
-    ow_id color_target;        ///< ID of color target texture. Setting it to `0` means render target is screen
-    bool clear_color;          ///< If `true`, render pass will clear color target with `clear_color_rgba`
-    float clear_color_rgba[4]; ///< RGBA color to clear color target with
-    ow_id depth_target;        ///< ID of depth target texture
-    bool clear_depth;          ///< If `true`, render pass will clear depth target with `clear_depth_value`
-    float clear_depth_value;   ///< Value to clear depth target with
+    ow_texture_id color_target; ///< ID of color target texture. Setting it to `0` means render target is screen
+    bool clear_color;           ///< If `true`, render pass will clear color target with `clear_color_rgba`
+    float clear_color_rgba[4];  ///< RGBA color to clear color target with
+    ow_texture_id depth_target; ///< ID of depth target texture
+    bool clear_depth;           ///< If `true`, render pass will clear depth target with `clear_depth_value`
+    float clear_depth_value;    ///< Value to clear depth target with
 } ow_pass_info;
 
 /**
@@ -146,12 +204,12 @@ typedef struct {
  * A structure specifying rectangular texture fragment to update in `ow_update_texture`.
  */
 typedef struct {
-    ow_id texture;      ///< ID of texture to update
-    uint32_t mip_level; ///< Mip level to update, must be less than texture's `mip_levels`
-    uint32_t x;         ///< Left offset of destination rectangle
-    uint32_t y;         ///< Top offset of destination rectangle
-    uint32_t w;         ///< Width of destination rectangle
-    uint32_t h;         ///< Height of destination rectangle
+    ow_texture_id texture; ///< ID of texture to update
+    uint32_t mip_level;    ///< Mip level to update, must be less than texture's `mip_levels`
+    uint32_t x;            ///< Left offset of destination rectangle
+    uint32_t y;            ///< Top offset of destination rectangle
+    uint32_t w;            ///< Width of destination rectangle
+    uint32_t h;            ///< Height of destination rectangle
 } ow_texture_update_destination;
 
 /**
@@ -195,8 +253,8 @@ typedef struct {
     const ow_vertex_attribute* vertex_attributes;  ///< A pointer to an array of vertex attributes
     uint32_t vertex_attributes_count;              ///< The number of vertex attributes in the array
     ow_texture_format color_target_format;         ///< The pixel format of the color target texture
-    ow_id vertex_shader;                           ///< ID of vertex shader to use
-    ow_id fragment_shader;                         ///< ID of fragment shader to use
+    ow_shader_id vertex_shader;                    ///< ID of vertex shader to use
+    ow_shader_id fragment_shader;                  ///< ID of fragment shader to use
     ow_blend_mode blend_mode;                      ///< The blend mode to use
     ow_depth_test_mode depth_test_mode;            ///< The depth test mode to use
     bool depth_write;                              ///< If `true`, depth test will update the depth target texture
@@ -208,18 +266,18 @@ typedef struct {
  * A structure specifying a texture binding.
  */
 typedef struct {
-    uint32_t slot; ///< The slot of the texture in shader
-    ow_id texture; ///< ID of the texture to bind
-    ow_id sampler; ///< ID of the sampler to use for this texture
+    uint32_t slot;         ///< The slot of the texture in shader
+    ow_texture_id texture; ///< ID of the texture to bind
+    ow_sampler_id sampler; ///< ID of the sampler to use for this texture
 } ow_texture_binding;
 
 /**
  * A structure specifying bindings for draw call.
  */
 typedef struct {
-    const ow_id* vertex_buffers;                ///< A pointer to an array of vertex buffer IDs
+    const ow_vertex_buffer_id* vertex_buffers;  ///< A pointer to an array of vertex buffer IDs
     uint32_t vertex_buffers_count;              ///< The number of vertex buffer IDs in the array
-    ow_id index_buffer;                         ///< ID of the index buffer
+    ow_index_buffer_id index_buffer;            ///< ID of the index buffer
     const ow_texture_binding* texture_bindings; ///< A pointer to an array of texture bindings
     uint32_t texture_bindings_count;            ///< The number of texture bindings in the array
 } ow_bindings_info;
@@ -270,24 +328,45 @@ extern void ow_begin_render_pass(const ow_pass_info* info);
 extern void ow_end_render_pass();
 
 /**
- * Creates a vertex or index buffer.
+ * Creates a vertex buffer of given `size`.
  *
  * \param type Type of the buffer
  * \param size Buffer size in bytes
  * \return ID of created buffer
  */
-extern ow_id ow_create_buffer(ow_buffer_type type, uint32_t size);
+extern ow_vertex_buffer_id ow_create_vertex_buffer(uint32_t size);
 
 /**
- * Overwrites buffer data subsegment beginning at `offset` with `size` bytes from `data`. Can be called only if copy
- * pass is currently active, panics elsewhere.
+ * Creates an index buffer of given `size`. If `wide` is `true`, the buffer will be created with 32-bit indices,
+ * otherwise with 16-bit indices.
  *
- * \param buffer Buffer ID to update
+ * \param type Type of the buffer
+ * \param size Buffer size in bytes
+ * \return ID of created buffer
+ */
+extern ow_index_buffer_id ow_create_index_buffer(uint32_t size, bool wide);
+
+/**
+ * Overwrites vertex buffer data subsegment beginning at `offset` with `size` bytes from `data`. Can be called only if
+ * copy pass is currently active, panics elsewhere.
+ *
+ * \param buffer Vertex buffer ID to update
  * \param offset Offset in bytes from the start of the buffer
  * \param data Pointer to the source data
  * \param size Size of subsegment to update in bytes
  */
-extern void ow_update_buffer(ow_id buffer, uint32_t offset, const void* data, uint32_t size);
+extern void ow_update_vertex_buffer(ow_vertex_buffer_id buffer, uint32_t offset, const void* data, uint32_t size);
+
+/**
+ * Overwrites index buffer data subsegment beginning at `offset` with `size` bytes from `data`. Can be called only if
+ * copy pass is currently active, panics elsewhere.
+ *
+ * \param buffer Index buffer ID to update
+ * \param offset Offset in bytes from the start of the buffer
+ * \param data Pointer to the source data
+ * \param size Size of subsegment to update in bytes
+ */
+extern void ow_update_index_buffer(ow_index_buffer_id buffer, uint32_t offset, const void* data, uint32_t size);
 
 /**
  * Creates a texture.
@@ -295,7 +374,7 @@ extern void ow_update_buffer(ow_id buffer, uint32_t offset, const void* data, ui
  * \param info Texture parameters
  * \return ID of created texture
  */
-extern ow_id ow_create_texture(const ow_texture_info* info);
+extern ow_texture_id ow_create_texture(const ow_texture_info* info);
 
 /**
  * Creates a texture from a WEBP file from the scene archive. Panics if file is not found.
@@ -304,7 +383,7 @@ extern ow_id ow_create_texture(const ow_texture_info* info);
  * \param info Texture parameters
  * \return ID of created texture
  */
-extern ow_id ow_create_texture_from_webp(const char* path, const ow_texture_info* info);
+extern ow_texture_id ow_create_texture_from_webp(const char* path, const ow_texture_info* info);
 
 /**
  * Updates a `dest` texture region with data from `data`
@@ -320,7 +399,7 @@ extern void ow_update_texture(const void* data, uint32_t pixels_per_row, const o
  *
  * \param texture Texture ID to generate mipmaps for.
  */
-extern void ow_generate_mipmaps(ow_id texture);
+extern void ow_generate_mipmaps(ow_texture_id texture);
 
 /**
  * Creates a sampler.
@@ -328,7 +407,7 @@ extern void ow_generate_mipmaps(ow_id texture);
  * \param info Sampler parameters
  * \return ID of created sampler
  */
-extern ow_id ow_create_sampler(const ow_sampler_info* info);
+extern ow_sampler_id ow_create_sampler(const ow_sampler_info* info);
 
 /**
  * Creates a shader from SPIR-V bytecode.
@@ -338,7 +417,7 @@ extern ow_id ow_create_sampler(const ow_sampler_info* info);
  * \param type Shader type
  * \return ID of created shader
  */
-extern ow_id ow_create_shader_from_bytecode(const uint8_t* bytecode, size_t size, ow_shader_type type);
+extern ow_shader_id ow_create_shader_from_bytecode(const uint8_t* bytecode, size_t size, ow_shader_type type);
 
 /**
  * Creates a shader from a SPIR-V bytecode file from the scene archive. Panics if file is not found.
@@ -347,7 +426,7 @@ extern ow_id ow_create_shader_from_bytecode(const uint8_t* bytecode, size_t size
  * \param type Shader type
  * \return ID of created shader
  */
-extern ow_id ow_create_shader_from_file(const char* path, ow_shader_type type);
+extern ow_shader_id ow_create_shader_from_file(const char* path, ow_shader_type type);
 
 /**
  * Creates a graphics pipeline.
@@ -355,7 +434,7 @@ extern ow_id ow_create_shader_from_file(const char* path, ow_shader_type type);
  * \param info Pipeline parameters
  * \return ID of created pipeline
  */
-extern ow_id ow_create_pipeline(const ow_pipeline_info* info);
+extern ow_pipeline_id ow_create_pipeline(const ow_pipeline_info* info);
 
 /**
  * Pushes uniform data for given shader type and slot. Subsequent `ow_render_geometry` and `ow_render_geometry_indexed`
@@ -378,7 +457,7 @@ extern void ow_push_uniform_data(ow_shader_type type, uint32_t slot, const void*
  * \param vertex_count Number of vertices to render
  * \param instance_count Number of instances
  */
-extern void ow_render_geometry(ow_id pipeline, const ow_bindings_info* bindings, uint32_t vertex_offset,
+extern void ow_render_geometry(ow_pipeline_id pipeline, const ow_bindings_info* bindings, uint32_t vertex_offset,
     uint32_t vertex_count, uint32_t instance_count);
 
 /**
@@ -391,7 +470,7 @@ extern void ow_render_geometry(ow_id pipeline, const ow_bindings_info* bindings,
  * \param vertex_offset Offset in vertices to start rendering from
  * \param instance_count Number of instances
  */
-extern void ow_render_geometry_indexed(ow_id pipeline, const ow_bindings_info* bindings, uint32_t index_offset,
+extern void ow_render_geometry_indexed(ow_pipeline_id pipeline, const ow_bindings_info* bindings, uint32_t index_offset,
     uint32_t index_count, uint32_t vertex_offset, uint32_t instance_count);
 
 /**
@@ -422,10 +501,44 @@ extern uint32_t ow_get_mouse_state(float* x, float* y);
 extern const char* ow_get_option(const char* name);
 
 /**
- * Frees an object by ID. Panics if object is not found or is already freed. Has no effect if `id` is `0`.
+ * Frees a vertex buffer by ID. Panics if vertex buffer is not found or is already freed. Does nothing if `id` is `0`.
  *
- * \param id Object ID to free
+ * \param id Vertex buffer ID to free
+ * \see ow_create_vertex_buffer
  */
-extern void ow_free(ow_id id);
+extern void ow_free_vertex_buffer(ow_vertex_buffer_id id);
+
+/**
+ * Frees an index buffer by ID. Panics if index buffer is not found or is already freed. Does nothing if `id` is `0`.
+ *
+ * \param id Index buffer ID to free
+ * \see ow_create_index_buffer
+ */
+extern void ow_free_index_buffer(ow_index_buffer_id id);
+
+/**
+ * Frees a texture by ID. Panics if texture is not found or is already freed. Does nothing if `id` is `0`.
+ *
+ * \param id Texture ID to free
+ * \see ow_create_texture
+ * \see ow_create_texture_from_webp
+ */
+extern void ow_free_texture(ow_texture_id id);
+
+/**
+ * Frees a sampler by ID. Panics if pipeline is not found or is already freed. Does nothing if `id` is `0`.
+ *
+ * \param id Sampler ID to free
+ * \see ow_create_sampler
+ */
+extern void ow_free_sampler(ow_sampler_id id);
+
+/**
+ * Frees a pipeline ID. Panics if pipeline is not found or is already freed. Does nothing if `id` is `0`.
+ *
+ * \param id Pipeline ID to free
+ * \see ow_create_pipeline
+ */
+extern void ow_free_pipeline(ow_pipeline_id id);
 
 #endif

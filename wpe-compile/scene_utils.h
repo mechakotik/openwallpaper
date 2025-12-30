@@ -513,7 +513,7 @@ typedef enum {
 typedef struct {
     particle_instance_t* instances;
     particle_instance_data_t* instance_data;
-    ow_id instance_buffer;
+    ow_vertex_buffer_id instance_buffer;
     particle_emitter_t* emitters;
     particle_initializer_t init;
     particle_operator_t operator;

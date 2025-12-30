@@ -6,10 +6,10 @@
 #include "openwallpaper.h"
 #include "scene_utils.h"
 
-{{range $_, $texture := .Textures}}ow_id texture{{$texture.ID}}; // {{$texture.Name}}
+{{range $_, $texture := .Textures}}ow_texture_id texture{{$texture.ID}}; // {{$texture.Name}}
 {{end}}
 {{range $_, $shader := .Shaders}}{{template "shader_header" $shader}}
-{{end}}{{range $_, $pass := .Passes}}ow_id object{{$pass.ObjectID}}_pass{{$pass.PassID}}_pipeline;
+{{end}}{{range $_, $pass := .Passes}}ow_pipeline_id object{{$pass.ObjectID}}_pass{{$pass.PassID}}_pipeline;
 {{end}}
 {{range $_, $particle := .Particles}}particle_t particle{{.ObjectID}};
 {{end}}
@@ -60,22 +60,22 @@ ow_vertex_attribute particle_vertex_attributes[6] = {
     { .slot = 1, .location = 5, .type = OW_ATTRIBUTE_INT, .offset = sizeof(float) * 11 },
 };
 
-ow_id screen_buffer = 0;
+ow_texture_id screen_buffer;
 uint32_t screen_buffer_width, screen_buffer_height;
 
-ow_id temp_buffers[{{len .TempBuffers}}];
-ow_id temp_screen_buffers[{{len .TempScreenBuffers}}];
+ow_texture_id temp_buffers[{{len .TempBuffers}}];
+ow_texture_id temp_screen_buffers[{{len .TempScreenBuffers}}];
 
-ow_id vertex_quad_buffer;
-ow_id particle_vertex_data_buffer;
+ow_vertex_buffer_id vertex_quad_buffer;
+ow_vertex_buffer_id particle_vertex_data_buffer;
 
-ow_id linear_clamp_sampler;
-ow_id linear_repeat_sampler;
-ow_id nearest_clamp_sampler;
-ow_id nearest_repeat_sampler;
+ow_sampler_id linear_clamp_sampler;
+ow_sampler_id linear_repeat_sampler;
+ow_sampler_id nearest_clamp_sampler;
+ow_sampler_id nearest_repeat_sampler;
 
-ow_id particle_vertex;
-ow_id particle_fragment;
+ow_shader_id particle_vertex;
+ow_shader_id particle_fragment;
 
 ow_texture_info texture_info = {
     .mip_levels = 1,
@@ -106,10 +106,10 @@ __attribute__((export_name("init"))) void init() {
 
     ow_begin_copy_pass();
 
-    vertex_quad_buffer = ow_create_buffer(OW_BUFFER_VERTEX, sizeof(vertex_quad));
-    ow_update_buffer(vertex_quad_buffer, 0, vertex_quad, sizeof(vertex_quad));
-    particle_vertex_data_buffer = ow_create_buffer(OW_BUFFER_VERTEX, sizeof(particle_vertex_data));
-    ow_update_buffer(particle_vertex_data_buffer, 0, particle_vertex_data, sizeof(particle_vertex_data));
+    vertex_quad_buffer = ow_create_vertex_buffer(sizeof(vertex_quad));
+    ow_update_vertex_buffer(vertex_quad_buffer, 0, vertex_quad, sizeof(vertex_quad));
+    particle_vertex_data_buffer = ow_create_vertex_buffer(sizeof(particle_vertex_data));
+    ow_update_vertex_buffer(particle_vertex_data_buffer, 0, particle_vertex_data, sizeof(particle_vertex_data));
 
 {{if ne (len .Particles) 0}}
     particle_vertex = ow_create_shader_from_file("assets/particle_vertex.spv", OW_SHADER_VERTEX);
@@ -202,13 +202,13 @@ __attribute__((export_name("update"))) void update(float delta) {
             .mip_levels = 1,
         };
 
-        ow_free(screen_buffer);
+        ow_free_texture(screen_buffer);
         screen_buffer = ow_create_texture(&screen_buffer_info);
 
 {{range $idx, $buffer := .TempScreenBuffers}}
         screen_buffer_info.width = screen_width * {{$buffer.ScaleX}};
         screen_buffer_info.height = screen_height * {{$buffer.ScaleY}};
-        ow_free(temp_screen_buffers[{{$idx}}]);
+        ow_free_texture(temp_screen_buffers[{{$idx}}]);
         temp_screen_buffers[{{$idx}}] = ow_create_texture(&screen_buffer_info);
 {{end}}
 
@@ -241,7 +241,7 @@ __attribute__((export_name("update"))) void update(float delta) {
 {{range $_, $particle := .Particles}}
     update_particle(&particle{{.ObjectID}}, delta);
     update_particle_instance_data(&particle{{.ObjectID}});
-    ow_update_buffer(particle{{.ObjectID}}.instance_buffer, 0, particle{{.ObjectID}}.instance_data, sizeof(particle_instance_data_t) * {{.MaxCount}});
+    ow_update_vertex_buffer(particle{{.ObjectID}}.instance_buffer, 0, particle{{.ObjectID}}.instance_data, sizeof(particle_instance_data_t) * {{.MaxCount}});
 {{end}}
 
     ow_end_copy_pass();
@@ -254,8 +254,8 @@ __attribute__((export_name("update"))) void update(float delta) {
 {{end}}
 
 {{define "shader_header"}}// {{.NameInfo}}
-ow_id shader{{.ID}}_vertex;
-ow_id shader{{.ID}}_fragment;
+ow_shader_id shader{{.ID}}_vertex;
+ow_shader_id shader{{.ID}}_fragment;
 
 {{.VertexUniformsStruct}}
 {{.FragmentUniformsStruct}}
@@ -438,7 +438,7 @@ ow_id shader{{.ID}}_fragment;
     };
 {{end}}
 
-    particle{{.ObjectID}}.instance_buffer = ow_create_buffer(OW_BUFFER_VERTEX, sizeof(particle_instance_data_t) * {{.MaxCount}});
+    particle{{.ObjectID}}.instance_buffer = ow_create_vertex_buffer(sizeof(particle_instance_data_t) * {{.MaxCount}});
     init_particle(&particle{{.ObjectID}});
     for(float timer = 0.0f; timer < {{.StartTime}}; timer += 0.05f) {
         update_particle(&particle{{.ObjectID}}, 0.05f);
@@ -535,7 +535,7 @@ ow_id shader{{.ID}}_fragment;
 {{end}}
 
 {{if .IsParticle}}
-        ow_id vertex_buffers[2] = {
+        ow_vertex_buffer_id vertex_buffers[2] = {
             particle_vertex_data_buffer,
             particle{{.ObjectID}}.instance_buffer
         };

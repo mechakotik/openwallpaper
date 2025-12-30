@@ -14,8 +14,10 @@ static NativeSymbol native_symbols[] = {
     {"ow_end_copy_pass", ow_end_copy_pass, "()"},
     {"ow_begin_render_pass", ow_begin_render_pass, "(i)"},
     {"ow_end_render_pass", ow_end_render_pass, "()"},
-    {"ow_create_buffer", ow_create_buffer, "(ii)i"},
-    {"ow_update_buffer", ow_update_buffer, "(iiii)"},
+    {"ow_create_vertex_buffer", ow_create_vertex_buffer, "(i)i"},
+    {"ow_create_index_buffer", ow_create_vertex_buffer, "(ii)i"},
+    {"ow_update_vertex_buffer", ow_update_buffer, "(iiii)"},
+    {"ow_update_index_buffer", ow_update_buffer, "(iiii)"},
     {"ow_create_texture", ow_create_texture, "(i)i"},
     {"ow_create_texture_from_webp", ow_create_texture_from_webp, "(ii)i"},
     {"ow_update_texture", ow_update_texture, "(iii)"},
@@ -30,7 +32,12 @@ static NativeSymbol native_symbols[] = {
     {"ow_get_screen_size", ow_get_screen_size, "(ii)"},
     {"ow_get_mouse_state", ow_get_mouse_state, "(ii)i"},
     {"ow_get_option", ow_get_option, "(i)i"},
-    {"ow_free", ow_free, "(i)"},
+    {"ow_free_vertex_buffer", ow_free, "(i)"},
+    {"ow_free_index_buffer", ow_free, "(i)"},
+    {"ow_free_texture", ow_free, "(i)"},
+    {"ow_free_sampler", ow_free, "(i)"},
+    {"ow_free_shader", ow_free, "(i)"},
+    {"ow_free_pipeline", ow_free, "(i)"},
 };
 
 bool wd_init_scene(wd_state* state, wd_args_state* args) {

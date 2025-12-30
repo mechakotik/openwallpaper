@@ -164,34 +164,38 @@ uint32_t ow_create_shader_from_file(wasm_exec_env_t exec_env, uint32_t path_ptr,
     return result;
 }
 
-uint32_t ow_create_buffer(wasm_exec_env_t exec_env, ow_buffer_type type, uint32_t size) {
+uint32_t ow_create_vertex_buffer(wasm_exec_env_t exec_env, uint32_t size) {
     wasm_module_inst_t instance = wasm_runtime_get_module_inst(exec_env);
     wd_state* state = wasm_runtime_get_custom_data(instance);
 
-    wd_object_type object_type;
-    switch(type) {
-        case OW_BUFFER_VERTEX:
-            object_type = WD_OBJECT_VERTEX_BUFFER;
-            break;
-        case OW_BUFFER_INDEX16:
-            object_type = WD_OBJECT_INDEX16_BUFFER;
-            break;
-        case OW_BUFFER_INDEX32:
-            object_type = WD_OBJECT_INDEX32_BUFFER;
-            break;
-        default:
-            wd_set_error("unknown buffer type %d", type);
-            wasm_runtime_set_exception(instance, "");
-            return 0;
-    }
-
     SDL_GPUBufferCreateInfo info = {0};
-    info.usage = (type == OW_BUFFER_VERTEX ? SDL_GPU_BUFFERUSAGE_VERTEX : SDL_GPU_BUFFERUSAGE_INDEX);
+    info.usage = SDL_GPU_BUFFERUSAGE_VERTEX;
     info.size = size;
 
     SDL_GPUBuffer* buffer = SDL_CreateGPUBuffer(state->output.gpu, &info);
     DEBUG_CHECK_RET0(buffer != NULL, "SDL_CreateGPUBuffer failed: %s", SDL_GetError());
 
+    uint32_t result;
+    if(!wd_new_object(&state->object_manager, WD_OBJECT_VERTEX_BUFFER, buffer, &result)) {
+        wasm_runtime_set_exception(instance, "");
+        return 0;
+    }
+
+    return result;
+}
+
+uint32_t ow_create_index_buffer(wasm_exec_env_t exec_env, uint32_t size, uint32_t wide) {
+    wasm_module_inst_t instance = wasm_runtime_get_module_inst(exec_env);
+    wd_state* state = wasm_runtime_get_custom_data(instance);
+
+    SDL_GPUBufferCreateInfo info = {0};
+    info.usage = SDL_GPU_BUFFERUSAGE_VERTEX;
+    info.size = size;
+
+    SDL_GPUBuffer* buffer = SDL_CreateGPUBuffer(state->output.gpu, &info);
+    DEBUG_CHECK_RET0(buffer != NULL, "SDL_CreateGPUBuffer failed: %s", SDL_GetError());
+
+    wd_object_type object_type = (wide ? WD_OBJECT_INDEX32_BUFFER : WD_OBJECT_INDEX16_BUFFER);
     uint32_t result;
     if(!wd_new_object(&state->object_manager, object_type, buffer, &result)) {
         wasm_runtime_set_exception(instance, "");

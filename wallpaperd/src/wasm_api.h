@@ -4,8 +4,6 @@
 #include <stdint.h>
 #include "wasm_export.h"
 
-#define OW_ID_SCREEN_TARGET 0xFFFFFFFF
-
 typedef enum {
     OW_TEXTURE_SWAPCHAIN,
     OW_TEXTURE_RGBA8_UNORM,
@@ -30,12 +28,6 @@ typedef enum {
     OW_SHADER_VERTEX,
     OW_SHADER_FRAGMENT,
 } ow_shader_type;
-
-typedef enum {
-    OW_BUFFER_VERTEX,
-    OW_BUFFER_INDEX16,
-    OW_BUFFER_INDEX32,
-} ow_buffer_type;
 
 typedef enum {
     OW_ATTRIBUTE_INT,
@@ -200,7 +192,8 @@ void ow_end_copy_pass(wasm_exec_env_t exec_env);
 void ow_begin_render_pass(wasm_exec_env_t exec_env, uint32_t info_ptr);
 void ow_end_render_pass(wasm_exec_env_t exec_env);
 
-uint32_t ow_create_buffer(wasm_exec_env_t exec_env, ow_buffer_type type, uint32_t size);
+uint32_t ow_create_vertex_buffer(wasm_exec_env_t exec_env, uint32_t size);
+uint32_t ow_create_index_buffer(wasm_exec_env_t exec_env, uint32_t size, uint32_t wide);
 void ow_update_buffer(wasm_exec_env_t exec_env, uint32_t buffer, uint32_t offset, uint32_t data_ptr, uint32_t size);
 uint32_t ow_create_texture(wasm_exec_env_t exec_env, uint32_t info_ptr);
 uint32_t ow_create_texture_from_webp(wasm_exec_env_t exec_env, uint32_t path_ptr, uint32_t info_ptr);
