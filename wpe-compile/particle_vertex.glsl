@@ -13,14 +13,12 @@ layout(location = 2) out flat int v_frame;
 
 layout(std140, set = 1, binding = 0) uniform uniforms_t {
     mat4 mvp;
+    float texture_ratio;
 };
 
-void main() {
-    vec2 off = a_uv - 0.5;
-    vec3 local = vec3(off * a_size, 0.0);
-
-    vec3 c = cos(a_rotation);
-    vec3 s = sin(a_rotation);
+mat3 rotation_matrix(vec3 rotation) {
+    vec3 c = cos(rotation);
+    vec3 s = sin(rotation);
 
     mat3 rot_z = mat3(
         c.z, -s.z, 0.0,
@@ -38,10 +36,18 @@ void main() {
         -s.y, 0.0, c.y
     );
 
-    vec3 rotated = rot_y * (rot_x * (rot_z * local));
-    vec3 billboard = a_position + rotated;
-    gl_Position = mvp * vec4(billboard, 1.0);
+    return rot_y * rot_x * rot_z;
+}
 
+void main() {
+    mat3 rot = rotation_matrix(a_rotation);
+    vec3 right = rot * vec3(1.0, 0.0, 0.0);
+    vec3 up = rot * vec3(0.0, 1.0, 0.0);
+    vec2 centered_uv = a_uv - 0.5;
+    vec3 offset = a_size * (right * centered_uv.x - up * centered_uv.y * texture_ratio);
+    vec3 world_pos = a_position + offset;
+
+    gl_Position = mvp * vec4(world_pos, 1.0);
     v_uv = a_uv;
     v_color = a_color;
     v_frame = a_frame;

@@ -721,6 +721,17 @@ func processParticleObject(object ParticleObject) {
 
 	codegenData.Particles = append(codegenData.Particles, particleData)
 
+	textureRatio := float32(1.0)
+	frameWidth := float32(texture.Width)
+	frameHeight := float32(texture.Height)
+	if texture.SpritesheetCols > 0 && texture.SpritesheetRows > 0 {
+		frameWidth = float32(texture.Width) / float32(texture.SpritesheetCols)
+		frameHeight = float32(texture.Height) / float32(texture.SpritesheetRows)
+	}
+	if frameWidth != 0 {
+		textureRatio = frameHeight / frameWidth
+	}
+
 	blendMode := "OW_BLEND_ALPHA"
 	switch object.ParticleData.Material.Blending {
 	case "translucent":
@@ -732,6 +743,10 @@ func processParticleObject(object ParticleObject) {
 	default:
 		fmt.Printf("warning: unknown blend mode %s, using default\n", object.ParticleData.Material.Blending)
 	}
+
+	uniformSetupCode := fmt.Sprintf(`vertex_uniforms.mvp = matrices.model_view_projection;
+		vertex_uniforms.texture_ratio = %f;
+`, textureRatio)
 
 	passData := CodegenPassData{
 		ObjectID:          lastObjectID,
@@ -745,7 +760,7 @@ func processParticleObject(object ParticleObject) {
 			Texture: fmt.Sprintf("texture%d", texture.ID),
 			Sampler: getTextureSampler(texture),
 		}},
-		UniformSetupCode: "vertex_uniforms.mvp = matrices.model_view_projection;\n",
+		UniformSetupCode: uniformSetupCode,
 		IsParticle:       true,
 		InstanceCount:    maxCount,
 		SpritesheetCols:  float32(texture.SpritesheetCols),
