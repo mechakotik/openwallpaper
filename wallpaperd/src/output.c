@@ -7,8 +7,8 @@
 #include "SDL3/SDL_properties.h"
 #include "argparse.h"
 #include "error.h"
-#include "window_output.h"
-#include "wlroots_output.h"
+#include "window.h"
+#include "wlroots.h"
 
 static const char* get_output(wd_args_state* args) {
     if(wd_get_option(args, "window") != NULL) {

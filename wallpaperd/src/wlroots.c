@@ -1,17 +1,15 @@
 #ifdef WD_WLROOTS
 
-#include "wlroots_output.h"
+#include "wlroots.h"
 #include <SDL3/SDL.h>
-#include <errno.h>
 #include <fcntl.h>
-#include <stdio.h>
 #include <stdlib.h>
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <unistd.h>
 #include <wlr-layer-shell-unstable-v1.h>
-#include "SDL3/SDL_hints.h"
 #include "error.h"
+#include "hyprland.h"
 
 typedef struct wlroots_output_state {
     struct wl_display* display;
@@ -31,8 +29,7 @@ typedef struct wlroots_output_state {
         SESSION_HYPRLAND,
     } session_type;
 
-    int hyprland_socket;
-    bool hyprland_output_hidden;
+    wd_hyprland_state hyprland;
 } wlroots_output_state;
 
 static void registry_global(
@@ -67,60 +64,9 @@ static void layer_surface_closed(void* data, struct zwlr_layer_surface_v1* surfa
 static const struct zwlr_layer_surface_v1_listener layer_surface_listener = {
     .configure = layer_surface_configure, .closed = layer_surface_closed};
 
-static int init_hyprland_socket() {
-    int sock = socket(AF_UNIX, SOCK_STREAM, 0);
-    if(sock == -1) {
-        printf("warning: failed to create socket, pause-hidden will not work: %s\n", strerror(errno));
-        return -1;
-    }
-
-    const char* runtime_dir = getenv("XDG_RUNTIME_DIR");
-    if(runtime_dir == NULL) {
-        printf("warning: XDG_RUNTIME_DIR is not set, pause-hidden will not work\n");
-        goto handle_error;
-    }
-    const char* hyprland_instance = getenv("HYPRLAND_INSTANCE_SIGNATURE");
-    if(hyprland_instance == NULL) {
-        printf("warning: HYPRLAND_INSTANCE_SIGNATURE is not set, pause-hidden will not work\n");
-        goto handle_error;
-    }
-
-    struct sockaddr_un name;
-    name.sun_family = AF_UNIX;
-    int res =
-        snprintf(name.sun_path, sizeof(name.sun_path), "%s/hypr/%s/.socket2.sock", runtime_dir, hyprland_instance);
-    if(res == sizeof(name.sun_path)) {
-        printf("warning: socket path is too long, pause-hidden will not work: %s\n", strerror(errno));
-        goto handle_error;
-    }
-
-    res = connect(sock, (const struct sockaddr*)&name, sizeof(name));
-    if(res == -1) {
-        printf("warning: failed to connect to hyprland socket, pause-hidden will not work: %s\n", strerror(errno));
-        goto handle_error;
-    }
-
-    int flags = fcntl(sock, F_GETFL, 0);
-    if(flags < 0) {
-        printf("warning: failed to get socket flags, pause-hidden will not work: %s\n", strerror(errno));
-        goto handle_error;
-    }
-    if(fcntl(sock, F_SETFL, flags | O_NONBLOCK) < 0) {
-        printf("warning: failed to set O_NONBLOCK flag for socket, pause-hidden will not work: %s\n", strerror(errno));
-        goto handle_error;
-    }
-
-    return sock;
-
-handle_error:
-    close(sock);
-    return -1;
-}
-
 bool wd_wlroots_output_init(void** data) {
     *data = calloc(1, sizeof(wlroots_output_state));
     wlroots_output_state* odata = (wlroots_output_state*)(*data);
-    odata->hyprland_socket = -1;
 
     odata->display = wl_display_connect(NULL);
     if(odata->display == NULL) {
@@ -182,7 +128,7 @@ bool wd_wlroots_output_init(void** data) {
     }
 
     if(odata->session_type == SESSION_HYPRLAND) {
-        odata->hyprland_socket = init_hyprland_socket();
+        wd_hyprland_init(&odata->hyprland);
     }
 
     return true;
@@ -193,34 +139,10 @@ SDL_Window* wd_wlroots_output_get_window(void* data) {
     return odata->window;
 }
 
-bool hyprland_output_hidden(wlroots_output_state* state) {
-    if(state->hyprland_socket == -1) {
-        return false;
-    }
-
-    // TODO: actually use information from hyprland socket to avoid calling shell
-    static char buf[128];
-    bool refresh_needed = false;
-    while(true) {
-        int res = read(state->hyprland_socket, buf, sizeof(buf));
-        if(res < 0) {
-            break;
-        }
-        refresh_needed = true;
-    }
-    if(!refresh_needed) {
-        return state->hyprland_output_hidden;
-    }
-
-    state->hyprland_output_hidden =
-        (system("hyprctl activewindow | grep -q \"floating: 0\\|fullscreen: 2\" > /dev/null") == 0);
-    return state->hyprland_output_hidden;
-}
-
 bool wd_wlroots_output_hidden(void* data) {
     wlroots_output_state* odata = (wlroots_output_state*)data;
     if(odata->session_type == SESSION_HYPRLAND) {
-        return hyprland_output_hidden(odata);
+        return wd_hyprland_output_hidden(&odata->hyprland);
     }
 
     // TODO: check for fullscreen window with wlr-foreign-toplevel-management
@@ -233,6 +155,7 @@ void wd_wlroots_output_free(void* data) {
     SDL_DestroyWindow(odata->window);
     SDL_Quit();
 
+    wd_hyprland_free(&odata->hyprland);
     if(odata->layer_surface != NULL) {
         zwlr_layer_surface_v1_destroy(odata->layer_surface);
     }

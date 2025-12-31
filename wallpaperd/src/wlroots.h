@@ -1,7 +1,7 @@
 #ifdef WD_WLROOTS
 
-#ifndef WD_WLROOTS_OUTPUT_H
-#define WD_WLROOTS_OUTPUT_H
+#ifndef WD_WLROOTS_H
+#define WD_WLROOTS_H
 
 #include <stdbool.h>
 
