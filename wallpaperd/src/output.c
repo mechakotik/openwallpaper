@@ -22,6 +22,7 @@ static const char* get_output(wd_args_state* args) {
 
 bool wd_init_output(wd_output_state* output, wd_args_state* args) {
     const char* name = get_output(args);
+    const char* display_name = wd_get_option(args, "display");
 
     if(strcmp(name, "window") == 0) {
         if(!wd_window_output_init(&output->data)) {
@@ -31,7 +32,7 @@ bool wd_init_output(wd_output_state* output, wd_args_state* args) {
         output->free_output = wd_window_output_free;
     } else if(strcmp(name, "wlroots") == 0) {
 #ifdef WD_WLROOTS
-        if(!wd_wlroots_output_init(&output->data)) {
+        if(!wd_wlroots_output_init(&output->data, display_name)) {
             return false;
         }
         output->window = wd_wlroots_output_get_window(output->data);
@@ -93,4 +94,20 @@ void wd_free_output(wd_output_state* output) {
         output->free_output(output->data);
         output->data = NULL;
     }
+}
+
+bool wd_list_displays(wd_args_state* args) {
+    const char* name = get_output(args);
+
+    if(strcmp(name, "wlroots") == 0) {
+#ifdef WD_WLROOTS
+        return wd_wlroots_list_displays();
+#else
+        wd_set_error("wlroots output support is disabled, compile wallpaperd with -DWD_WLROOTS=ON to use it");
+        return false;
+#endif
+    }
+
+    wd_set_error("no available wallpaper output");
+    return false;
 }

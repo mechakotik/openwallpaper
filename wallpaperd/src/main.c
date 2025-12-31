@@ -12,13 +12,15 @@ static void print_help() {
     printf("Usage: wallpaperd [OPTIONS] [WALLPAPER_PATH] [WALLPAPER_OPTIONS]\n");
     printf("Interactive live wallpaper daemon\n\n");
 
-    printf("  --output=<output>\n");
+    printf("  --display=<display>\n");
     printf("  --fps=<fps>\n");
     printf("  --speed=<speed>\n");
     printf("  --prefer-dgpu\n");
     printf("  --pause-hidden\n");
     printf("  --pause-on-bat\n");
-    printf("  --window\n");
+    printf("  --window\n\n");
+
+    printf("  --list-displays\n");
     printf("  --help\n");
 }
 
@@ -31,6 +33,14 @@ int main(int argc, char* argv[]) {
 
     if(wd_get_option(&state.args, "help") != NULL) {
         print_help();
+        wd_free_state(&state);
+        return 0;
+    }
+
+    if(wd_get_option(&state.args, "list-displays") != NULL) {
+        if(!wd_list_displays(&state.args)) {
+            goto handle_error;
+        }
         wd_free_state(&state);
         return 0;
     }

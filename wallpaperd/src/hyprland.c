@@ -11,6 +11,8 @@
 #include <unistd.h>
 #include <wlr-layer-shell-unstable-v1.h>
 
+// TODO: properly handle multiple displays
+
 void wd_hyprland_init(wd_hyprland_state* state) {
     state->socket = socket(AF_UNIX, SOCK_STREAM, 0);
     if(state->socket == -1) {

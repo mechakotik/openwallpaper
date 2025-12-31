@@ -5,10 +5,11 @@
 
 #include <stdbool.h>
 
-bool wd_wlroots_output_init(void** data);
+bool wd_wlroots_output_init(void** data, const char* display_name);
 struct SDL_Window* wd_wlroots_output_get_window(void* data);
 bool wd_wlroots_output_hidden(void* data);
 void wd_wlroots_output_free(void* data);
+bool wd_wlroots_list_displays();
 
 #endif
 
