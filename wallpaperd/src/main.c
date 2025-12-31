@@ -14,6 +14,7 @@ static void print_help() {
 
     printf("  --output=<output>\n");
     printf("  --fps=<fps>\n");
+    printf("  --speed=<speed>\n");
     printf("  --prefer-dgpu\n");
     printf("  --pause-hidden\n");
     printf("  --pause-on-bat\n");
@@ -38,6 +39,16 @@ int main(int argc, char* argv[]) {
         wd_set_error("no wallpaper path specified");
         goto handle_error;
     }
+
+    float speed = 1;
+    if(wd_get_option(&state.args, "speed") != NULL) {
+        speed = atof(wd_get_option(&state.args, "speed"));
+        if(speed <= 0) {
+            wd_set_error("invalid speed value");
+            goto handle_error;
+        }
+    }
+
     if(!wd_init_output(&state.output, &state.args)) {
         goto handle_error;
     }
@@ -145,7 +156,7 @@ int main(int argc, char* argv[]) {
             continue;
         }
 
-        if(!wd_update_scene(&state.scene, delta)) {
+        if(!wd_update_scene(&state.scene, delta * speed)) {
             goto handle_error;
         }
 
