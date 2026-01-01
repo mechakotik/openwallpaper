@@ -4,6 +4,7 @@ import (
 	"bytes"
 	_ "embed"
 	"fmt"
+	"math"
 	"os"
 	"os/exec"
 	"strconv"
@@ -665,7 +666,7 @@ func processParticleObject(object ParticleObject) {
 	override := object.InstanceOverride
 	if override.Enabled {
 		if override.Count != 0 {
-			maxCount = int(float32(maxCount) * object.InstanceOverride.Count)
+			maxCount = int(float32(maxCount) * override.Count)
 		}
 		if override.OverrideColorN {
 			for i := range 3 {
@@ -701,6 +702,13 @@ func processParticleObject(object ParticleObject) {
 				emitter.Rate *= override.Rate
 			}
 		}
+	}
+
+	if object.ParticleData.Flags&ParticleFlagWorldSpace != 0 {
+		// TODO: fair implementation of world space flag
+		scale := float32(math.Pow(float64(object.Scale[0]*object.Scale[1]*object.Scale[2]), -1.0/3.0))
+		init.MinSize *= scale
+		init.MaxSize *= scale
 	}
 
 	particleData := CodegenParticleData{
