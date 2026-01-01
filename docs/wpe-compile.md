@@ -34,7 +34,7 @@ wpe-compile /path/to/scene.pkg /path/to/result.owf
 Available wpe-compile options:
 
 - `--keep-sources` - keep intermediate C and GLSL sources, which are not needed for rendering but are useful for debugging
-- `--particles=<true|false>` - enable/disable particles, disabled by default because of inaccurate implementation
+- `--particles=<true|false>` - enable/disable particles, enabled by default
 
 Generated OWF scenes have the following runtime options that you can set when running with wallpaperd:
 
@@ -123,6 +123,21 @@ You can check out this list to see what is not yet implemented or can be improve
 - [ ] User properties
 - [ ] 3D (not planned because of immense complexity)
 - [ ] SceneScript (not planned because of immense complexity)
+
+## Test scenes
+
+Here is a few Wallpaper Engine scenes that were tested to work fully (or almost fully) with wpe-compile, so you can try compiling them before other scenes that may not work:
+
+- [Alena Aenami - Stardust](https://steamcommunity.com/sharedfiles/filedetails/?id=2829446254)
+- [Cherry Lake](https://steamcommunity.com/sharedfiles/filedetails/?id=2113434704)
+- [Christmas eve](https://steamcommunity.com/sharedfiles/filedetails/?id=2276185076)
+- [Demon Slayer Infinity Train: Kyojuro Rengoku](https://steamcommunity.com/sharedfiles/filedetails/?id=2288615270)
+- [Forgotten Ruins](https://steamcommunity.com/sharedfiles/filedetails/?id=2133182232)
+- [Gantry and Sunshine](https://steamcommunity.com/sharedfiles/filedetails/?id=1117170220) (ultrawide)
+- [Mt. Fuji Japan](https://steamcommunity.com/sharedfiles/filedetails/?id=1926677846)
+- [One Piece - Luffy](https://steamcommunity.com/sharedfiles/filedetails/?id=2853719148)
+- [The Cave](https://steamcommunity.com/sharedfiles/filedetails/?id=2026973019)
+- [Winter tranquility](https://steamcommunity.com/sharedfiles/filedetails/?id=2290585492)
 
 ## Credits
 
