@@ -83,6 +83,13 @@ typedef struct {
 } ow_pipeline_id;
 
 typedef enum {
+    OW_MSAA_OFF,
+    OW_MSAA_2X,
+    OW_MSAA_4X,
+    OW_MSAA_8X,
+} ow_msaa_samples;
+
+typedef enum {
     OW_TEXTURE_SWAPCHAIN,
     OW_TEXTURE_RGBA8_UNORM,
     OW_TEXTURE_RGBA8_UNORM_SRGB,
@@ -197,11 +204,10 @@ typedef struct {
  * A structure specifying texture parameters.
  */
 typedef struct {
-    uint32_t width;      ///< Width of texture in pixels
-    uint32_t height;     ///< Height of texture in pixels
-    uint32_t mip_levels; ///< Number of mip levels
-    uint32_t samples;    ///< Power of two of number of MSAA samples, e.g. `samples = 3` means 8x MSAA. Clamped to the
-                         ///< maximum supported value
+    uint32_t width;           ///< Width of texture in pixels
+    uint32_t height;          ///< Height of texture in pixels
+    uint32_t mip_levels;      ///< Number of mip levels
+    ow_msaa_samples samples;  ///< Number of MSAA samples
     ow_texture_format format; ///< Pixel format of texture
     bool render_target;       ///< If `true`, texture can be used as render target
 } ow_texture_info;
