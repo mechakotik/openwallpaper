@@ -340,15 +340,18 @@ func processImageObject(object ImageObject) {
 
 	switch object.Material.Blending {
 	case "translucent":
-		codegenData.Passes[lastIdx].BlendMode = "OW_BLEND_ALPHA"
+		codegenData.Passes[lastIdx].BlendMode = "blend_translucent"
 	case "additive":
-		codegenData.Passes[lastIdx].BlendMode = "OW_BLEND_ADD"
-	case "normal", "disabled":
-		codegenData.Passes[lastIdx].BlendMode = "OW_BLEND_NONE"
+		codegenData.Passes[lastIdx].BlendMode = "blend_additive"
+	case "normal":
+		codegenData.Passes[lastIdx].BlendMode = "blend_normal"
+	case "disabled":
+		codegenData.Passes[lastIdx].BlendMode = "blend_disabled"
 	default:
 		fmt.Printf("warning: unknown blend mode %s, using default\n", object.Material.Blending)
-		codegenData.Passes[lastIdx].BlendMode = "OW_BLEND_ALPHA"
+		codegenData.Passes[lastIdx].BlendMode = "blend_normal"
 	}
+
 	codegenData.Passes[lastIdx].ColorTarget = "screen_buffer"
 	codegenData.Passes[lastIdx].ColorTargetFormat = "OW_TEXTURE_RGBA8_UNORM"
 	if !object.Fullscreen {
@@ -389,7 +392,7 @@ func processImageObjectInit(object ImageObject, tempBuffers *[2]int) (CodegenPas
 		ColorTarget:       fmt.Sprintf("%s[%d]", tempBuffersArray, tempBuffers[0]),
 		ColorTargetFormat: "OW_TEXTURE_RGBA8_UNORM",
 		ClearColor:        true,
-		BlendMode:         "OW_BLEND_NONE",
+		BlendMode:         "blend_disabled",
 		InstanceCount:     1,
 	}
 
@@ -500,7 +503,7 @@ func processImageEffect(object ImageObject, effect ImageEffect, tempBuffers *[2]
 			PassID:            lastPassID,
 			ColorTargetFormat: "OW_TEXTURE_RGBA8_UNORM",
 			ClearColor:        true,
-			BlendMode:         "OW_BLEND_NONE",
+			BlendMode:         "blend_disabled",
 			InstanceCount:     1,
 		}
 
@@ -740,14 +743,16 @@ func processParticleObject(object ParticleObject) {
 		textureRatio = frameHeight / frameWidth
 	}
 
-	blendMode := "OW_BLEND_ALPHA"
+	blendMode := "blend_normal"
 	switch object.ParticleData.Material.Blending {
 	case "translucent":
-		blendMode = "OW_BLEND_ALPHA"
+		blendMode = "blend_translucent"
 	case "additive":
-		blendMode = "OW_BLEND_ADD"
-	case "normal", "disabled":
-		blendMode = "OW_BLEND_NONE"
+		blendMode = "blend_additive"
+	case "normal":
+		blendMode = "blend_normal"
+	case "disabled":
+		blendMode = "blend_disabled"
 	default:
 		fmt.Printf("warning: unknown blend mode %s, using default\n", object.ParticleData.Material.Blending)
 	}
@@ -817,7 +822,7 @@ func processFinalPassthrough() {
 		ColorTarget:       "(ow_texture_id){0}",
 		ColorTargetFormat: "OW_TEXTURE_SWAPCHAIN",
 		ClearColor:        true,
-		BlendMode:         "OW_BLEND_NONE",
+		BlendMode:         "blend_disabled",
 		TextureBindings: []CodegenTextureBindingData{
 			{
 				Slot:    0,

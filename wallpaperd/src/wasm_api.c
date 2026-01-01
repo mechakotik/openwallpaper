@@ -524,6 +524,50 @@ uint32_t ow_create_sampler(wasm_exec_env_t exec_env, uint32_t info_ptr) {
     return result;
 }
 
+static SDL_GPUBlendFactor ow_blend_factor_to_sdl(ow_blend_factor factor) {
+    switch(factor) {
+        case OW_BLENDFACTOR_ZERO:
+            return SDL_GPU_BLENDFACTOR_ZERO;
+        case OW_BLENDFACTOR_ONE:
+            return SDL_GPU_BLENDFACTOR_ONE;
+        case OW_BLENDFACTOR_SRC_COLOR:
+            return SDL_GPU_BLENDFACTOR_SRC_COLOR;
+        case OW_BLENDFACTOR_ONE_MINUS_SRC_COLOR:
+            return SDL_GPU_BLENDFACTOR_ONE_MINUS_SRC_COLOR;
+        case OW_BLENDFACTOR_DST_COLOR:
+            return SDL_GPU_BLENDFACTOR_DST_COLOR;
+        case OW_BLENDFACTOR_ONE_MINUS_DST_COLOR:
+            return SDL_GPU_BLENDFACTOR_ONE_MINUS_DST_COLOR;
+        case OW_BLENDFACTOR_SRC_ALPHA:
+            return SDL_GPU_BLENDFACTOR_SRC_ALPHA;
+        case OW_BLENDFACTOR_ONE_MINUS_SRC_ALPHA:
+            return SDL_GPU_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
+        case OW_BLENDFACTOR_DST_ALPHA:
+            return SDL_GPU_BLENDFACTOR_DST_ALPHA;
+        case OW_BLENDFACTOR_ONE_MINUS_DST_ALPHA:
+            return SDL_GPU_BLENDFACTOR_ONE_MINUS_DST_ALPHA;
+        default:
+            return SDL_GPU_BLENDFACTOR_ZERO;
+    }
+}
+
+static SDL_GPUBlendOp ow_blend_operator_to_sdl(ow_blend_operator operator) {
+    switch(operator) {
+        case OW_BLENDOP_ADD:
+            return SDL_GPU_BLENDOP_ADD;
+        case OW_BLENDOP_SUBTRACT:
+            return SDL_GPU_BLENDOP_SUBTRACT;
+        case OW_BLENDOP_REVERSE_SUBTRACT:
+            return SDL_GPU_BLENDOP_REVERSE_SUBTRACT;
+        case OW_BLENDOP_MIN:
+            return SDL_GPU_BLENDOP_MIN;
+        case OW_BLENDOP_MAX:
+            return SDL_GPU_BLENDOP_MAX;
+        default:
+            return SDL_GPU_BLENDOP_ADD;
+    }
+}
+
 uint32_t ow_create_pipeline(wasm_exec_env_t exec_env, uint32_t info_ptr) {
     wasm_module_inst_t instance = wasm_runtime_get_module_inst(exec_env);
     wd_state* state = wasm_runtime_get_custom_data(instance);
@@ -634,79 +678,16 @@ uint32_t ow_create_pipeline(wasm_exec_env_t exec_env, uint32_t info_ptr) {
             return 0;
     }
 
-    switch(info->blend_mode) {
-        case OW_BLEND_NONE:
-            break;
-        case OW_BLEND_ALPHA:
-            color_target_description.blend_state = (SDL_GPUColorTargetBlendState){
-                .enable_blend = true,
-                .color_blend_op = SDL_GPU_BLENDOP_ADD,
-                .alpha_blend_op = SDL_GPU_BLENDOP_ADD,
-                .src_color_blendfactor = SDL_GPU_BLENDFACTOR_SRC_ALPHA,
-                .dst_color_blendfactor = SDL_GPU_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
-                .src_alpha_blendfactor = SDL_GPU_BLENDFACTOR_ONE,
-                .dst_alpha_blendfactor = SDL_GPU_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
-            };
-            break;
-        case OW_BLEND_ALPHA_PREMULTIPLIED:
-            color_target_description.blend_state = (SDL_GPUColorTargetBlendState){
-                .enable_blend = true,
-                .color_blend_op = SDL_GPU_BLENDOP_ADD,
-                .alpha_blend_op = SDL_GPU_BLENDOP_ADD,
-                .src_color_blendfactor = SDL_GPU_BLENDFACTOR_ONE,
-                .dst_color_blendfactor = SDL_GPU_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
-                .src_alpha_blendfactor = SDL_GPU_BLENDFACTOR_ONE,
-                .dst_alpha_blendfactor = SDL_GPU_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
-            };
-            break;
-        case OW_BLEND_ADD:
-            color_target_description.blend_state = (SDL_GPUColorTargetBlendState){
-                .enable_blend = true,
-                .color_blend_op = SDL_GPU_BLENDOP_ADD,
-                .alpha_blend_op = SDL_GPU_BLENDOP_ADD,
-                .src_color_blendfactor = SDL_GPU_BLENDFACTOR_SRC_ALPHA,
-                .dst_color_blendfactor = SDL_GPU_BLENDFACTOR_ONE,
-                .src_alpha_blendfactor = SDL_GPU_BLENDFACTOR_ZERO,
-                .dst_alpha_blendfactor = SDL_GPU_BLENDFACTOR_ONE,
-            };
-            break;
-        case OW_BLEND_ADD_PREMULTIPLIED:
-            color_target_description.blend_state = (SDL_GPUColorTargetBlendState){
-                .enable_blend = true,
-                .color_blend_op = SDL_GPU_BLENDOP_ADD,
-                .alpha_blend_op = SDL_GPU_BLENDOP_ADD,
-                .src_color_blendfactor = SDL_GPU_BLENDFACTOR_ONE,
-                .dst_color_blendfactor = SDL_GPU_BLENDFACTOR_ONE,
-                .src_alpha_blendfactor = SDL_GPU_BLENDFACTOR_ZERO,
-                .dst_alpha_blendfactor = SDL_GPU_BLENDFACTOR_ONE,
-            };
-            break;
-        case OW_BLEND_MODULATE:
-            color_target_description.blend_state = (SDL_GPUColorTargetBlendState){
-                .enable_blend = true,
-                .color_blend_op = SDL_GPU_BLENDOP_ADD,
-                .alpha_blend_op = SDL_GPU_BLENDOP_ADD,
-                .src_color_blendfactor = SDL_GPU_BLENDFACTOR_DST_COLOR,
-                .dst_color_blendfactor = SDL_GPU_BLENDFACTOR_ZERO,
-                .src_alpha_blendfactor = SDL_GPU_BLENDFACTOR_ZERO,
-                .dst_alpha_blendfactor = SDL_GPU_BLENDFACTOR_ONE,
-            };
-            break;
-        case OW_BLEND_MULTIPLY:
-            color_target_description.blend_state = (SDL_GPUColorTargetBlendState){
-                .enable_blend = true,
-                .color_blend_op = SDL_GPU_BLENDOP_ADD,
-                .alpha_blend_op = SDL_GPU_BLENDOP_ADD,
-                .src_color_blendfactor = SDL_GPU_BLENDFACTOR_DST_COLOR,
-                .dst_color_blendfactor = SDL_GPU_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
-                .src_alpha_blendfactor = SDL_GPU_BLENDFACTOR_ZERO,
-                .dst_alpha_blendfactor = SDL_GPU_BLENDFACTOR_ONE,
-            };
-            break;
-        default:
-            wd_set_error("unknown blend mode %d", info->blend_mode);
-            wasm_runtime_set_exception(instance, "");
-            return 0;
+    if(info->blend_mode.enabled) {
+        color_target_description.blend_state = (SDL_GPUColorTargetBlendState){
+            .enable_blend = true,
+            .src_color_blendfactor = ow_blend_factor_to_sdl(info->blend_mode.src_color_factor),
+            .dst_color_blendfactor = ow_blend_factor_to_sdl(info->blend_mode.dst_color_factor),
+            .color_blend_op = ow_blend_operator_to_sdl(info->blend_mode.color_operator),
+            .src_alpha_blendfactor = ow_blend_factor_to_sdl(info->blend_mode.src_alpha_factor),
+            .dst_alpha_blendfactor = ow_blend_factor_to_sdl(info->blend_mode.dst_alpha_factor),
+            .alpha_blend_op = ow_blend_operator_to_sdl(info->blend_mode.alpha_operator),
+        };
     }
 
     switch(info->cull_mode) {

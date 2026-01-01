@@ -58,14 +58,25 @@ typedef enum {
 } ow_attribute_type;
 
 typedef enum {
-    OW_BLEND_NONE,
-    OW_BLEND_ALPHA,
-    OW_BLEND_ALPHA_PREMULTIPLIED,
-    OW_BLEND_ADD,
-    OW_BLEND_ADD_PREMULTIPLIED,
-    OW_BLEND_MODULATE,
-    OW_BLEND_MULTIPLY,
-} ow_blend_mode;
+    OW_BLENDFACTOR_ZERO,
+    OW_BLENDFACTOR_ONE,
+    OW_BLENDFACTOR_SRC_COLOR,
+    OW_BLENDFACTOR_ONE_MINUS_SRC_COLOR,
+    OW_BLENDFACTOR_DST_COLOR,
+    OW_BLENDFACTOR_ONE_MINUS_DST_COLOR,
+    OW_BLENDFACTOR_SRC_ALPHA,
+    OW_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
+    OW_BLENDFACTOR_DST_ALPHA,
+    OW_BLENDFACTOR_ONE_MINUS_DST_ALPHA,
+} ow_blend_factor;
+
+typedef enum {
+    OW_BLENDOP_ADD,
+    OW_BLENDOP_SUBTRACT,
+    OW_BLENDOP_REVERSE_SUBTRACT,
+    OW_BLENDOP_MIN,
+    OW_BLENDOP_MAX,
+} ow_blend_operator;
 
 typedef enum {
     OW_DEPTH_TEST_DISABLED,
@@ -147,6 +158,16 @@ typedef struct {
     uint32_t slot;
     uint32_t offset;
 } ow_vertex_attribute;
+
+typedef struct {
+    bool enabled;
+    ow_blend_factor src_color_factor;
+    ow_blend_factor dst_color_factor;
+    ow_blend_operator color_operator;
+    ow_blend_factor src_alpha_factor;
+    ow_blend_factor dst_alpha_factor;
+    ow_blend_operator alpha_operator;
+} ow_blend_mode;
 
 typedef struct {
     uint32_t vertex_bindings_ptr;

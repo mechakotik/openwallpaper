@@ -147,14 +147,25 @@ typedef enum {
 } ow_attribute_type;
 
 typedef enum {
-    OW_BLEND_NONE,
-    OW_BLEND_ALPHA,
-    OW_BLEND_ALPHA_PREMULTIPLIED,
-    OW_BLEND_ADD,
-    OW_BLEND_ADD_PREMULTIPLIED,
-    OW_BLEND_MODULATE,
-    OW_BLEND_MULTIPLY,
-} ow_blend_mode;
+    OW_BLENDFACTOR_ZERO,
+    OW_BLENDFACTOR_ONE,
+    OW_BLENDFACTOR_SRC_COLOR,
+    OW_BLENDFACTOR_ONE_MINUS_SRC_COLOR,
+    OW_BLENDFACTOR_DST_COLOR,
+    OW_BLENDFACTOR_ONE_MINUS_DST_COLOR,
+    OW_BLENDFACTOR_SRC_ALPHA,
+    OW_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
+    OW_BLENDFACTOR_DST_ALPHA,
+    OW_BLENDFACTOR_ONE_MINUS_DST_ALPHA,
+} ow_blend_factor;
+
+typedef enum {
+    OW_BLENDOP_ADD,
+    OW_BLENDOP_SUBTRACT,
+    OW_BLENDOP_REVERSE_SUBTRACT,
+    OW_BLENDOP_MIN,
+    OW_BLENDOP_MAX,
+} ow_blend_operator;
 
 typedef enum {
     OW_DEPTH_TEST_DISABLED,
@@ -255,6 +266,19 @@ typedef struct {
     uint32_t slot;          ///< The binding slot of the associated vertex buffer
     size_t offset;          ///< The offset of the attribute in bytes from the start of the vertex element
 } ow_vertex_attribute;
+
+/**
+ * A structure specifying blend mode of a color target.
+ */
+typedef struct {
+    bool enabled;                     ///< Whether blending is enabled
+    ow_blend_factor src_color_factor; ///< Value to be multiplied by the source RGB value
+    ow_blend_factor dst_color_factor; ///< Value to be multiplied by the destination RGB value
+    ow_blend_operator color_operator; ///< Color blending operator
+    ow_blend_factor src_alpha_factor; ///< Value to be multiplied by the source alpha value
+    ow_blend_factor dst_alpha_factor; ///< Value to be multiplied by the destination alpha value
+    ow_blend_operator alpha_operator; ///< Alpha blending operator
+} ow_blend_mode;
 
 /**
  * A structure specifying pipeline parameters.

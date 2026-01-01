@@ -6,6 +6,40 @@
 #include <stdlib.h>
 #include "openwallpaper.h"
 
+ow_blend_mode blend_additive = {
+    .enabled = true,
+    .src_color_factor = OW_BLENDFACTOR_SRC_ALPHA,
+    .dst_color_factor = OW_BLENDFACTOR_ONE,
+    .color_operator = OW_BLENDOP_ADD,
+    .src_alpha_factor = OW_BLENDFACTOR_SRC_ALPHA,
+    .dst_alpha_factor = OW_BLENDFACTOR_ONE,
+    .alpha_operator = OW_BLENDOP_ADD,
+};
+
+ow_blend_mode blend_translucent = {
+    .enabled = true,
+    .src_color_factor = OW_BLENDFACTOR_SRC_ALPHA,
+    .dst_color_factor = OW_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
+    .color_operator = OW_BLENDOP_ADD,
+    .src_alpha_factor = OW_BLENDFACTOR_SRC_ALPHA,
+    .dst_alpha_factor = OW_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
+    .alpha_operator = OW_BLENDOP_ADD,
+};
+
+ow_blend_mode blend_normal = {
+    .enabled = true,
+    .src_color_factor = OW_BLENDFACTOR_ONE,
+    .dst_color_factor = OW_BLENDFACTOR_ZERO,
+    .color_operator = OW_BLENDOP_ADD,
+    .src_alpha_factor = OW_BLENDFACTOR_ONE,
+    .dst_alpha_factor = OW_BLENDFACTOR_ZERO,
+    .alpha_operator = OW_BLENDOP_ADD,
+};
+
+ow_blend_mode blend_disabled = {
+    .enabled = false,
+};
+
 typedef struct {
     float at[1];
 } glsl_float;
