@@ -157,7 +157,7 @@ var (
 	args struct {
 		Input       string `arg:"positional,required"`
 		Output      string `arg:"positional,required"`
-		Particles   bool   `arg:"--particles" default:"false"`
+		Particles   bool   `arg:"--particles" default:"true"`
 		KeepSources bool   `arg:"--keep-sources"`
 	}
 
