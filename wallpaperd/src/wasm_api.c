@@ -96,7 +96,26 @@ void ow_begin_render_pass(wasm_exec_env_t exec_env, uint32_t info_ptr) {
         color_target_info.texture = texture;
     }
 
-    state->output.render_pass = SDL_BeginGPURenderPass(state->output.command_buffer, &color_target_info, 1, NULL);
+    SDL_GPUDepthStencilTargetInfo depth_target_info = {0};
+    SDL_GPUDepthStencilTargetInfo* depth_target_info_ptr = NULL;
+    if(info->depth_target != 0) {
+        SDL_GPUTexture* depth_texture = NULL;
+        wd_object_type object_type;
+        wd_get_object(&state->object_manager, info->depth_target, &object_type, (void**)&depth_texture);
+        DEBUG_CHECK(depth_texture != NULL, "passed non-existent object as ow_pass_info depth target");
+        DEBUG_CHECK(object_type == WD_OBJECT_TEXTURE, "passed non-texture object as ow_pass_info depth target");
+
+        depth_target_info.texture = depth_texture;
+        depth_target_info.clear_depth = info->clear_depth_value;
+        depth_target_info.load_op = (info->clear_depth ? SDL_GPU_LOADOP_CLEAR : SDL_GPU_LOADOP_LOAD);
+        depth_target_info.store_op = SDL_GPU_STOREOP_STORE;
+        depth_target_info.stencil_load_op = SDL_GPU_LOADOP_DONT_CARE;
+        depth_target_info.stencil_store_op = SDL_GPU_STOREOP_DONT_CARE;
+        depth_target_info_ptr = &depth_target_info;
+    }
+
+    state->output.render_pass =
+        SDL_BeginGPURenderPass(state->output.command_buffer, &color_target_info, 1, depth_target_info_ptr);
 }
 
 void ow_end_render_pass(wasm_exec_env_t exec_env) {
@@ -568,6 +587,28 @@ static SDL_GPUBlendOp ow_blend_operator_to_sdl(ow_blend_operator operator) {
     }
 }
 
+static SDL_GPUCompareOp ow_depth_test_mode_to_sdl(ow_depth_test_mode mode) {
+    switch(mode) {
+        case OW_DEPTHTEST_DISABLED:
+        case OW_DEPTHTEST_ALWAYS:
+            return SDL_GPU_COMPAREOP_ALWAYS;
+        case OW_DEPTHTEST_LESS:
+            return SDL_GPU_COMPAREOP_LESS;
+        case OW_DEPTHTEST_LESS_EQUAL:
+            return SDL_GPU_COMPAREOP_LESS_OR_EQUAL;
+        case OW_DEPTHTEST_GREATER:
+            return SDL_GPU_COMPAREOP_GREATER;
+        case OW_DEPTHTEST_GREATER_EQUAL:
+            return SDL_GPU_COMPAREOP_GREATER_OR_EQUAL;
+        case OW_DEPTHTEST_EQUAL:
+            return SDL_GPU_COMPAREOP_EQUAL;
+        case OW_DEPTHTEST_NOT_EQUAL:
+            return SDL_GPU_COMPAREOP_NOT_EQUAL;
+        default:
+            return SDL_GPU_COMPAREOP_ALWAYS;
+    }
+}
+
 uint32_t ow_create_pipeline(wasm_exec_env_t exec_env, uint32_t info_ptr) {
     wasm_module_inst_t instance = wasm_runtime_get_module_inst(exec_env);
     wd_state* state = wasm_runtime_get_custom_data(instance);
@@ -702,8 +743,17 @@ uint32_t ow_create_pipeline(wasm_exec_env_t exec_env, uint32_t info_ptr) {
             break;
     }
 
+    bool depth_enabled = (info->depth_test_mode != OW_DEPTHTEST_DISABLED);
+    pipeline_info.depth_stencil_state.enable_depth_test = depth_enabled;
+    pipeline_info.depth_stencil_state.enable_depth_write = (depth_enabled && info->depth_write);
+    pipeline_info.depth_stencil_state.compare_op = ow_depth_test_mode_to_sdl(info->depth_test_mode);
+
     pipeline_info.target_info.num_color_targets = 1;
     pipeline_info.target_info.color_target_descriptions = &color_target_description;
+    if(depth_enabled) {
+        pipeline_info.target_info.has_depth_stencil_target = true;
+        pipeline_info.target_info.depth_stencil_format = SDL_GPU_TEXTUREFORMAT_D16_UNORM;
+    }
 
     SDL_GPUGraphicsPipeline* pipeline = SDL_CreateGPUGraphicsPipeline(state->output.gpu, &pipeline_info);
     free(sdl_vertex_attributes);
