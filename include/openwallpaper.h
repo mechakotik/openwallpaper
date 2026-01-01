@@ -366,7 +366,6 @@ extern void ow_end_render_pass();
 /**
  * Creates a vertex buffer of given `size`.
  *
- * \param type Type of the buffer
  * \param size Buffer size in bytes
  * \return ID of created buffer
  */
@@ -376,8 +375,8 @@ extern ow_vertex_buffer_id ow_create_vertex_buffer(uint32_t size);
  * Creates an index buffer of given `size`. If `wide` is `true`, the buffer will be created with 32-bit indices,
  * otherwise with 16-bit indices.
  *
- * \param type Type of the buffer
  * \param size Buffer size in bytes
+ * \param wide Whether to use 32-bit indices
  * \return ID of created buffer
  */
 extern ow_index_buffer_id ow_create_index_buffer(uint32_t size, bool wide);
