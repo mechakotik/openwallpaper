@@ -6,9 +6,3 @@ div.summary, .summary {
   display: none !important;
 }
 
-#top {
-  position: sticky;
-  top: 0;
-  z-index: 9999;
-}
-

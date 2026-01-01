@@ -4,12 +4,16 @@ OPTIMIZE_OUTPUT_FOR_C  = YES
 EXTRACT_ALL            = YES
 EXTRACT_STATIC         = YES
 SHOW_INCLUDE_FILES     = NO
-INPUT                  = ../include
-FILE_PATTERNS          = *.h
+INPUT                  = ../include .
+FILE_PATTERNS          = *.h *.md
 VERBATIM_HEADERS       = NO
 HTML_EXTRA_STYLESHEET  = doxygen-awesome-css/doxygen-awesome.css \
                          custom.css
 HTML_COLORSTYLE        = LIGHT
 GENERATE_TREEVIEW      = NO
 GENERATE_LATEX         = NO
+MARKDOWN_SUPPORT       = YES
+USE_MDFILE_AS_MAINPAGE = index.md
+HTML_HEADER            = header.html
+HTML_EXTRA_FILES       = doxygen-awesome-css/doxygen-awesome-darkmode-toggle.js
 
