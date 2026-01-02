@@ -707,6 +707,11 @@ func processParticleObject(object ParticleObject) {
 		}
 	}
 
+	for i := range 3 {
+		if object.Scale[i] <= 0 {
+			object.Scale[i] = 1
+		}
+	}
 	if object.ParticleData.Flags&ParticleFlagWorldSpace != 0 {
 		// TODO: fair implementation of world space flag
 		scale := float32(math.Pow(float64(object.Scale[0]*object.Scale[1]*object.Scale[2]), -1.0/3.0))
