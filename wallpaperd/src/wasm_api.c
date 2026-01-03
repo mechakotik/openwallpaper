@@ -37,12 +37,13 @@ void ow_load_file(wasm_exec_env_t exec_env, uint32_t path_ptr, uint32_t data_ptr
         return;
     }
 
-    uint8_t* data_wasm = wasm_runtime_malloc(size);
-    memcpy(data_wasm, data, size);
+    void* data_wasm_native = NULL;
+    uint32_t data_wasm = wasm_runtime_module_malloc(state->scene.instance, size, &data_wasm_native);
+    memcpy(data_wasm_native, data, size);
     free(data);
 
     uint32_t* data_ptr_real = wasm_runtime_addr_app_to_native(instance, data_ptr);
-    *data_ptr_real = wasm_runtime_addr_native_to_app(instance, data_wasm);
+    *data_ptr_real = data_wasm;
     uint32_t* size_ptr_real = wasm_runtime_addr_app_to_native(instance, size_ptr);
     *size_ptr_real = size;
 }
