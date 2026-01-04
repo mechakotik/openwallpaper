@@ -5,7 +5,6 @@
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include "SDL3/SDL_gpu.h"
 #include "error.h"
 #include "object_manager.h"
 #include "state.h"
@@ -927,10 +926,15 @@ void ow_get_screen_size(wasm_exec_env_t exec_env, uint32_t width, uint32_t heigh
 
 uint32_t ow_get_mouse_state(wasm_exec_env_t exec_env, uint32_t x_ptr, uint32_t y_ptr) {
     wasm_module_inst_t instance = wasm_runtime_get_module_inst(exec_env);
+    wd_state* state = wasm_runtime_get_custom_data(instance);
     float* x_ptr_real = wasm_runtime_addr_app_to_native(instance, x_ptr);
     float* y_ptr_real = wasm_runtime_addr_app_to_native(instance, y_ptr);
 
     SDL_MouseButtonFlags sdl_flags = SDL_GetMouseState(x_ptr_real, y_ptr_real);
+    float density = SDL_GetWindowPixelDensity(state->output.window);
+    *x_ptr_real *= density;
+    *y_ptr_real *= density;
+
     uint32_t flags = 0;
     if((sdl_flags & SDL_BUTTON_LEFT) != 0) {
         flags |= OW_BUTTON_LEFT;
