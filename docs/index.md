@@ -5,9 +5,15 @@ Currently it's in early development stage, the API is unstable and unfinished, s
 Ecosystem:
 
 - [wallpaperd](@ref wallpaperd) -- OpenWallpaper scene renderer made with C and SDL3 GPU
-- [wpe-compile](@ref wpe-compile) -- A tool to make OpenWallpaper scenes from Wallpaper Engine PKG scenes using code generation.
+- [wpe-compile](@ref wpe-compile) -- A tool to make OpenWallpaper scenes from Wallpaper Engine PKG scenes using code generation
 
 Format documentation:
 
+- [Developer guide](@ref overview)
+  1. [Overview and first steps](@ref overview)
+  2. [Drawing a triangle](@ref triangle)
+  3. [Uniforms](@ref uniforms)
+  4. [Textures](@ref textures)
+  5. [Interactivity](@ref interactivity)
 - [API reference](@ref openwallpaper.h)
 

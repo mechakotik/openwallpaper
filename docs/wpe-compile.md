@@ -28,7 +28,7 @@ Usage example:
 ```sh
 export WPE_COMPILE_ASSETS=/path/to/assets
 export WPE_COMPILE_WASM_CC=/path/to/wasi-sdk/bin/clang
-wpe-compile /path/to/scene.pkg /path/to/result.owf
+./wpe-compile /path/to/scene.pkg /path/to/result.owf
 ```
 
 Available wpe-compile options:
