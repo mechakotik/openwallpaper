@@ -412,13 +412,13 @@ extern void ow_update_index_buffer(ow_index_buffer_id buffer, uint32_t offset, c
 extern ow_texture_id ow_create_texture(const ow_texture_info* info);
 
 /**
- * Creates a texture from a WEBP file from the scene archive. Panics if file is not found.
+ * Creates a texture from a PNG or WEBP image file from the scene archive. Panics if file is not found.
  *
  * \param path Path to the file to load, absolute in the scene archive. A null-terminated byte string
  * \param info Texture parameters
  * \return ID of created texture
  */
-extern ow_texture_id ow_create_texture_from_webp(const char* path, const ow_texture_info* info);
+extern ow_texture_id ow_create_texture_from_image(const char* path, const ow_texture_info* info);
 
 /**
  * Updates a `dest` texture region with data from `data`
@@ -581,7 +581,7 @@ extern void ow_free_index_buffer(ow_index_buffer_id id);
  *
  * \param id Texture ID to free
  * \see ow_create_texture
- * \see ow_create_texture_from_webp
+ * \see ow_create_texture_from_image
  */
 extern void ow_free_texture(ow_texture_id id);
 
