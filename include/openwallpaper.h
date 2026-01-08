@@ -596,7 +596,7 @@ extern void ow_free_sampler(ow_sampler_id id);
 /**
  * Frees a vertex shader by ID. Panics if vertex shader is not found or is already freed. Does nothing if `id` is `0`.
  *
- * \param id Sampler ID to free
+ * \param id Vertex shader ID to free
  * \see ow_create_sampler
  */
 extern void ow_free_vertex_shader(ow_vertex_shader_id id);
@@ -605,13 +605,13 @@ extern void ow_free_vertex_shader(ow_vertex_shader_id id);
  * Frees a fragment shader by ID. Panics if fragment shader is not found or is already freed. Does nothing if `id` is
  * `0`.
  *
- * \param id Sampler ID to free
+ * \param id Fragment shader ID to free
  * \see ow_create_sampler
  */
 extern void ow_free_fragment_shader(ow_fragment_shader_id id);
 
 /**
- * Frees a pipeline ID. Panics if pipeline is not found or is already freed. Does nothing if `id` is `0`.
+ * Frees a pipeline by ID. Panics if pipeline is not found or is already freed. Does nothing if `id` is `0`.
  *
  * \param id Pipeline ID to free
  * \see ow_create_pipeline
