@@ -16,7 +16,29 @@ if(buttons & OW_BUTTON_LEFT) {
 
 ## Audio spectrum
 
-TODO
+To get audio spectrum data for visualization, use `ow_get_audio_spectrum` function. You need to specify a number of bars to get and a buffer to store them. `ow_get_audio_spectrum` will fill the buffer with normalized floats from 0 to 1.
+
+```c
+float spectrum[16];
+ow_get_audio_spectrum(spectrum, 16);
+```
+
+## Wallpaper options
+
+This feature allows to change the behavior of the scene at runtime. Wallpaper options are specified in wallpaperd CLI arguments after the wallpaper path like this:
+
+```
+wallpaperd wallpaper.owf --scale-mode=aspect-crop
+```
+
+To get a value of a wallpaper option, use `ow_get_option` function.
+
+```c
+const char* scale_mode = ow_get_option("scale-mode");
+if(scale_mode != NULL && strcmp(scale_mode, "aspect-crop") == 0) {
+    // do something
+}
+```
 
 <div class="section_buttons">
  
