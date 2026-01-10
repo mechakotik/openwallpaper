@@ -560,8 +560,9 @@ extern uint32_t ow_get_mouse_state(float* x, float* y);
 extern void ow_get_audio_spectrum(float* data, size_t length);
 
 /**
- * Gets a wallpaper option value by name. Returns `NULL` if wallpaper option with given name is unspecified. The
- * returned string is owned by the host application and must not be freed.
+ * Gets a wallpaper option value by name. Returns `NULL` if wallpaper option with given name is unspecified. Returns an
+ * empty string if wallpaper option with given name is specified, but has no value. The returned string is owned by the
+ * host application and must not be freed.
  *
  * \param name Name of the option to get
  * \return Value of the option, a null-terminated byte string
