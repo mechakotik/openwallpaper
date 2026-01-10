@@ -231,6 +231,7 @@ void ow_render_geometry_indexed(wasm_exec_env_t exec_env, uint32_t pipeline, uin
 
 void ow_get_screen_size(wasm_exec_env_t exec_env, uint32_t width_ptr, uint32_t height_ptr);
 uint32_t ow_get_mouse_state(wasm_exec_env_t exec_env, uint32_t x_ptr, uint32_t y_ptr);
+void ow_get_audio_spectrum(wasm_exec_env_t exec_env, uint32_t data_ptr, uint32_t length);
 uint32_t ow_get_option(wasm_exec_env_t exec_env, uint32_t name_ptr);
 
 void ow_free(wasm_exec_env_t exec_env, uint32_t id);

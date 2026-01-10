@@ -955,6 +955,13 @@ uint32_t ow_get_mouse_state(wasm_exec_env_t exec_env, uint32_t x_ptr, uint32_t y
     return flags;
 }
 
+void ow_get_audio_spectrum(wasm_exec_env_t exec_env, uint32_t data_ptr, uint32_t length) {
+    wasm_module_inst_t instance = wasm_runtime_get_module_inst(exec_env);
+    wd_state* state = wasm_runtime_get_custom_data(instance);
+    float* data_ptr_real = wasm_runtime_addr_app_to_native(instance, data_ptr);
+    wd_audio_visualizer_get_spectrum(&state->audio_visualizer, data_ptr_real, (size_t)length);
+}
+
 uint32_t ow_get_option(wasm_exec_env_t exec_env, uint32_t name_ptr) {
     wasm_module_inst_t instance = wasm_runtime_get_module_inst(exec_env);
     wd_state* state = wasm_runtime_get_custom_data(instance);

@@ -7,6 +7,7 @@
 #include "object_manager.h"
 #include "output.h"
 #include "scene.h"
+#include "audio_visualizer.h"
 #include "zip.h"
 
 typedef struct wd_state {
@@ -16,6 +17,7 @@ typedef struct wd_state {
     wd_scene_state scene;
     wd_zip_state zip;
     wd_battery_state battery;
+    wd_audio_visualizer_state audio_visualizer;
 } wd_state;
 
 void wd_init_state(wd_state* state);

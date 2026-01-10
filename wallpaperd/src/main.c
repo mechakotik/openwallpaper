@@ -18,6 +18,9 @@ static void print_help() {
     printf("  --prefer-dgpu\n");
     printf("  --pause-hidden\n");
     printf("  --pause-on-bat\n");
+    printf("  --audio-backend=<backend>\n");
+    printf("  --audio-source=<source>\n");
+    printf("  --no-audio\n");
     printf("  --window\n\n");
 
     printf("  --list-displays\n");
@@ -59,6 +62,9 @@ int main(int argc, char* argv[]) {
         }
     }
 
+    if(!wd_init_audio_visualizer(&state.audio_visualizer, &state.args)) {
+        goto handle_error;
+    }
     if(!wd_init_output(&state.output, &state.args)) {
         goto handle_error;
     }

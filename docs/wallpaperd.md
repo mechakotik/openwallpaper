@@ -40,6 +40,12 @@ Wallpaper output:
 
 - wlr-layer-shell (Plasma Wayland, Hyprland, wlroots based compositors)
 
+Audio visualizer (through [cava](https://github.com/karlstav/cava)):
+
+- PipeWire
+- PulseAudio
+- PortAudio
+
 `--pause-hidden` support:
 
 - Hyprland

@@ -34,6 +34,7 @@ static NativeSymbol native_symbols[] = {
     {"ow_render_geometry_indexed", ow_render_geometry_indexed, "(iiiiii)"},
     {"ow_get_screen_size", ow_get_screen_size, "(ii)"},
     {"ow_get_mouse_state", ow_get_mouse_state, "(ii)i"},
+    {"ow_get_audio_spectrum", ow_get_audio_spectrum, "(ii)"},
     {"ow_get_option", ow_get_option, "(i)i"},
     {"ow_free_vertex_buffer", ow_free, "(i)"},
     {"ow_free_index_buffer", ow_free, "(i)"},
