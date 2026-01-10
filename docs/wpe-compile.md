@@ -33,12 +33,12 @@ export WPE_COMPILE_WASM_CC=/path/to/wasi-sdk/bin/clang
 
 Available wpe-compile options:
 
-- `--keep-sources` - keep intermediate C and GLSL sources, which are not needed for rendering but are useful for debugging
-- `--particles=<true|false>` - enable/disable particles, enabled by default
+- `--keep-sources` -- keep intermediate C and GLSL sources, which are not needed for rendering but are useful for debugging
+- `--particles=<true|false>` -- enable/disable particles, enabled by default
 
 Generated OWF scenes have the following runtime options that you can set when running with wallpaperd:
 
-- `--scale-mode=<stretch|aspect-fit|aspect-crop>` - controls how the scene is fitted in screen when its aspect ratio does not match screen aspect ratio, defaults to `aspect-crop`
+- `--scale-mode=<stretch|aspect-fit|aspect-crop>` -- controls how the scene is fitted in screen when its aspect ratio does not match screen aspect ratio, defaults to `aspect-crop`
 
 ## Support status
 

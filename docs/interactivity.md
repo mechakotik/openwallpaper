@@ -31,7 +31,7 @@ This feature allows to change the behavior of the scene at runtime. Wallpaper op
 wallpaperd wallpaper.owf --scale-mode=aspect-crop
 ```
 
-To get a value of a wallpaper option, use `ow_get_option` function.
+To get a value of a wallpaper option, use `ow_get_option` function. It will return option value as null-terminated string. If option is not specified, it will return `NULL`. If the option is specified but has no value, it will return an empty string `""`.
 
 ```c
 const char* scale_mode = ow_get_option("scale-mode");
