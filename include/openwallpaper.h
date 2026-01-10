@@ -551,6 +551,14 @@ extern void ow_get_screen_size(uint32_t* width, uint32_t* height);
  */
 extern uint32_t ow_get_mouse_state(float* x, float* y);
 
+/** Gets audio spectrum data for visualization. Output data is a normalized array of floats in the range [0, 1] of
+ * length `length`.
+ *
+ * \param data Pointer to the array to store spectrum data
+ * \param length Length of the array
+ */
+extern void ow_get_audio_spectrum(float* data, size_t length);
+
 /**
  * Gets a wallpaper option value by name. Returns `NULL` if wallpaper option with given name is unspecified. The
  * returned string is owned by the host application and must not be freed.
