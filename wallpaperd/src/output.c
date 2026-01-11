@@ -6,6 +6,7 @@
 #include "SDL3/SDL_gpu.h"
 #include "SDL3/SDL_properties.h"
 #include "argparse.h"
+#include "dynamic_api.h"
 #include "error.h"
 #include "window.h"
 #include "wlroots.h"
@@ -14,7 +15,7 @@ static const char* get_output(wd_args_state* args) {
     if(wd_get_option(args, "window") != NULL) {
         return "window";
     }
-    if(getenv("WAYLAND_DISPLAY") != NULL) {
+    if(getenv("WAYLAND_DISPLAY") != NULL && wd_dynapi_load_wayland()) {
         return "wlroots";
     }
     return "window";

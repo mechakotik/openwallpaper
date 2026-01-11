@@ -170,7 +170,6 @@ if(WD_WLROOTS)
 
     add_protocol(xdg-shell)
     add_protocol(wlr-layer-shell-unstable-v1)
-    target_link_libraries(wallpaperd PRIVATE wayland-client)
     target_compile_definitions(wallpaperd PRIVATE -DWD_WLROOTS)
 endif()
 
