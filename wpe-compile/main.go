@@ -670,6 +670,15 @@ func processParticleObject(object ParticleObject) {
 	if override.Enabled {
 		if override.Count != 0 {
 			maxCount = int(float32(maxCount) * override.Count)
+			for i := range object.ParticleData.Emitters {
+				object.ParticleData.Emitters[i].Rate *= override.Count
+			}
+		}
+		if override.OverrideColor {
+			for i := range 3 {
+				init.MinColor[i] = override.Color[i]
+				init.MaxColor[i] = override.Color[i]
+			}
 		}
 		if override.OverrideColorN {
 			for i := range 3 {
@@ -701,8 +710,8 @@ func processParticleObject(object ParticleObject) {
 			}
 		}
 		if override.Rate != 0 {
-			for _, emitter := range object.ParticleData.Emitters {
-				emitter.Rate *= override.Rate
+			for i := range object.ParticleData.Emitters {
+				object.ParticleData.Emitters[i].Rate *= override.Rate
 			}
 		}
 	}
