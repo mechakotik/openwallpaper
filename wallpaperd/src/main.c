@@ -101,6 +101,7 @@ int main(int argc, char* argv[]) {
     bool frame_skipped = false;
     uint64_t last_pause_check = prev_time;
     bool first_draw = true;
+    float delta_factor = 1;
 
     if(pause_on_bat) {
         wd_init_battery(&state.battery);
@@ -146,10 +147,15 @@ int main(int argc, char* argv[]) {
                 (pause_on_bat && wd_battery_discharging(&state.battery))) {
                 SDL_Delay(200);
                 frame_skipped = true;
+                delta_factor = 0;
                 continue;
-            } else {
-                last_pause_check = cur_time;
             }
+            last_pause_check = cur_time;
+        }
+
+        delta_factor += delta * 5;
+        if(delta_factor > 1) {
+            delta_factor = 1;
         }
 
         state.output.command_buffer = SDL_AcquireGPUCommandBuffer(state.output.gpu);
@@ -172,7 +178,7 @@ int main(int argc, char* argv[]) {
             continue;
         }
 
-        if(!wd_update_scene(&state.scene, delta * speed)) {
+        if(!wd_update_scene(&state.scene, delta * delta_factor * speed)) {
             goto handle_error;
         }
 
