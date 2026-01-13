@@ -25,3 +25,6 @@
 [submodule "docs/doxygen-awesome-css"]
 	path = docs/doxygen-awesome-css
 	url = https://github.com/jothepro/doxygen-awesome-css.git
+[submodule "wallpaperd/external/fftw3"]
+	path = wallpaperd/external/fftw3
+	url = https://github.com/mechakotik/fftw3
