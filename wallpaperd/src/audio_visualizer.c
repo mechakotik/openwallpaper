@@ -35,6 +35,7 @@ void wd_audio_visualizer_get_spectrum(wd_audio_visualizer_state* state, float* d
 #include <time.h>
 #include <unistd.h>
 #include "cavacore.h"
+#include "dynamic_api.h"
 #include "input/common.h"
 
 #ifdef WD_PIPEWIRE
@@ -63,25 +64,32 @@ static wd_audio_backend parse_backend(const char* name) {
     return WD_AUDIO_BACKEND_NONE;
 }
 
-static bool backend_available(wd_audio_backend backend) {
+static const char* backend_name(wd_audio_backend backend) {
     switch(backend) {
-        case WD_AUDIO_BACKEND_PIPEWIRE:
-#ifdef WD_PIPEWIRE
-            return true;
-#else
-            return false;
-#endif
-        case WD_AUDIO_BACKEND_PULSE:
-#ifdef WD_PULSE
-            return true;
-#else
-            return false;
-#endif
         case WD_AUDIO_BACKEND_PORTAUDIO:
+            return "portaudio";
+        case WD_AUDIO_BACKEND_PIPEWIRE:
+            return "pipewire";
+        case WD_AUDIO_BACKEND_PULSE:
+            return "pulse";
+        default:
+            return "unknown";
+    }
+}
+
+static bool load_backend_library(wd_audio_backend backend) {
+    switch(backend) {
+#ifdef WD_PIPEWIRE
+        case WD_AUDIO_BACKEND_PIPEWIRE:
+            return wd_dynapi_load_pipewire();
+#endif
+#ifdef WD_PULSE
+        case WD_AUDIO_BACKEND_PULSE:
+            return wd_dynapi_load_pulse();
+#endif
 #ifdef WD_PORTAUDIO
-            return true;
-#else
-            return false;
+        case WD_AUDIO_BACKEND_PORTAUDIO:
+            return wd_dynapi_load_portaudio();
 #endif
         default:
             return false;
@@ -116,7 +124,7 @@ bool wd_init_audio_visualizer(wd_audio_visualizer_state* state, wd_args_state* a
             wd_set_error("unknown audio backend %s", custom_backend);
             return false;
         }
-        if(!backend_available(parsed)) {
+        if(!load_backend_library(parsed)) {
             wd_set_error("audio backend %s is not available", custom_backend);
             return false;
         }
@@ -248,6 +256,11 @@ static bool recreate_plan(wd_audio_visualizer_state* state, size_t length) {
 
 static bool start_backend(
     wd_audio_visualizer_state* state, wd_audio_backend backend, const char* source, size_t length) {
+    if(!load_backend_library(backend)) {
+        wd_set_error("%s backend is not available", backend_name(backend));
+        return false;
+    }
+
     wd_free_audio_visualizer(state);
     state->backend = backend;
 
@@ -333,7 +346,7 @@ static bool init_visualizer(wd_audio_visualizer_state* state, size_t length) {
     int backend_count = sizeof(default_backends) / sizeof(default_backends[0]);
     for(int i = 0; i < backend_count; i++) {
         wd_audio_backend backend = default_backends[i];
-        if(!backend_available(backend)) {
+        if(!load_backend_library(backend)) {
             continue;
         }
         if(start_backend(state, backend, state->custom_source, length)) {
