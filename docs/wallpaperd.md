@@ -4,13 +4,23 @@ OpenWallpaper scene renderer made with C and SDL3 GPU.
 
 ## Build and install
 
-Install C/C++ compiler, CMake and Git, then run:
+To build wallpaperd, you will need to install:
+
+- C/C++ compiler
+- CMake
+- Git
+- wayland-scanner *(optional, for wlr-layer-shell output support)*
+- libpipewire, libspa *(optional, for PipeWire audio visualizer)*
+- libpulse-simple *(optional, for PulseAudio audio visualizer)*
+- PortAudio *(optional, for PortAudio audio visualizer)*
+
+After you have installed all the dependencies, run the following commands to build and install wallpaperd:
 
 ```sh
 git clone --recurse-submodules https://github.com/mechakotik/openwallpaper
 cd openwallpaper/wallpaperd
 mkdir build && cd build
-cmake .. -DWD_WLROOTS=ON
+cmake ..
 cmake --build . -j$(nproc)
 sudo cmake --install .
 ```
