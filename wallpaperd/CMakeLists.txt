@@ -5,7 +5,7 @@ include(GNUInstallDirs)
 find_package(PkgConfig)
 
 option(WD_WLROOTS "Enable wlroots output support" OFF)
-option(WD_AUDIO_VISUALIZER "Enable audio visualization support" OFF)
+option(WD_AUDIO_VISUALIZER "Enable audio visualization support" ON)
 
 option(WD_SDL_SHARED "Dynamically link to system SDL" OFF)
 option(WD_SDL_IMAGE_SHARED "Dynamically link to system SDL_image" OFF)
@@ -175,52 +175,69 @@ if(WD_WLROOTS)
 endif()
 
 if(WD_AUDIO_VISUALIZER)
-    target_sources(wallpaperd PRIVATE
-        external/cava/cavacore.c
-        external/cava/input/common.c
-    )
-    target_include_directories(wallpaperd PRIVATE external/cava)
-    target_compile_definitions(wallpaperd PRIVATE WD_AUDIO_VISUALIZER=1)
-
-    find_package(Threads REQUIRED)
-    target_link_libraries(wallpaperd PRIVATE ${WD_AUDIO_VISUALIZER_LIBS} Threads::Threads)
-
-    if(WD_FFTW_SHARED)
-        pkg_check_modules(FFTW3 REQUIRED IMPORTED_TARGET fftw3)
-        target_link_libraries(wallpaperd PRIVATE PkgConfig::FFTW3)
-    else()
-        add_subdirectory(external/fftw3 EXCLUDE_FROM_ALL)
-        target_include_directories(fftw3 PUBLIC
-            $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/external/fftw3/api>
-            $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/external/fftw3>
-        )
-        target_link_libraries(wallpaperd PRIVATE fftw3)
-        target_include_directories(wallpaperd PRIVATE external/fftw3/api ${CMAKE_CURRENT_BINARY_DIR}/external/fftw3)
-    endif()
-
     pkg_check_modules(PIPEWIRE QUIET libpipewire-0.3)
     pkg_check_modules(SPA QUIET libspa-0.2)
+    set(AUDIO_AVAILABLE OFF)
     if(PIPEWIRE_FOUND AND SPA_FOUND)
+        message(STATUS "Found PipeWire and libspa, enabling PipeWire support in audio visualizer")
         target_sources(wallpaperd PRIVATE external/cava/input/pipewire.c)
         target_compile_definitions(wallpaperd PRIVATE WD_PIPEWIRE)
         target_include_directories(wallpaperd PRIVATE ${PIPEWIRE_INCLUDE_DIRS} ${SPA_INCLUDE_DIRS})
         target_compile_options(wallpaperd PRIVATE ${PIPEWIRE_CFLAGS_OTHER} ${SPA_CFLAGS_OTHER})
+        set(AUDIO_AVAILABLE ON)
+    else()
+        message(STATUS "PipeWire or libspa not found, disabling PipeWire support in audio visualizer")
     endif()
 
     pkg_check_modules(PULSE QUIET libpulse-simple)
     if(PULSE_FOUND)
+        message(STATUS "Found PulseAudio, enabling its support in audio visualizer")
         target_sources(wallpaperd PRIVATE external/cava/input/pulse.c)
         target_compile_definitions(wallpaperd PRIVATE WD_PULSE)
         target_include_directories(wallpaperd PRIVATE ${PULSE_INCLUDE_DIRS})
         target_compile_options(wallpaperd PRIVATE ${PULSE_CFLAGS_OTHER})
+        set(AUDIO_AVAILABLE ON)
+    else()
+        message(STATUS "PulseAudio not found, disabling its support in audio visualizer")
     endif()
 
     pkg_check_modules(PORTAUDIO QUIET portaudio-2.0)
     if(PORTAUDIO_FOUND)
+        message(STATUS "Found PortAudio, enabling its support in audio visualizer")
         target_sources(wallpaperd PRIVATE external/cava/input/portaudio.c)
         target_compile_definitions(wallpaperd PRIVATE WD_PORTAUDIO)
         target_include_directories(wallpaperd PRIVATE ${PORTAUDIO_INCLUDE_DIRS})
         target_compile_options(wallpaperd PRIVATE ${PORTAUDIO_CFLAGS_OTHER})
+        set(AUDIO_AVAILABLE ON)
+    else()
+        message(STATUS "PortAudio not found, disabling its support in audio visualizer")
+    endif()
+
+    if(AUDIO_AVAILABLE)
+        target_sources(wallpaperd PRIVATE
+            external/cava/cavacore.c
+            external/cava/input/common.c
+        )
+        target_include_directories(wallpaperd PRIVATE external/cava)
+        target_compile_definitions(wallpaperd PRIVATE WD_AUDIO_VISUALIZER=1)
+
+        find_package(Threads REQUIRED)
+        target_link_libraries(wallpaperd PRIVATE ${WD_AUDIO_VISUALIZER_LIBS} Threads::Threads)
+
+        if(WD_FFTW_SHARED)
+            pkg_check_modules(FFTW3 REQUIRED IMPORTED_TARGET fftw3)
+            target_link_libraries(wallpaperd PRIVATE PkgConfig::FFTW3)
+        else()
+            add_subdirectory(external/fftw3 EXCLUDE_FROM_ALL)
+            target_include_directories(fftw3 PUBLIC
+                $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/external/fftw3/api>
+                $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/external/fftw3>
+            )
+            target_link_libraries(wallpaperd PRIVATE fftw3)
+            target_include_directories(wallpaperd PRIVATE external/fftw3/api ${CMAKE_CURRENT_BINARY_DIR}/external/fftw3)
+        endif()
+    else()
+        message(WARNING "No audio backend found, disabling audio visualizer suppport")
     endif()
 else()
     target_compile_definitions(wallpaperd PRIVATE WD_AUDIO_VISUALIZER=0)
