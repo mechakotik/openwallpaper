@@ -17,7 +17,7 @@ To build wallpaperd, you will need to install:
 After you have installed all the dependencies, run the following commands to build and install wallpaperd:
 
 ```sh
-git clone --recurse-submodules https://github.com/mechakotik/openwallpaper
+git clone --depth=1 --recurse-submodules https://github.com/mechakotik/openwallpaper
 cd openwallpaper/wallpaperd
 mkdir build && cd build
 cmake ..
@@ -51,7 +51,7 @@ Available options:
 
 Wallpaper output:
 
-- wlr-layer-shell (Plasma Wayland, Hyprland, wlroots based compositors)
+- wlr-layer-shell (KDE Plasma Wayland, Hyprland, wlroots based compositors)
 
 Audio visualizer (through [cava](https://github.com/karlstav/cava)):
 
@@ -66,4 +66,8 @@ Audio visualizer (through [cava](https://github.com/karlstav/cava)):
 `--pause-on-bat` support:
 
 - Linux
+
+## Note on porting to other platforms
+
+Rendering is implemented with SDL3 GPU, which has Vulkan, DirectX and Metal backends. So wallpaperd can be easily ported to any platform supporting one of these APIs. All you need to do is to wrap your platform's wallpaper surface in `SDL_Window`. Before trying to do this, you may test rendering by running wallpaperd in windowed mode (`--window` flag), this should just work without extra code.
 

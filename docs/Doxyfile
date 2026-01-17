@@ -15,6 +15,10 @@ GENERATE_LATEX         = NO
 MARKDOWN_SUPPORT       = YES
 USE_MDFILE_AS_MAINPAGE = index.md
 HTML_HEADER            = header.html
-HTML_EXTRA_FILES       = doxygen-awesome-css/doxygen-awesome-darkmode-toggle.js triangle.webp
+HTML_EXTRA_FILES       = doxygen-awesome-css/doxygen-awesome-darkmode-toggle.js \
+                         triangle.webp \
+                         triangle-transparent.webp \
+                         fullscreen-shader.webp \
+                         visualizer.webp \
 INLINE_SIMPLE_STRUCTS  = YES
 

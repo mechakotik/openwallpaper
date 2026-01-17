@@ -14,7 +14,7 @@ To build and use wpe-compile, you will need to install:
 After you have installed all the dependencies, run the following commands to build wpe-compile:
 
 ```sh
-git clone --recurse-submodules https://github.com/mechakotik/openwallpaper
+git clone --depth=1 --recurse-submodules https://github.com/mechakotik/openwallpaper
 cd openwallpaper/wpe-compile
 go build .
 ```
