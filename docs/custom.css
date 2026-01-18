@@ -6,3 +6,19 @@ div.summary, .summary {
   display: none !important;
 }
 
+#projectlogo img {
+  height: 26px;
+  width: auto;
+  max-height: none !important;
+}
+
+html.light-mode #projectlogo img {
+  content: url("logo-light.svg");
+  filter: none;
+}
+
+html.dark-mode #projectlogo img {
+  content: url("logo-dark.svg");
+  filter: none;
+}
+

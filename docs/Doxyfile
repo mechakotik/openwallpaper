@@ -21,4 +21,6 @@ HTML_EXTRA_FILES       = doxygen-awesome-css/doxygen-awesome-darkmode-toggle.js 
                          fullscreen-shader.webp \
                          visualizer.webp \
 INLINE_SIMPLE_STRUCTS  = YES
+PROJECT_LOGO           = logo-dark.svg
+PROJECT_ICON           = logo-dark.svg
 
