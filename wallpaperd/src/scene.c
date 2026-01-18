@@ -48,7 +48,6 @@ static NativeSymbol native_symbols[] = {
 bool wd_init_scene(wd_state* state, wd_args_state* args) {
     wd_scene_state* scene = &state->scene;
     const uint32_t stack_size = 4 * 1024 * 1024;
-    const uint32_t heap_size = 32 * 1024 * 1024;
 
     if(!wasm_runtime_init()) {
         wd_set_error("wasm_runtime_init failed");
@@ -79,7 +78,7 @@ bool wd_init_scene(wd_state* state, wd_args_state* args) {
         return false;
     }
 
-    scene->instance = wasm_runtime_instantiate(scene->module, stack_size, heap_size, error_buf, sizeof(error_buf));
+    scene->instance = wasm_runtime_instantiate(scene->module, stack_size, 0, error_buf, sizeof(error_buf));
     if(scene->instance == NULL) {
         wd_set_error("wasm_runtime_instantiate failed: %s", error_buf);
         return false;
