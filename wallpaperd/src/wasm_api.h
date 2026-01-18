@@ -117,7 +117,7 @@ typedef struct {
     uint32_t depth_target;
     uint32_t clear_depth;
     float clear_depth_value;
-} ow_pass_info;
+} ow_render_pass_info;
 
 typedef struct {
     uint32_t width;

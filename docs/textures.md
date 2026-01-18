@@ -91,10 +91,10 @@ What to specify in `layout(set = ...)`? By convention:
 
 ## Rendering to texture
 
-By default, render pass renders to the screen, but you can also set it up to use texture as a target. To do this, specify target texture ID in `ow_pass_info` `color_target` field.
+By default, render pass renders to the screen, but you can also set it up to use texture as a target. To do this, specify target texture ID in `ow_render_pass_info` `color_target` field.
 
 ```c
-ow_begin_render_pass(&(ow_pass_info){
+ow_begin_render_pass(&(ow_render_pass_info){
     .color_target = texture,
     .clear_color = true,
     .clear_color_rgba = {0, 0, 0, 1},

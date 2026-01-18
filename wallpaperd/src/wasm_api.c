@@ -75,7 +75,7 @@ void ow_begin_render_pass(wasm_exec_env_t exec_env, uint32_t info_ptr) {
     DEBUG_CHECK(state->output.copy_pass == NULL, "called ow_begin_render_pass when copy pass is active");
     DEBUG_CHECK(state->output.render_pass == NULL, "called ow_begin_render_pass when render pass is active");
 
-    ow_pass_info* info = (ow_pass_info*)wasm_runtime_addr_app_to_native(instance, info_ptr);
+    ow_render_pass_info* info = (ow_render_pass_info*)wasm_runtime_addr_app_to_native(instance, info_ptr);
 
     SDL_GPUColorTargetInfo color_target_info = {0};
     color_target_info.clear_color = (SDL_FColor){.r = info->clear_color_rgba[0],
@@ -91,8 +91,8 @@ void ow_begin_render_pass(wasm_exec_env_t exec_env, uint32_t info_ptr) {
         SDL_GPUTexture* texture = NULL;
         wd_object_type object_type;
         wd_get_object(&state->object_manager, info->color_target, &object_type, (void**)&texture);
-        DEBUG_CHECK(texture != NULL, "passed non-existent object as ow_pass_info color target");
-        DEBUG_CHECK(object_type == WD_OBJECT_TEXTURE, "passed non-texture object as ow_pass_info color target");
+        DEBUG_CHECK(texture != NULL, "passed non-existent object as ow_render_pass_info color target");
+        DEBUG_CHECK(object_type == WD_OBJECT_TEXTURE, "passed non-texture object as ow_render_pass_info color target");
         color_target_info.texture = texture;
     }
 
@@ -102,8 +102,8 @@ void ow_begin_render_pass(wasm_exec_env_t exec_env, uint32_t info_ptr) {
         SDL_GPUTexture* depth_texture = NULL;
         wd_object_type object_type;
         wd_get_object(&state->object_manager, info->depth_target, &object_type, (void**)&depth_texture);
-        DEBUG_CHECK(depth_texture != NULL, "passed non-existent object as ow_pass_info depth target");
-        DEBUG_CHECK(object_type == WD_OBJECT_TEXTURE, "passed non-texture object as ow_pass_info depth target");
+        DEBUG_CHECK(depth_texture != NULL, "passed non-existent object as ow_render_pass_info depth target");
+        DEBUG_CHECK(object_type == WD_OBJECT_TEXTURE, "passed non-texture object as ow_render_pass_info depth target");
 
         depth_target_info.texture = depth_texture;
         depth_target_info.clear_depth = info->clear_depth_value;

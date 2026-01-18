@@ -31,7 +31,7 @@ __attribute__((export_name("update"))) void update(float delta) {
         .time = time,
     };
 
-    ow_begin_render_pass(&(ow_pass_info){
+    ow_begin_render_pass(&(ow_render_pass_info){
         .clear_color = true,
         .clear_color_rgba = {0.0f, 0.0f, 0.0f, 1.0f},
     });

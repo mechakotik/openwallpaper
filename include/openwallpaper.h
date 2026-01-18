@@ -209,7 +209,7 @@ typedef struct {
     ow_texture_id depth_target; ///< ID of depth target texture
     bool clear_depth;           ///< If `true`, render pass will clear depth target with `clear_depth_value`
     float clear_depth_value;    ///< Value to clear depth target with
-} ow_pass_info;
+} ow_render_pass_info;
 
 /**
  * A structure specifying texture parameters.
@@ -356,7 +356,7 @@ extern void ow_end_copy_pass();
  *
  * \param info Render pass parameters
  */
-extern void ow_begin_render_pass(const ow_pass_info* info);
+extern void ow_begin_render_pass(const ow_render_pass_info* info);
 
 /**
  * Ends a render pass. Can be called only if a render pass is currently active, panics elsewhere.

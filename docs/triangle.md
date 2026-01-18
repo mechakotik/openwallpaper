@@ -123,7 +123,7 @@ ow_bindings_info bindings = {
     .vertex_buffers_count = 1,
 };
 
-ow_begin_render_pass(&(ow_pass_info){
+ow_begin_render_pass(&(ow_render_pass_info){
     .clear_color = true,
     .clear_color_rgba = {0, 0, 0, 1},
 });

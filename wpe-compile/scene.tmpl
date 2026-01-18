@@ -521,7 +521,7 @@ ow_fragment_shader_id shader{{.ID}}_fragment;
 {{end}}
 
 {{define "pass_update"}}    {{"{"}}
-        ow_pass_info pass_info = {0};
+        ow_render_pass_info pass_info = {0};
         pass_info.color_target = {{.ColorTarget}};
         pass_info.clear_color = {{.ClearColor}};
         ow_begin_render_pass(&pass_info);
