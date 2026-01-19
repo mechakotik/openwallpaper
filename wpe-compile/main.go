@@ -260,7 +260,22 @@ func main() {
 		panic("write scene_utils.h failed" + err.Error())
 	}
 
-	logBytes, err := exec.Command(env.WasmCC, tempDir+"/scene.c", "-o", tempDir+"/scene.wasm", "-I../include", "-Wl,--allow-undefined").CombinedOutput()
+	compileArgs := []string{
+		tempDir + "/scene.c",
+		"-o",
+		tempDir + "/scene.wasm",
+		"-I../include",
+		"-O3",
+		"-Wl,--allow-undefined",
+		"-Wl,--max-memory=268435456",
+		"-Wl,-z,stack-size=1048576",
+		"-Wl,--export=malloc",
+		"-Wl,--export=free",
+		"-Wl,--export=__heap_base",
+		"-Wl,--export=__data_end",
+	}
+
+	logBytes, err := exec.Command(env.WasmCC, compileArgs...).CombinedOutput()
 	if err != nil {
 		panic("compiling scene module failed: " + string(logBytes))
 	}
