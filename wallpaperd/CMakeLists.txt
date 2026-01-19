@@ -83,10 +83,12 @@ if(WD_LIBZIP_SHARED)
     find_package(libzip REQUIRED CONFIG)
     target_link_libraries(wallpaperd PRIVATE zip)
 else()
-    set(ZLIB_BUILD_SHARED OFF)
-    add_subdirectory(external/zlib EXCLUDE_FROM_ALL)
-    # hack to make find_package(ZLIB) use static zlib
-    add_library(ZLIB::ZLIB ALIAS zlibstatic)
+    if(NOT TARGET ZLIB::ZLIB)
+        set(ZLIB_BUILD_SHARED OFF)
+        add_subdirectory(external/zlib EXCLUDE_FROM_ALL)
+        # hack to make find_package(ZLIB) use static zlib
+        add_library(ZLIB::ZLIB ALIAS zlibstatic)
+    endif()
 
     set(BUILD_DOC OFF CACHE BOOL "" FORCE)
     set(BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
