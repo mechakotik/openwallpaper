@@ -4,9 +4,6 @@
 [submodule "wallpaperd/external/SDL_image"]
 	path = wallpaperd/external/SDL_image
 	url = https://github.com/libsdl-org/SDL_image
-[submodule "wallpaperd/external/SDL_mixer"]
-	path = wallpaperd/external/SDL_mixer
-	url = https://github.com/libsdl-org/SDL_mixer
 [submodule "wallpaperd/external/wasm-micro-runtime"]
 	path = wallpaperd/external/wasm-micro-runtime
 	url = https://github.com/bytecodealliance/wasm-micro-runtime
