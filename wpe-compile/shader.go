@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"regexp"
+	"strconv"
 	"strings"
 )
 
@@ -451,9 +452,31 @@ func preprocessUniforms(source string, set int) (string, []UniformInfo) {
 		})
 	}
 
+	reArrayUniform := regexp.MustCompile(`uniform\s*([a-z|A-Z|0-9|_]*)\s*([a-z|A-Z|0-9|_]*)\s*\[(.*)\]\s*;`)
+	matches = reArrayUniform.FindAllStringSubmatch(source, -1)
+	for _, match := range matches {
+		if match[1] == "sampler2D" {
+			continue
+		}
+		arraySize, err := strconv.Atoi(match[3])
+		if err != nil {
+			fmt.Printf("warning: unable to parse array size %s: %s\n", match[3], err.Error())
+			continue
+		}
+		uniforms = append(uniforms, UniformInfo{
+			Name:      string(match[2]),
+			Type:      string(match[1]),
+			ArraySize: arraySize,
+		})
+	}
+
 	uniformBlock := fmt.Sprintf("layout(std140, set = %d, binding = 0) uniform uniforms_t {\n", set)
 	for _, uniform := range uniforms {
-		uniformBlock += fmt.Sprintf("    %s %s;\n", uniform.Type, uniform.Name)
+		if uniform.ArraySize == 0 {
+			uniformBlock += fmt.Sprintf("    %s %s;\n", uniform.Type, uniform.Name)
+		} else {
+			uniformBlock += fmt.Sprintf("    %s %s[%d];\n", uniform.Type, uniform.Name, uniform.ArraySize)
+		}
 	}
 	uniformBlock += "};\n\n"
 
@@ -466,6 +489,13 @@ func preprocessUniforms(source string, set int) (string, []UniformInfo) {
 		if firstMatch {
 			firstMatch = false
 			return uniformBlock
+		}
+		return ""
+	})
+	source = reArrayUniform.ReplaceAllStringFunc(source, func(match string) string {
+		submatches := reArrayUniform.FindStringSubmatch(match)
+		if submatches[1] == "sampler2D" {
+			return match
 		}
 		return ""
 	})
@@ -512,14 +542,27 @@ func generateUniformsStructCode(uniforms []UniformInfo, structName string) strin
 	lastPaddingID := -1
 	for _, uniform := range uniforms {
 		size, align := getGLSLTypeSizeAndAlignment(uniform.Type)
+		if uniform.ArraySize != 0 {
+			if size < 16 {
+				size = 16
+			}
+			if align < 16 {
+				align = 16
+			}
+		}
 		if offset%align != 0 {
 			lastPaddingID++
 			padding := align - (offset % align)
 			code += fmt.Sprintf("    uint8_t __pad%d[%d];\n", lastPaddingID, padding)
 			offset += padding
 		}
-		code += fmt.Sprintf("    glsl_%s %s;\n", uniform.Type, uniform.Name)
-		offset += size
+		if uniform.ArraySize == 0 {
+			code += fmt.Sprintf("    glsl_%s %s;\n", uniform.Type, uniform.Name)
+			offset += size
+		} else {
+			code += fmt.Sprintf("    glsl_array_%s %s[%d];\n", uniform.Type, uniform.Name, uniform.ArraySize)
+			offset += size * uniform.ArraySize
+		}
 	}
 	code += "} " + structName + ";\n"
 	return code

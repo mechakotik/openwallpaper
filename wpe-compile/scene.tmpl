@@ -222,6 +222,11 @@ __attribute__((export_name("update"))) void update(float delta) {
         mouse_y /= screen_height;
     }
 
+{{if .UseAudioSpectrum}}
+    float spectrum[16];
+    ow_get_audio_spectrum(spectrum, 16);
+{{end}}
+
     if(!parallax_initialized) {
         parallax_mouse_x = mouse_x;
         parallax_mouse_y = mouse_y;

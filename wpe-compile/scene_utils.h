@@ -68,6 +68,10 @@ typedef struct {
     float at[4][4];
 } glsl_mat4;
 
+typedef struct {
+    float at[4];
+} glsl_array_float;
+
 typedef enum {
     SCALE_MODE_STRETCH,
     SCALE_MODE_ASPECT_FIT,

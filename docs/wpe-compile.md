@@ -116,6 +116,7 @@ You can check out this list to see what is not yet implemented or can be improve
   - [ ] Children
   - [ ] Control points
 
+- [x] Audio response
 - [ ] Timeline animations
 - [ ] Puppet warp
 - [ ] Lighting and reflections
@@ -137,7 +138,7 @@ Here is a few Wallpaper Engine scenes that were tested to work fully (or almost 
 - [Mt. Fuji Japan](https://steamcommunity.com/sharedfiles/filedetails/?id=1926677846)
 - [One Piece - Luffy](https://steamcommunity.com/sharedfiles/filedetails/?id=2853719148)
 - [The Cave](https://steamcommunity.com/sharedfiles/filedetails/?id=2026973019)
-- [Winter tranquility](https://steamcommunity.com/sharedfiles/filedetails/?id=2290585492)
+- [Zoro Rengoku Onigiri](https://steamcommunity.com/sharedfiles/filedetails/?id=2707450949) (audio reactive)
 
 ## Credits
 
