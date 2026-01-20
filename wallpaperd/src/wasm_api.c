@@ -288,9 +288,8 @@ uint32_t ow_create_texture(wasm_exec_env_t exec_env, uint32_t info_ptr) {
 
     switch(info->format) {
         case OW_TEXTURE_SWAPCHAIN:
-            wd_set_error("passed swapchain format as offscreen texture format");
-            wasm_runtime_set_exception(instance, "");
-            return 0;
+            texture_info.format = SDL_GetGPUSwapchainTextureFormat(state->output.gpu, state->output.window);
+            break;
         case OW_TEXTURE_RGBA8_UNORM:
             texture_info.format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM;
             break;
@@ -357,7 +356,8 @@ uint32_t ow_create_texture_from_image(wasm_exec_env_t exec_env, uint32_t path_pt
     wd_state* state = wasm_runtime_get_custom_data(instance);
     const char* path = wasm_runtime_addr_app_to_native(instance, path_ptr);
     ow_texture_info* info = (ow_texture_info*)wasm_runtime_addr_app_to_native(instance, info_ptr);
-    DEBUG_CHECK_RET0(state->output.copy_pass != NULL, "called ow_create_texture_from_image when no copy pass is active");
+    DEBUG_CHECK_RET0(
+        state->output.copy_pass != NULL, "called ow_create_texture_from_image when no copy pass is active");
 
     if(info->format != OW_TEXTURE_RGBA8_UNORM && info->format != OW_TEXTURE_RGBA8_UNORM_SRGB) {
         wd_set_error("unsupported texture format (TODO)");
