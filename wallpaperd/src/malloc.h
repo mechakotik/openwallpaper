@@ -19,4 +19,12 @@ static inline void* wd_calloc(size_t nmemb, size_t size) {
     return ptr;
 }
 
+static inline void* wd_realloc(void* ptr, size_t size) {
+    ptr = realloc(ptr, size);
+    if(ptr == NULL) {
+        exit(2);
+    }
+    return ptr;
+}
+
 #endif

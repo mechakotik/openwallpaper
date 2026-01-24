@@ -92,7 +92,7 @@ static void free_outputs(wlroots_output_state* state) {
 static output_data* add_output(wlroots_output_state* state, uint32_t name, uint32_t version) {
     if(state->outputs_len == state->outputs_cap) {
         size_t new_cap = (state->outputs_cap == 0 ? 4 : state->outputs_cap * 2);
-        output_data* new_outputs = realloc(state->outputs, sizeof(output_data) * new_cap);
+        output_data* new_outputs = wd_realloc(state->outputs, sizeof(output_data) * new_cap);
         state->outputs = new_outputs;
         state->outputs_cap = new_cap;
     }

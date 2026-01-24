@@ -237,7 +237,7 @@ static bool recreate_plan(wd_audio_visualizer_state* state, size_t length) {
     pthread_mutex_lock(&state->audio.lock);
     if(plan->input_buffer_size != state->audio.cava_buffer_size) {
         state->audio.cava_buffer_size = plan->input_buffer_size;
-        state->audio.cava_in = realloc(state->audio.cava_in, sizeof(double) * state->audio.cava_buffer_size);
+        state->audio.cava_in = wd_realloc(state->audio.cava_in, sizeof(double) * state->audio.cava_buffer_size);
     }
     state->audio.samples_counter = 0;
     pthread_mutex_unlock(&state->audio.lock);
@@ -301,7 +301,7 @@ static bool start_backend(
     state->audio.input_buffer_size = BUFFER_SIZE * state->audio.channels;
     if(state->audio.cava_buffer_size < state->audio.input_buffer_size * 8) {
         state->audio.cava_buffer_size = state->audio.input_buffer_size * 8;
-        state->audio.cava_in = realloc(state->audio.cava_in, sizeof(double) * state->audio.cava_buffer_size);
+        state->audio.cava_in = wd_realloc(state->audio.cava_in, sizeof(double) * state->audio.cava_buffer_size);
     }
 
     if(pthread_mutex_init(&state->audio.lock, NULL) != 0) {
