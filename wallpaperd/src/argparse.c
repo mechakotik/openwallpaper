@@ -64,8 +64,8 @@ bool wd_parse_args(wd_args_state* args, int argc, char* argv[]) {
     args->num_wallpaper_options = num_wallpaper_options;
     args->options_keys = calloc(args->num_options, sizeof(char*));
     args->options_values = calloc(args->num_options, sizeof(char*));
-    args->wallpaper_options_keys = malloc(sizeof(char*) * args->num_wallpaper_options);
-    args->wallpaper_options_values = malloc(sizeof(char*) * args->num_wallpaper_options);
+    args->wallpaper_options_keys = calloc(args->num_wallpaper_options, sizeof(char*));
+    args->wallpaper_options_values = calloc(args->num_wallpaper_options, sizeof(char*));
 
     for(int i = 0; i < args->num_options; i++) {
         if(!split_option(argv[i + 1] + 2, &args->options_keys[i], &args->options_values[i])) {
