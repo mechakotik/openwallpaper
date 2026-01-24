@@ -112,6 +112,10 @@ bool wd_init_scene(wd_state* state, wd_args_state* args) {
         void* value_wasm_native = NULL;
         uint32_t value_wasm =
             wasm_runtime_module_malloc(scene->instance, sizeof(char) * (strlen(value) + 1), &value_wasm_native);
+        if(value_wasm == 0) {
+            wd_set_error("failed to allocate wasm memory for wallpaper option value");
+            return false;
+        }
         memcpy(value_wasm_native, value, sizeof(char) * (strlen(value) + 1));
         scene->wallpaper_options_values_wasm[i] = value_wasm;
     }

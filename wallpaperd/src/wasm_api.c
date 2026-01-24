@@ -39,6 +39,11 @@ void ow_load_file(wasm_exec_env_t exec_env, uint32_t path_ptr, uint32_t data_ptr
 
     void* data_wasm_native = NULL;
     uint32_t data_wasm = wasm_runtime_module_malloc(state->scene.instance, size, &data_wasm_native);
+    if(data_wasm == 0) {
+        wd_set_error("failed to allocate wasm memory for file data");
+        wasm_runtime_set_exception(instance, "");
+        return;
+    }
     memcpy(data_wasm_native, data, size);
     free(data);
 
