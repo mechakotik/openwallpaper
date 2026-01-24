@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include "SDL3/SDL_video.h"
 #include "error.h"
+#include "malloc.h"
 
 typedef struct window_output_data {
     SDL_Window* window;
@@ -13,7 +14,7 @@ bool wd_window_output_init(void** data) {
         wd_set_error("SDL_Init failed: %s", SDL_GetError());
     }
 
-    *data = malloc(sizeof(window_output_state));
+    *data = wd_malloc(sizeof(window_output_state));
     window_output_state* odata = (window_output_state*)(*data);
 
     odata->window = SDL_CreateWindow("wallpaperd", 1280, 720, SDL_WINDOW_HIGH_PIXEL_DENSITY | SDL_WINDOW_RESIZABLE);

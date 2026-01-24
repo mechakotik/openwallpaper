@@ -4,6 +4,7 @@
 #include <string.h>
 #include <wasm_export.h>
 #include "error.h"
+#include "malloc.h"
 #include "state.h"
 #include "wasm_api.h"
 #include "zip.h"
@@ -104,7 +105,7 @@ bool wd_init_scene(wd_state* state, wd_args_state* args) {
         return false;
     }
 
-    scene->wallpaper_options_values_wasm = malloc(sizeof(uint32_t) * args->num_wallpaper_options);
+    scene->wallpaper_options_values_wasm = wd_malloc(sizeof(uint32_t) * args->num_wallpaper_options);
     for(int i = 0; i < args->num_wallpaper_options; i++) {
         const char* value = args->wallpaper_options_values[i];
         uint64_t len = strlen(value);

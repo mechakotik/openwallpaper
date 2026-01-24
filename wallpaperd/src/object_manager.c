@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include "SDL3/SDL_gpu.h"
 #include "error.h"
+#include "malloc.h"
 #include "state.h"
 
 bool wd_new_object(wd_object_manager_state* state, wd_object_type type, void* data, uint32_t* result) {
@@ -14,8 +15,8 @@ bool wd_new_object(wd_object_manager_state* state, wd_object_type type, void* da
     uint32_t bucket = state->top >> WD_OBJECTMANAGER_BUCKET_SIZE_LOG2;
     uint32_t index = state->top & ((1 << WD_OBJECTMANAGER_BUCKET_SIZE_LOG2) - 1);
     if(index == 0) {
-        state->type_buckets[bucket] = malloc((1 << WD_OBJECTMANAGER_BUCKET_SIZE_LOG2) * sizeof(wd_object_type));
-        state->data_buckets[bucket] = calloc(1 << WD_OBJECTMANAGER_BUCKET_SIZE_LOG2, sizeof(void*));
+        state->type_buckets[bucket] = wd_malloc((1 << WD_OBJECTMANAGER_BUCKET_SIZE_LOG2) * sizeof(wd_object_type));
+        state->data_buckets[bucket] = wd_calloc(1 << WD_OBJECTMANAGER_BUCKET_SIZE_LOG2, sizeof(void*));
     }
 
     state->type_buckets[bucket][index] = type;

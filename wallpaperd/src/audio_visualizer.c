@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "error.h"
+#include "malloc.h"
 
 #ifndef WD_AUDIO_VISUALIZER
 #define WD_AUDIO_VISUALIZER 0
@@ -242,7 +243,7 @@ static bool recreate_plan(wd_audio_visualizer_state* state, size_t length) {
     pthread_mutex_unlock(&state->audio.lock);
 
     free(state->output_buffer);
-    state->output_buffer = calloc((size_t)number_of_bars * channels, sizeof(double));
+    state->output_buffer = wd_calloc((size_t)number_of_bars * channels, sizeof(double));
     if(state->plan != NULL) {
         cava_destroy(state->plan);
     }
@@ -277,7 +278,7 @@ static bool start_backend(
         .cava_buffer_size = 16384,
     };
 
-    state->audio.cava_in = calloc(state->audio.cava_buffer_size, sizeof(double));
+    state->audio.cava_in = wd_calloc(state->audio.cava_buffer_size, sizeof(double));
 
     switch(backend) {
         case WD_AUDIO_BACKEND_PORTAUDIO:

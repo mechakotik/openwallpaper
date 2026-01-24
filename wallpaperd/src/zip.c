@@ -3,6 +3,7 @@
 #include <string.h>
 #include <zip.h>
 #include "error.h"
+#include "malloc.h"
 
 bool wd_init_zip(wd_zip_state* zip, const char* path) {
     int error = 0;
@@ -35,7 +36,7 @@ bool wd_read_from_zip(wd_zip_state* zip, const char* path, uint8_t** result, siz
 
     if(has_stat && (stat.valid & ZIP_STAT_SIZE) != 0) {
         capacity = (size_t)stat.size;
-        buffer = malloc(capacity + 1);
+        buffer = wd_malloc(capacity + 1);
 
         size_t offset = 0;
         while(offset < capacity) {

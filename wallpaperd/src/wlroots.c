@@ -1,6 +1,6 @@
+#include "malloc.h"
 #ifdef WD_WLROOTS
 
-#include "wlroots.h"
 #include <SDL3/SDL.h>
 #include <fcntl.h>
 #include <stdio.h>
@@ -13,6 +13,7 @@
 #include <wlr-layer-shell-unstable-v1.h>
 #include "error.h"
 #include "hyprland.h"
+#include "wlroots.h"
 
 typedef struct {
     struct wl_output* output;
@@ -247,7 +248,7 @@ static void wlroots_free(wlroots_output_state* state, bool free_state) {
 }
 
 bool wd_wlroots_output_init(void** data, const char* display_name) {
-    *data = calloc(1, sizeof(wlroots_output_state));
+    *data = wd_calloc(1, sizeof(wlroots_output_state));
     wlroots_output_state* state = (wlroots_output_state*)(*data);
 
     if(!wlroots_connect(state)) {

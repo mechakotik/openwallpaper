@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "error.h"
+#include "malloc.h"
 #include "object_manager.h"
 #include "state.h"
 #include "wasm_export.h"
@@ -629,7 +630,7 @@ uint32_t ow_create_pipeline(wasm_exec_env_t exec_env, uint32_t info_ptr) {
         "fragment_shader object in ow_pipeline_info is not a fragment shader");
 
     SDL_GPUVertexBufferDescription* sdl_vertex_buffer_descriptions =
-        calloc(info->vertex_bindings_count, sizeof(SDL_GPUVertexBufferDescription));
+        wd_calloc(info->vertex_bindings_count, sizeof(SDL_GPUVertexBufferDescription));
     ow_vertex_binding_info* vertex_bindings =
         (ow_vertex_binding_info*)wasm_runtime_addr_app_to_native(instance, info->vertex_bindings_ptr);
 
@@ -647,7 +648,7 @@ uint32_t ow_create_pipeline(wasm_exec_env_t exec_env, uint32_t info_ptr) {
     pipeline_info.vertex_input_state.vertex_buffer_descriptions = sdl_vertex_buffer_descriptions;
 
     SDL_GPUVertexAttribute* sdl_vertex_attributes =
-        calloc(info->vertex_attributes_count, sizeof(SDL_GPUVertexAttribute));
+        wd_calloc(info->vertex_attributes_count, sizeof(SDL_GPUVertexAttribute));
     ow_vertex_attribute* vertex_attributes =
         (ow_vertex_attribute*)wasm_runtime_addr_app_to_native(instance, info->vertex_attributes_ptr);
 
@@ -799,7 +800,7 @@ void ow_render_geometry(wasm_exec_env_t exec_env, uint32_t pipeline, uint32_t bi
 
     ow_bindings_info* bindings = (ow_bindings_info*)wasm_runtime_addr_app_to_native(instance, bindings_ptr);
     SDL_GPUBufferBinding* sdl_vertex_buffer_bindings =
-        calloc(bindings->vertex_buffers_count, sizeof(SDL_GPUBufferBinding));
+        wd_calloc(bindings->vertex_buffers_count, sizeof(SDL_GPUBufferBinding));
     uint32_t* vertex_buffers = wasm_runtime_addr_app_to_native(instance, bindings->vertex_buffers_ptr);
 
     for(uint32_t i = 0; i < bindings->vertex_buffers_count; i++) {
@@ -815,7 +816,7 @@ void ow_render_geometry(wasm_exec_env_t exec_env, uint32_t pipeline, uint32_t bi
     ow_texture_binding* texture_bindings =
         (ow_texture_binding*)wasm_runtime_addr_app_to_native(instance, bindings->texture_bindings_ptr);
     SDL_GPUTextureSamplerBinding* sdl_texture_bindings =
-        calloc(bindings->texture_bindings_count, sizeof(SDL_GPUTextureSamplerBinding));
+        wd_calloc(bindings->texture_bindings_count, sizeof(SDL_GPUTextureSamplerBinding));
 
     for(uint32_t i = 0; i < bindings->texture_bindings_count; i++) {
         SDL_GPUTexture* sdl_texture = NULL;
@@ -855,7 +856,7 @@ void ow_render_geometry_indexed(wasm_exec_env_t exec_env, uint32_t pipeline, uin
 
     ow_bindings_info* bindings = (ow_bindings_info*)wasm_runtime_addr_app_to_native(instance, bindings_ptr);
     SDL_GPUBufferBinding* sdl_vertex_buffer_bindings =
-        calloc(bindings->vertex_buffers_count, sizeof(SDL_GPUBufferBinding));
+        wd_calloc(bindings->vertex_buffers_count, sizeof(SDL_GPUBufferBinding));
     uint32_t* vertex_buffers = wasm_runtime_addr_app_to_native(instance, bindings->vertex_buffers_ptr);
 
     for(uint32_t i = 0; i < bindings->vertex_buffers_count; i++) {
@@ -871,7 +872,7 @@ void ow_render_geometry_indexed(wasm_exec_env_t exec_env, uint32_t pipeline, uin
     ow_texture_binding* texture_bindings =
         (ow_texture_binding*)wasm_runtime_addr_app_to_native(instance, bindings->texture_bindings_ptr);
     SDL_GPUTextureSamplerBinding* sdl_texture_bindings =
-        calloc(bindings->texture_bindings_count, sizeof(SDL_GPUTextureSamplerBinding));
+        wd_calloc(bindings->texture_bindings_count, sizeof(SDL_GPUTextureSamplerBinding));
 
     for(uint32_t i = 0; i < bindings->texture_bindings_count; i++) {
         SDL_GPUTexture* sdl_texture = NULL;

@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "error.h"
+#include "malloc.h"
 
 static bool split_option(const char* option, char** key, char** value) {
     int len = strlen(option);
@@ -20,13 +21,13 @@ static bool split_option(const char* option, char** key, char** value) {
     }
 
     if(pos == -1) {
-        *key = malloc(sizeof(char) * (len + 1));
-        *value = malloc(sizeof(char));
+        *key = wd_malloc(sizeof(char) * (len + 1));
+        *value = wd_malloc(sizeof(char));
         strcpy(*key, option);
         *value[0] = '\0';
     } else {
-        *key = malloc(sizeof(char) * (pos + 1));
-        *value = malloc(sizeof(char) * (len - pos));
+        *key = wd_malloc(sizeof(char) * (pos + 1));
+        *value = wd_malloc(sizeof(char) * (len - pos));
         strncpy(*key, option, pos);
         strncpy(*value, option + pos + 1, len - pos - 1);
         (*key)[pos] = (*value)[len - pos - 1] = '\0';
@@ -53,7 +54,7 @@ bool wd_parse_args(wd_args_state* args, int argc, char* argv[]) {
                 return false;
             } else {
                 int len = strlen(argv[i]);
-                args->wallpaper_path = malloc(sizeof(char) * (len + 1));
+                args->wallpaper_path = wd_malloc(sizeof(char) * (len + 1));
                 strcpy(args->wallpaper_path, argv[i]);
                 path_set = true;
             }
@@ -62,10 +63,10 @@ bool wd_parse_args(wd_args_state* args, int argc, char* argv[]) {
 
     args->num_options = num_options;
     args->num_wallpaper_options = num_wallpaper_options;
-    args->options_keys = calloc(args->num_options, sizeof(char*));
-    args->options_values = calloc(args->num_options, sizeof(char*));
-    args->wallpaper_options_keys = calloc(args->num_wallpaper_options, sizeof(char*));
-    args->wallpaper_options_values = calloc(args->num_wallpaper_options, sizeof(char*));
+    args->options_keys = wd_calloc(args->num_options, sizeof(char*));
+    args->options_values = wd_calloc(args->num_options, sizeof(char*));
+    args->wallpaper_options_keys = wd_calloc(args->num_wallpaper_options, sizeof(char*));
+    args->wallpaper_options_values = wd_calloc(args->num_wallpaper_options, sizeof(char*));
 
     for(int i = 0; i < args->num_options; i++) {
         if(!split_option(argv[i + 1] + 2, &args->options_keys[i], &args->options_values[i])) {
