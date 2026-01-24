@@ -616,13 +616,13 @@ uint32_t ow_create_pipeline(wasm_exec_env_t exec_env, uint32_t info_ptr) {
     SDL_GPUGraphicsPipelineCreateInfo pipeline_info = {0};
 
     wd_object_type object_type;
-    wd_get_object(&state->object_manager, info->vertex_shader, &object_type, (void*)&pipeline_info.vertex_shader);
+    wd_get_object(&state->object_manager, info->vertex_shader, &object_type, (void**)&pipeline_info.vertex_shader);
     DEBUG_CHECK_RET0(
         pipeline_info.vertex_shader != NULL, "vertex_shader object in ow_pipeline_info does not exist or freed");
     DEBUG_CHECK_RET0(
         object_type == WD_OBJECT_VERTEX_SHADER, "vertex_shader object in ow_pipeline_info is not a vertex shader");
 
-    wd_get_object(&state->object_manager, info->fragment_shader, &object_type, (void*)&pipeline_info.fragment_shader);
+    wd_get_object(&state->object_manager, info->fragment_shader, &object_type, (void**)&pipeline_info.fragment_shader);
     DEBUG_CHECK_RET0(
         pipeline_info.fragment_shader != NULL, "fragment_shader object in ow_pipeline_info does not exist or freed");
     DEBUG_CHECK_RET0(object_type == WD_OBJECT_FRAGMENT_SHADER,
