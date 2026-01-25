@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=OpenWallpaper UI
+Exec=owui
+Icon=preferences-desktop-theme
+Type=Application
+Terminal=false
+Categories=Utility
+
