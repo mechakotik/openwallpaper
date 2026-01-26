@@ -19,9 +19,10 @@ HTML_EXTRA_FILES       = doxygen-awesome-css/doxygen-awesome-darkmode-toggle.js 
                          triangle.webp \
                          triangle-transparent.webp \
                          fullscreen-shader.webp \
+                         image.webp \
                          visualizer.webp \
                          logo-dark.svg \
-                         logo-light.svg \
+                         logo-light.svg
 INLINE_SIMPLE_STRUCTS  = YES
 PROJECT_LOGO           = logo-dark.svg
 PROJECT_ICON           = logo-dark.svg

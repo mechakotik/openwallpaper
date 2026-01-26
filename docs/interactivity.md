@@ -23,6 +23,8 @@ float spectrum[16];
 ow_get_audio_spectrum(spectrum, 16);
 ```
 
+You may see an example of `ow_get_audio_spectrum` usage in [visualizer example](\ref examples).
+
 ## Wallpaper options
 
 This feature allows to change the behavior of the scene at runtime. Wallpaper options are specified in wallpaperd CLI arguments after the wallpaper path like this:

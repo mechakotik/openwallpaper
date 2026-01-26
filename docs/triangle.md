@@ -43,9 +43,9 @@ Vertex shader is used to transform vertex data from the buffer into the final ve
 ```glsl
 #version 460
 
-layout (location = 0) in vec2 a_position;
-layout (location = 1) in vec3 a_color;
-layout (location = 0) out vec4 v_color;
+layout(location = 0) in vec2 a_position;
+layout(location = 1) in vec3 a_color;
+layout(location = 0) out vec4 v_color;
 
 void main() {
     gl_Position = vec4(a_position, 0, 1);
@@ -62,11 +62,11 @@ Additional vertex shader output (in our case, `v_color`), is passed to fragment 
 ```glsl
 #version 460
 
-layout (location = 0) in vec4 v_color;
-layout (location = 0) out vec4 frag_color;
+layout(location = 0) in vec4 v_color;
+layout(location = 0) out vec4 f_color;
 
 void main() {
-    frag_color = v_color;
+    f_color = v_color;
 }
 ```
 

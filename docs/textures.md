@@ -75,12 +75,12 @@ First we need to declare a texture with `uniform sampler2D`. Then we can use `te
 #version 460
 
 layout(location = 0) in vec2 v_uv;
-layout(location = 0) out vec4 frag_color;
+layout(location = 0) out vec4 f_color;
 
 layout(set = 2, binding = 0) uniform sampler2D u_texture;
 
 void main() {
-    frag_color = texture(u_texture, v_uv);
+    f_color = texture(u_texture, v_uv);
 }
 ```
 
@@ -88,6 +88,8 @@ What to specify in `layout(set = ...)`? By convention:
 
 - In vertex shaders, textures are bound to `set = 0`
 - In fragment shaders, textures are bound to `set = 2`
+
+You may see a complete texture usage example in [image example](\ref examples).
 
 ## Rendering to texture
 

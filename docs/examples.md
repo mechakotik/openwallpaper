@@ -57,6 +57,18 @@ Demonstrates how to run shader wallpapers (e.g. from ShaderToy) in OpenWallpaper
 
 [Source code](https://github.com/mechakotik/openwallpaper/tree/main/examples/fullscreen-shader)
 
+## image
+
+Draws static image, simplest example of texture rendering. Original image is Scarlett Tree from KDE Plasma 6 artwork.
+
+<div style="text-align:left;">
+    <img src="image.webp" width="600">
+</div>
+
+[Download owf](image.owf)
+
+[Source code](https://github.com/mechakotik/openwallpaper/tree/main/examples/image)
+
 ## visualizer
 
 Example of using `ow_get_audio_spectrum` to visualize audio. It gets spectrum data and draws it as white bars on the screen, without any preprocessing.
