@@ -8,7 +8,7 @@ layout(std140, set = 3, binding = 0) uniform uniforms_t {
     float time;
 };
 
-layout(location = 0) out vec4 frag_color;
+layout(location = 0) out vec4 f_color;
 
 mat2 rot(float a) {
     float c = cos(a), s = sin(a);
@@ -52,5 +52,5 @@ void main() {
         / (0.03 + abs(length(p) - 0.7))
     );
 
-    frag_color = clamp(O, 0.0, 1.0);
+    f_color = clamp(O, 0.0, 1.0);
 }
