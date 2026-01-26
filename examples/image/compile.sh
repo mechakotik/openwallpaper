@@ -20,6 +20,6 @@ fi
 $WASM_CC scene.c -o scene.wasm -I../../include -Wl,--allow-undefined
 glslc -fshader-stage=vertex vertex.glsl -o vertex.spv
 glslc -fshader-stage=fragment fragment.glsl -o fragment.spv
-rm -f fullscreen-shader.owf
+rm -f image.owf
 zip image.owf scene.wasm vertex.spv fragment.spv image.png
 rm -f scene.wasm vertex.spv fragment.spv
