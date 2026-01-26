@@ -289,8 +289,11 @@ uint32_t ow_create_texture(wasm_exec_env_t exec_env, uint32_t info_ptr) {
     SDL_GPUTextureCreateInfo texture_info = {0};
     texture_info.width = info->width;
     texture_info.height = info->height;
-    texture_info.num_levels = info->mip_levels;
     texture_info.layer_count_or_depth = 1;
+    texture_info.num_levels = info->mip_levels;
+    if(texture_info.num_levels == 0) {
+        texture_info.num_levels = 1;
+    }
 
     switch(info->format) {
         case OW_TEXTURE_SWAPCHAIN:
