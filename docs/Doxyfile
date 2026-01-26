@@ -20,6 +20,7 @@ HTML_EXTRA_FILES       = doxygen-awesome-css/doxygen-awesome-darkmode-toggle.js 
                          triangle-transparent.webp \
                          fullscreen-shader.webp \
                          image.webp \
+                         rain.webp \
                          visualizer.webp \
                          logo-dark.svg \
                          logo-light.svg

@@ -35,7 +35,7 @@ Resulting `.owf` files will be in corresponding example directories.
 
 ## triangle
 
-Draws a static triangle in the center of the screen, classic example of graphics API usage. You can see an explanation of how this code works in [Drawing a triangle](\ref triangle) developer guide section.
+Draws a triangle in the center of the screen, classic example of graphics API usage. You can see an explanation of how this code works in [Drawing a triangle](\ref triangle) developer guide section.
 
 <div style="text-align:left;">
     <img src="triangle.webp" width="600">
@@ -59,7 +59,7 @@ Demonstrates how to run shader wallpapers (e.g. from ShaderToy) in OpenWallpaper
 
 ## image
 
-Draws static image, simplest example of texture rendering. Original image is Scarlett Tree from KDE Plasma 6 artwork.
+Draws a static image, simplest example of texture rendering. Original image is Scarlett Tree from KDE Plasma 6 artwork.
 
 <div style="text-align:left;">
     <img src="image.webp" width="600">
@@ -68,6 +68,18 @@ Draws static image, simplest example of texture rendering. Original image is Sca
 [Download owf](image.owf)
 
 [Source code](https://github.com/mechakotik/openwallpaper/tree/main/examples/image)
+
+## rain
+
+Draws particles to create a rain-like effect. An example of using instanced rendering to draw a lot of similar objects efficiently.
+
+<div style="text-align:left;">
+    <img src="rain.webp" width="600">
+</div>
+
+[Download owf](rain.owf)
+
+[Source code](https://github.com/mechakotik/openwallpaper/tree/main/examples/rain)
 
 ## visualizer
 
