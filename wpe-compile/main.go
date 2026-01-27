@@ -874,13 +874,13 @@ func generateUniformSetupCode(ctx UniformCodegenContext) string {
 	code := ""
 	for _, uniform := range ctx.Uniforms {
 		if uniform.Name == "g_ModelMatrix" {
-			code += "        " + ctx.StructName + ".g_ModelMatrix = matrices.model;\n"
+			code += ctx.StructName + ".g_ModelMatrix = matrices.model;\n"
 		} else if uniform.Name == "g_ViewProjectionMatrix" {
-			code += "        " + ctx.StructName + ".g_ViewProjectionMatrix = matrices.view_projection;\n"
+			code += ctx.StructName + ".g_ViewProjectionMatrix = matrices.view_projection;\n"
 		} else if uniform.Name == "g_ModelViewProjectionMatrix" {
-			code += "        " + ctx.StructName + ".g_ModelViewProjectionMatrix = matrices.model_view_projection;\n"
+			code += ctx.StructName + ".g_ModelViewProjectionMatrix = matrices.model_view_projection;\n"
 		} else if strings.HasPrefix(uniform.Name, "g_Texture") && strings.HasSuffix(uniform.Name, "Rotation") {
-			code += "        " + ctx.StructName + "." + uniform.Name + " = (glsl_vec4){.at = {1, 0, 0, 1}};\n"
+			code += ctx.StructName + "." + uniform.Name + " = (glsl_vec4){.at = {1, 0, 0, 1}};\n"
 		} else if strings.HasPrefix(uniform.Name, "g_Texture") && strings.HasSuffix(uniform.Name, "Translation") {
 			// TODO:
 		} else if strings.HasPrefix(uniform.Name, "g_Texture") && strings.HasSuffix(uniform.Name, "Resolution") {
@@ -888,36 +888,36 @@ func generateUniformSetupCode(ctx UniformCodegenContext) string {
 			idxString, _ = strings.CutSuffix(idxString, "Resolution")
 			idx, _ := strconv.Atoi(idxString)
 			if idx < len(ctx.Resolutions) {
-				code += fmt.Sprintf("        %s.%s = (glsl_vec4){.at = {%f, %f, %f, %f}};\n", ctx.StructName, uniform.Name,
+				code += fmt.Sprintf("%s.%s = (glsl_vec4){.at = {%f, %f, %f, %f}};\n", ctx.StructName, uniform.Name,
 					ctx.Resolutions[idx][0], ctx.Resolutions[idx][1], ctx.Resolutions[idx][2], ctx.Resolutions[idx][3])
 			}
 		} else if uniform.Name == "g_Time" {
-			code += "        " + ctx.StructName + ".g_Time = (glsl_float){.at = {time}};\n"
+			code += ctx.StructName + ".g_Time = (glsl_float){.at = {time}};\n"
 		} else if uniform.Name == "g_ParallaxPosition" {
-			code += "        " + ctx.StructName + ".g_ParallaxPosition = (glsl_vec2){.at = {matrices.parallax_position_x, matrices.parallax_position_y}};\n"
+			code += ctx.StructName + ".g_ParallaxPosition = (glsl_vec2){.at = {matrices.parallax_position_x, matrices.parallax_position_y}};\n"
 		} else if uniform.Name == "g_Screen" {
-			code += "        " + ctx.StructName + ".g_Screen = (glsl_vec3){.at = {screen_width, screen_height, (float)screen_width / (float)screen_height}};\n"
+			code += ctx.StructName + ".g_Screen = (glsl_vec3){.at = {screen_width, screen_height, (float)screen_width / (float)screen_height}};\n"
 		} else if uniform.Name == "g_EffectTextureProjectionMatrix" || uniform.Name == "g_EffectTextureProjectionMatrixInverse" {
-			code += "        " + ctx.StructName + "." + uniform.Name + " = mat4_identity();\n"
+			code += ctx.StructName + "." + uniform.Name + " = mat4_identity();\n"
 		} else if uniform.Name == "g_EyePosition" {
-			code += "        " + ctx.StructName + ".g_EyePosition = (glsl_vec3){.at = {0, 0, 0}};\n"
+			code += ctx.StructName + ".g_EyePosition = (glsl_vec3){.at = {0, 0, 0}};\n"
 		} else if uniform.Name == "g_Color4" {
-			code += fmt.Sprintf("        %s.g_Color4 = (glsl_vec4){.at = {%f, %f, %f, %f}};\n",
+			code += fmt.Sprintf("%s.g_Color4 = (glsl_vec4){.at = {%f, %f, %f, %f}};\n",
 				ctx.StructName, ctx.Color[0], ctx.Color[1], ctx.Color[2], ctx.Alpha)
 		} else if uniform.Name == "g_Color" {
-			code += fmt.Sprintf("        %s.g_Color = (glsl_vec3){.at = {%f, %f, %f}};\n",
+			code += fmt.Sprintf("%s.g_Color = (glsl_vec3){.at = {%f, %f, %f}};\n",
 				ctx.StructName, ctx.Color[0], ctx.Color[1], ctx.Color[2])
 		} else if uniform.Name == "g_Alpha" {
-			code += fmt.Sprintf("        %s.g_Alpha = (glsl_float){.at = {%f}};\n", ctx.StructName, ctx.Alpha)
+			code += fmt.Sprintf("%s.g_Alpha = (glsl_float){.at = {%f}};\n", ctx.StructName, ctx.Alpha)
 		} else if uniform.Name == "g_UserAlpha" {
-			code += fmt.Sprintf("        %s.g_UserAlpha = (glsl_float){.at = {%f}};\n", ctx.StructName, ctx.Alpha)
+			code += fmt.Sprintf("%s.g_UserAlpha = (glsl_float){.at = {%f}};\n", ctx.StructName, ctx.Alpha)
 		} else if uniform.Name == "g_Brightness" {
-			code += fmt.Sprintf("        %s.g_Brightness = (glsl_float){.at = {%f}};\n", ctx.StructName, ctx.Brightness)
+			code += fmt.Sprintf("%s.g_Brightness = (glsl_float){.at = {%f}};\n", ctx.StructName, ctx.Brightness)
 		} else if uniform.Name == "g_AudioSpectrum16Left" || uniform.Name == "g_AudioSpectrum16Right" {
 			codegenData.UseAudioSpectrum = true
 			code += fmt.Sprintf("for(int i = 0; i < 16; i++) { %s.%s[i] = (glsl_array_float){.at = {spectrum[i]}}; }\n", ctx.StructName, uniform.Name)
 		} else if uniform.DefaultSet {
-			code += fmt.Sprintf("        %s.%s = (glsl_%s){.at = {", ctx.StructName, uniform.Name, uniform.Type)
+			code += fmt.Sprintf("%s.%s = (glsl_%s){.at = {", ctx.StructName, uniform.Name, uniform.Type)
 			value := uniform.Default
 			if override, exists := ctx.Constants[uniform.ConstantName]; exists {
 				value = override

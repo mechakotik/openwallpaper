@@ -6,12 +6,25 @@
 #include "openwallpaper.h"
 #include "scene_utils.h"
 
-{{range $_, $texture := .Textures}}ow_texture_id texture{{$texture.ID}}; // {{$texture.Name}}
+{{range $_, $texture := .Textures}}
+ow_texture_id texture{{.ID}}; // {{$texture.Name}}
 {{end}}
-{{range $_, $shader := .Shaders}}{{template "shader_header" $shader}}
-{{end}}{{range $_, $pass := .Passes}}ow_pipeline_id object{{$pass.ObjectID}}_pass{{$pass.PassID}}_pipeline;
+
+{{range $_, $shader := .Shaders}}
+// {{.NameInfo}}
+ow_vertex_shader_id shader{{.ID}}_vertex;
+ow_fragment_shader_id shader{{.ID}}_fragment;
+
+{{.VertexUniformsStruct}}
+{{.FragmentUniformsStruct}}
 {{end}}
-{{range $_, $particle := .Particles}}particle_t particle{{.ObjectID}};
+
+{{range $_, $pass := .Passes}}
+ow_pipeline_id object{{.ObjectID}}_pass{{.PassID}}_pipeline;
+{{end}}
+
+{{range $_, $particle := .Particles}}
+particle_t particle{{.ObjectID}};
 {{end}}
 
 typedef struct {
@@ -178,12 +191,21 @@ __attribute__((export_name("init"))) void init() {
         nearest_repeat_sampler = ow_create_sampler(&sampler_info);
     }
 
-{{range $_, $texture := .Textures}}    texture{{$texture.ID}} = ow_create_texture_from_image("assets/texture{{$texture.ID}}.webp", &texture_info);
+{{range $_, $texture := .Textures}}
+    texture{{$texture.ID}} = ow_create_texture_from_image("assets/texture{{$texture.ID}}.webp", &texture_info);
 {{end}}
-{{range $_, $shader := .Shaders}}{{template "shader_init" $shader}}{{end}}
-{{range $_, $pass := .Passes}}{{template "pass_init" $pass}}
+
+{{range $_, $shader := .Shaders}}
+    shader{{.ID}}_vertex = ow_create_vertex_shader_from_file("assets/shader{{.ID}}_vertex.spv");
+    shader{{.ID}}_fragment = ow_create_fragment_shader_from_file("assets/shader{{.ID}}_fragment.spv");
 {{end}}
-{{range $_, $particle := .Particles}}{{template "particle_init" $particle}}
+
+{{range $_, $pass := .Passes}}
+    {{template "pass_init" $pass}}
+{{end}}
+
+{{range $_, $particle := .Particles}}
+    {{template "particle_init" $particle}}
 {{end}}
 
     ow_end_copy_pass();
@@ -252,25 +274,16 @@ __attribute__((export_name("update"))) void update(float delta) {
     ow_end_copy_pass();
 
     time += delta;
+
 {{range $_, $pass := .Passes}}
-{{template "pass_update" $pass}}{{end}}
+    {{template "pass_update" $pass}}
+{{end}}
 }
 
 {{end}}
 
-{{define "shader_header"}}// {{.NameInfo}}
-ow_vertex_shader_id shader{{.ID}}_vertex;
-ow_fragment_shader_id shader{{.ID}}_fragment;
-
-{{.VertexUniformsStruct}}
-{{.FragmentUniformsStruct}}
-{{end}}
-
-{{define "shader_init"}}    shader{{.ID}}_vertex = ow_create_vertex_shader_from_file("assets/shader{{.ID}}_vertex.spv");
-    shader{{.ID}}_fragment = ow_create_fragment_shader_from_file("assets/shader{{.ID}}_fragment.spv");
-{{end}}
-
-{{define "particle_init"}}    {
+{{define "particle_init"}}
+{
     particle{{.ObjectID}} = (particle_t){
         .emitters = calloc({{len .Emitters}}, sizeof(particle_emitter_t)),
         .init = {
@@ -451,129 +464,135 @@ ow_fragment_shader_id shader{{.ID}}_fragment;
 }
 {{end}}
 
-{{define "transform_setup"}}
-{{if .Enabled}}
-        transform_matrices_t matrices = compute_transform_matrices((transform_parameters_t){
-			.scene_width = {{.SceneWidth}},
-			.scene_height = {{.SceneHeight}},
-			.origin_x = {{.OriginX}},
-			.origin_y = {{.OriginY}},
-			.origin_z = {{.OriginZ}},
-			.size_x = {{.SizeX}},
-			.size_y = {{.SizeY}},
-			.scale_x = {{.ScaleX}},
-			.scale_y = {{.ScaleY}},
-			.scale_z = {{.ScaleZ}},
-			.angle_x = {{.AngleX}},
-			.angle_y = {{.AngleY}},
-			.angle_z = {{.AngleZ}},
-			.parallax_depth_x = {{.ParallaxDepthX}},
-			.parallax_depth_y = {{.ParallaxDepthY}},
-			.parallax_enabled = {{.ParallaxEnabled}},
-			.parallax_amount = {{.ParallaxAmount}},
-			.parallax_mouse_influence = {{.ParallaxMouseInfluence}},
-			.perspective = {{.Perspective}},
-			.near_z = {{.NearZ}},
-			.far_z = {{.FarZ}},
-			.fov = {{.FOV}},
-			.scale_mode = scale_mode,
-			.mouse_x = parallax_mouse_x,
-			.mouse_y = parallax_mouse_y,
-        });
-{{else}}
-        transform_matrices_t matrices = default_transform_matrices();
-{{end}}{{end}}
-
-{{define "pass_init"}}    {{"{"}}
+{{define "pass_init"}}
+{
 {{if .IsParticle}}
-        ow_vertex_binding_info vertex_bindings_info[2] = {
-            { .slot = 0, .stride = sizeof(particle_vertex_data_t) },
-            { .slot = 1, .stride = sizeof(particle_instance_data_t), .per_instance = true },
-        };
+    ow_vertex_binding_info vertex_bindings_info[2] = {
+        { .slot = 0, .stride = sizeof(particle_vertex_data_t) },
+        { .slot = 1, .stride = sizeof(particle_instance_data_t), .per_instance = true },
+    };
 
-        ow_pipeline_info pipeline_info = {
-            .vertex_bindings = vertex_bindings_info,
-            .vertex_bindings_count = 2,
-            .vertex_attributes = particle_vertex_attributes,
-            .vertex_attributes_count = 6,
-            .color_target_format = {{.ColorTargetFormat}},
-            .vertex_shader = particle_vertex,
-            .fragment_shader = particle_fragment,
-            .blend_mode = {{.BlendMode}},
-            .topology = OW_TOPOLOGY_TRIANGLES_STRIP,
-        };
+    ow_pipeline_info pipeline_info = {
+        .vertex_bindings = vertex_bindings_info,
+        .vertex_bindings_count = 2,
+        .vertex_attributes = particle_vertex_attributes,
+        .vertex_attributes_count = 6,
+        .color_target_format = {{.ColorTargetFormat}},
+        .vertex_shader = particle_vertex,
+        .fragment_shader = particle_fragment,
+        .blend_mode = {{.BlendMode}},
+        .topology = OW_TOPOLOGY_TRIANGLES_STRIP,
+    };
 {{else}}
-        ow_vertex_binding_info vertex_binding_info = {
-            .slot = 0,
-            .stride = sizeof(vertex_data_t),
-        };
+    ow_vertex_binding_info vertex_binding_info = {
+        .slot = 0,
+        .stride = sizeof(vertex_data_t),
+    };
 
-        ow_pipeline_info pipeline_info = {
-            .vertex_bindings = &vertex_binding_info,
-            .vertex_bindings_count = 1,
-            .vertex_attributes = vertex_attributes,
-            .vertex_attributes_count = 2,
-            .color_target_format = {{.ColorTargetFormat}},
-            .vertex_shader = shader{{.ShaderID}}_vertex,
-            .fragment_shader = shader{{.ShaderID}}_fragment,
-            .blend_mode = {{.BlendMode}},
-            .topology = OW_TOPOLOGY_TRIANGLES_STRIP,
-        };
+    ow_pipeline_info pipeline_info = {
+        .vertex_bindings = &vertex_binding_info,
+        .vertex_bindings_count = 1,
+        .vertex_attributes = vertex_attributes,
+        .vertex_attributes_count = 2,
+        .color_target_format = {{.ColorTargetFormat}},
+        .vertex_shader = shader{{.ShaderID}}_vertex,
+        .fragment_shader = shader{{.ShaderID}}_fragment,
+        .blend_mode = {{.BlendMode}},
+        .topology = OW_TOPOLOGY_TRIANGLES_STRIP,
+    };
 {{end}}
 
-        object{{.ObjectID}}_pass{{.PassID}}_pipeline = ow_create_pipeline(&pipeline_info);
-    {{"}"}}
+    object{{.ObjectID}}_pass{{.PassID}}_pipeline = ow_create_pipeline(&pipeline_info);
+}
 {{end}}
 
-{{define "pass_update"}}    {{"{"}}
-        ow_render_pass_info pass_info = {0};
-        pass_info.color_target = {{.ColorTarget}};
-        pass_info.clear_color = {{.ClearColor}};
-        ow_begin_render_pass(&pass_info);
+{{define "pass_update"}}
+{
+    ow_render_pass_info pass_info = {0};
+    pass_info.color_target = {{.ColorTarget}};
+    pass_info.clear_color = {{.ClearColor}};
+    ow_begin_render_pass(&pass_info);
 
-        ow_texture_binding texture_bindings[{{len .TextureBindings}}];
-        {{range $_, $binding := .TextureBindings}}texture_bindings[{{$binding.Slot}}] = (ow_texture_binding){
-            .slot = {{$binding.Slot}},
-            .texture = {{$binding.Texture}},
-            .sampler = {{$binding.Sampler}},
-        };
-{{end}}
+    ow_texture_binding texture_bindings[{{len .TextureBindings}}];
+    {{range $_, $binding := .TextureBindings}}
+    texture_bindings[{{$binding.Slot}}] = (ow_texture_binding){
+        .slot = {{$binding.Slot}},
+        .texture = {{$binding.Texture}},
+        .sampler = {{$binding.Sampler}},
+    };
+    {{end}}
 
 {{if .IsParticle}}
-        ow_vertex_buffer_id vertex_buffers[2] = {
-            particle_vertex_data_buffer,
-            particle{{.ObjectID}}.instance_buffer
-        };
+    ow_vertex_buffer_id vertex_buffers[2] = {
+        particle_vertex_data_buffer,
+        particle{{.ObjectID}}.instance_buffer
+    };
 
-        ow_bindings_info bindings_info = {
-            .vertex_buffers = vertex_buffers,
-            .vertex_buffers_count = 2,
-            .texture_bindings = texture_bindings,
-            .texture_bindings_count = {{len .TextureBindings}},
-        };
+    ow_bindings_info bindings_info = {
+        .vertex_buffers = vertex_buffers,
+        .vertex_buffers_count = 2,
+        .texture_bindings = texture_bindings,
+        .texture_bindings_count = {{len .TextureBindings}},
+    };
 
-        particle_vertex_uniforms_t vertex_uniforms = {0};
-        particle_fragment_uniforms_t fragment_uniforms = {0};
-        fragment_uniforms.spritesheet_size = (glsl_ivec2){ .at = { {{.SpritesheetCols}}, {{.SpritesheetRows}} } };
+    particle_vertex_uniforms_t vertex_uniforms = {0};
+    particle_fragment_uniforms_t fragment_uniforms = {0};
+    fragment_uniforms.spritesheet_size = (glsl_ivec2){ .at = { {{.SpritesheetCols}}, {{.SpritesheetRows}} } };
 {{else}}
-        ow_bindings_info bindings_info = {
-            .vertex_buffers = &vertex_quad_buffer,
-            .vertex_buffers_count = 1,
-            .texture_bindings = texture_bindings,
-            .texture_bindings_count = {{len .TextureBindings}},
-        };
+    ow_bindings_info bindings_info = {
+        .vertex_buffers = &vertex_quad_buffer,
+        .vertex_buffers_count = 1,
+        .texture_bindings = texture_bindings,
+        .texture_bindings_count = {{len .TextureBindings}},
+    };
 
-        shader{{.ShaderID}}_vertex_uniforms_t vertex_uniforms = {0};
-        shader{{.ShaderID}}_fragment_uniforms_t fragment_uniforms = {0};
+    shader{{.ShaderID}}_vertex_uniforms_t vertex_uniforms = {0};
+    shader{{.ShaderID}}_fragment_uniforms_t fragment_uniforms = {0};
 {{end}}
 
 {{template "transform_setup" .Transform}}
 
 {{.UniformSetupCode}}
-        ow_push_vertex_uniform_data(0, &vertex_uniforms, sizeof(vertex_uniforms));
-        ow_push_fragment_uniform_data(0, &fragment_uniforms, sizeof(fragment_uniforms));
 
-        ow_render_geometry(object{{.ObjectID}}_pass{{.PassID}}_pipeline, &bindings_info, 0, 4, {{.InstanceCount}});
-        ow_end_render_pass();
-    {{"}"}}
+    ow_push_vertex_uniform_data(0, &vertex_uniforms, sizeof(vertex_uniforms));
+    ow_push_fragment_uniform_data(0, &fragment_uniforms, sizeof(fragment_uniforms));
+
+    ow_render_geometry(object{{.ObjectID}}_pass{{.PassID}}_pipeline, &bindings_info, 0, 4, {{.InstanceCount}});
+    ow_end_render_pass();
+}
 {{end}}
+
+{{define "transform_setup"}}
+{{if .Enabled}}
+transform_matrices_t matrices = compute_transform_matrices((transform_parameters_t){
+    .scene_width = {{.SceneWidth}},
+    .scene_height = {{.SceneHeight}},
+    .origin_x = {{.OriginX}},
+    .origin_y = {{.OriginY}},
+    .origin_z = {{.OriginZ}},
+    .size_x = {{.SizeX}},
+    .size_y = {{.SizeY}},
+    .scale_x = {{.ScaleX}},
+    .scale_y = {{.ScaleY}},
+    .scale_z = {{.ScaleZ}},
+    .angle_x = {{.AngleX}},
+    .angle_y = {{.AngleY}},
+    .angle_z = {{.AngleZ}},
+    .parallax_depth_x = {{.ParallaxDepthX}},
+    .parallax_depth_y = {{.ParallaxDepthY}},
+    .parallax_enabled = {{.ParallaxEnabled}},
+    .parallax_amount = {{.ParallaxAmount}},
+    .parallax_mouse_influence = {{.ParallaxMouseInfluence}},
+    .perspective = {{.Perspective}},
+    .near_z = {{.NearZ}},
+    .far_z = {{.FarZ}},
+    .fov = {{.FOV}},
+    .scale_mode = scale_mode,
+    .mouse_x = parallax_mouse_x,
+    .mouse_y = parallax_mouse_y,
+});
+{{else}}
+transform_matrices_t matrices = default_transform_matrices();
+{{end}}
+{{end}}
+
