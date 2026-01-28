@@ -109,7 +109,11 @@ __attribute__((export_name("update"))) void update(float delta) {
         .texture_bindings_count = 1,
     };
 
-    ow_begin_render_pass(&(ow_render_pass_info){0});
+    ow_begin_render_pass(&(ow_render_pass_info){
+        .clear_color = true,
+        .clear_color_rgba = {0, 0, 0, 1},
+    });
+
     ow_render_geometry(pipeline, &bindings, 0, 4, NUM_INSTANCES);
     ow_end_render_pass();
 }

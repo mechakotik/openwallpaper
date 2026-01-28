@@ -52,6 +52,7 @@ __attribute__((export_name("update"))) void update(float delta) {
         .clear_color = true,
         .clear_color_rgba = {0, 0, 0, 1},
     });
+
     ow_render_geometry(pipeline, &bindings, 0, 3, 1);
     ow_end_render_pass();
 }

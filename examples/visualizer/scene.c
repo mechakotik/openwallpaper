@@ -70,8 +70,6 @@ __attribute__((export_name("update"))) void update(float delta) {
         .clear_color = true,
         .clear_color_rgba = {0, 0, 0, 1},
     });
-
-    int vertex_count = sizeof(vertices) / sizeof(vertex_t);
-    ow_render_geometry(pipeline, &bindings, 0, vertex_count, 1);
+    ow_render_geometry(pipeline, &bindings, 0, sizeof(vertices) / sizeof(vertex_t), 1);
     ow_end_render_pass();
 }
