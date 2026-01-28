@@ -24,17 +24,15 @@ __attribute__((export_name("init"))) void init() {
     ow_fragment_shader_id fragment_shader = ow_create_fragment_shader_from_file("fragment.spv");
 
     pipeline = ow_create_pipeline(&(ow_pipeline_info){
-        .vertex_bindings =
-            &(ow_vertex_binding_info){
-                .slot = 0,
-                .stride = sizeof(vertex_t),
-            },
+        .vertex_bindings = &(ow_vertex_binding_info){
+            .slot = 0,
+            .stride = sizeof(vertex_t),
+        },
         .vertex_bindings_count = 1,
-        .vertex_attributes =
-            (ow_vertex_attribute[]){
-                {.slot = 0, .location = 0, .type = OW_ATTRIBUTE_FLOAT2, .offset = 0},
-                {.slot = 0, .location = 1, .type = OW_ATTRIBUTE_FLOAT3, .offset = sizeof(float) * 2},
-            },
+        .vertex_attributes = (ow_vertex_attribute[]){
+            {.slot = 0, .location = 0, .type = OW_ATTRIBUTE_FLOAT2, .offset = 0},
+            {.slot = 0, .location = 1, .type = OW_ATTRIBUTE_FLOAT3, .offset = sizeof(float) * 2},
+        },
         .vertex_attributes_count = 2,
         .vertex_shader = vertex_shader,
         .fragment_shader = fragment_shader,
@@ -52,7 +50,6 @@ __attribute__((export_name("update"))) void update(float delta) {
         .clear_color = true,
         .clear_color_rgba = {0, 0, 0, 1},
     });
-
     ow_render_geometry(pipeline, &bindings, 0, 3, 1);
     ow_end_render_pass();
 }
