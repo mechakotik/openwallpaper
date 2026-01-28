@@ -6,8 +6,8 @@
 #include <stdint.h>
 
 /**
- * A handle pointing to vertex buffer stored in host memory. Existing vertex buffer's id is never zero, this
- * value is reserved to act as non-existent object.
+ * A handle pointing to host-managed vertex buffer. Existing vertex buffer's `id` is never zero, this value is reserved
+ * to act as non-existent object.
  *
  * \see `ow_free_vertex_buffer`
  */
@@ -17,8 +17,8 @@ typedef struct {
 } ow_vertex_buffer_id;
 
 /**
- * A handle pointing to index buffer stored in host memory. Existing index buffer's id is never zero, this
- * value is reserved to act as non-existent object.
+ * A handle pointing to host-managed index buffer. Existing index buffer's `id` is never zero, this value is reserved to
+ * act as non-existent object.
  *
  * \see `ow_free_index_buffer`
  */
@@ -28,8 +28,8 @@ typedef struct {
 } ow_index_buffer_id;
 
 /**
- * A handle pointing to GPU texture stored in host memory. Existing texture's id is never zero, this value is reserved
- * to act as non-existent object.
+ * A handle pointing to host-managed GPU texture. Existing texture's `id` is never zero, this value is reserved to act
+ * as non-existent object.
  *
  * \see `ow_free_texture`
  */
@@ -39,8 +39,8 @@ typedef struct {
 } ow_texture_id;
 
 /**
- * A handle pointing to GPU sampler stored in host memory. Existing sampler's id is never zero, this value is reserved
- * to act as non-existent object.
+ * A handle pointing to host-managed GPU sampler. Existing sampler's `id` is never zero, this value is reserved to act
+ * as non-existent object.
  *
  * \see `ow_free_sampler`
  */
@@ -50,8 +50,8 @@ typedef struct {
 } ow_sampler_id;
 
 /**
- * A handle pointing to vertex shader stored in host memory. Existing vertex shader's id is never zero, this value is
- * reserved to act as non-existent object.
+ * A handle pointing to host-managed vertex shader. Existing vertex shader's `id` is never zero, this value is reserved
+ * to act as non-existent object.
  *
  * \see `ow_free_vertex_shader`
  */
@@ -61,8 +61,8 @@ typedef struct {
 } ow_vertex_shader_id;
 
 /**
- * A handle pointing to fragment shader stored in host memory. Existing fragment shader's id is never zero, this value
- * is reserved to act as non-existent object.
+ * A handle pointing to host-managed fragment shader. Existing fragment shader's `id` is never zero, this value is
+ * reserved to act as non-existent object.
  *
  * \see `ow_free_fragment_shader`
  */
@@ -72,8 +72,8 @@ typedef struct {
 } ow_fragment_shader_id;
 
 /**
- * A handle pointing to GPU pipeline state object stored in host memory. Existing pipeline's id is never zero, this
- * value is reserved to act as non-existent object.
+ * A handle pointing to host-managed GPU pipeline object. Existing pipeline's `id` is never zero, this value is reserved
+ * to act as non-existent object.
  *
  * \see `ow_free_pipeline`
  */
@@ -204,11 +204,13 @@ typedef enum {
  */
 typedef struct {
     ow_texture_id color_target; ///< ID of color target texture. Setting it to `0` means render target is screen
-    bool clear_color;           ///< If `true`, render pass will clear color target with `clear_color_rgba`
+    bool clear_color; ///< If `true`, render pass will clear color target with `clear_color_rgba`. If `false`, texture
+                      ///< target keeps its previous data, screen target data is undefined
     float clear_color_rgba[4];  ///< RGBA color to clear color target with
     ow_texture_id depth_target; ///< ID of depth target texture
-    bool clear_depth;           ///< If `true`, render pass will clear depth target with `clear_depth_value`
-    float clear_depth_value;    ///< Value to clear depth target with
+    bool clear_depth; ///< If `true`, render pass will clear depth target with `clear_depth_value`. If `false`, target
+                      ///< keeps its previous data
+    float clear_depth_value; ///< Value to clear depth target with
 } ow_render_pass_info;
 
 /**
