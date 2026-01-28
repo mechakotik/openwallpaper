@@ -28,6 +28,8 @@ Then you can build examples with shell scripts:
 ```sh
 ./examples/triangle/compile.sh
 ./examples/fullscreen-shader/compile.sh
+./examples/image/compile.sh
+./examples/rain/compile.sh
 ./examples/visualizer/compile.sh
 ```
 
