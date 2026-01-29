@@ -12,6 +12,7 @@ WallpaperList::WallpaperList(QObject* parent) : QObject(parent) {
         if(entry.is_regular_file()) {
             WallpaperListItem* item = new WallpaperListItem(this);
             item->setName(QString::fromStdString(entry.path().filename().string()));
+            item->setPath(QString::fromStdString(entry.path().string()));
             mWallpapers.push_back(item);
         }
     }

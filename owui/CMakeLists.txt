@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.20)
 project(owui)
 
+set(CMAKE_CXX_STANDARD 23)
+
 find_package(ECM 6.0.0 REQUIRED NO_MODULE)
 set(CMAKE_MODULE_PATH ${ECM_MODULE_PATH})
 
@@ -42,6 +44,8 @@ target_sources(owui
     src/display_list.cpp
     src/wallpaper_list.cpp
     src/wallpaper_list_item.cpp
+    src/runner.cpp
+    src/runner_worker.cpp
 )
 
 ecm_target_qml_sources(owui

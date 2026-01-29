@@ -76,15 +76,67 @@ Kirigami.ApplicationWindow {
                         }
 
                         Controls.ComboBox {
+                            id: displaySelector
                             model: displayList.displays
                             Layout.alignment: Qt.AlignVCenter
                         }
 
                         Controls.Button {
-                            text: "Run wallpaper"
-                            enabled: wallpaperGrid.selectedIndex >= 0
+                            id: runButton
+                            enabled: !runner.working && wallpaperGrid.selectedIndex >= 0
                             Layout.alignment: Qt.AlignVCenter
-                            onClicked: showPassiveNotification("Set as wallpaper: " + wallpaperGrid.selectedIndex)
+                            Layout.preferredWidth: Kirigami.Units.gridUnit * 10
+                            onClicked: runner.run(wallpaperList.wallpapers[wallpaperGrid.selectedIndex].path, displaySelector.currentText)
+
+                            contentItem: Item {
+                                anchors.fill: parent
+
+                                Row {
+                                    id: contentRow
+                                    anchors.centerIn: parent
+                                    spacing: Kirigami.Units.smallSpacing
+
+                                    Loader {
+                                        id: stateIcon
+                                        width: Kirigami.Units.iconSizes.smallMedium
+                                        height: Kirigami.Units.iconSizes.smallMedium
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        sourceComponent: runner.working ? busyComp : playComp
+                                    }
+
+                                    Controls.Label {
+                                        text: runner.working ? "Running wallpaper" : "Run wallpaper"
+                                        anchors.verticalCenter: parent.verticalCenter
+                                    }
+                                }
+                            }
+
+                            Component {
+                                id: playComp
+                                Kirigami.Icon {
+                                    source: "media-playback-start"
+                                    width: Kirigami.Units.iconSizes.smallMedium
+                                    height: Kirigami.Units.iconSizes.smallMedium
+                                }
+                            }
+
+                            Component {
+                                id: busyComp
+                                Kirigami.Icon {
+                                    source: "process-working"
+                                    width: Kirigami.Units.iconSizes.smallMedium
+                                    height: Kirigami.Units.iconSizes.smallMedium
+                                    transformOrigin: Item.Center
+
+                                    NumberAnimation on rotation {
+                                        from: 0
+                                        to: 360
+                                        duration: 1500
+                                        loops: Animation.Infinite
+                                        running: true
+                                    }
+                                }
+                            }
                         }
                     }
                 }
