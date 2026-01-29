@@ -16,10 +16,14 @@ Kirigami.ApplicationWindow {
     pageStack.initialPage: initPage
 
     Component {
+        id: optionsPage
+        OptionsPage {}
+    }
+
+    Component {
         id: initPage
 
         Kirigami.Page {
-            id: page
             title: "OpenWallpaper UI"
 
             padding: 0
@@ -37,7 +41,7 @@ Kirigami.ApplicationWindow {
                 Kirigami.Action {
                     icon.name: "settings"
                     text: "Options"
-                    onTriggered: showPassiveNotification("Options")
+                    onTriggered: root.pageStack.layers.push(optionsPage)
                 }
             ]
 
@@ -92,12 +96,10 @@ Kirigami.ApplicationWindow {
                                 anchors.fill: parent
 
                                 Row {
-                                    id: contentRow
                                     anchors.centerIn: parent
                                     spacing: Kirigami.Units.smallSpacing
 
                                     Loader {
-                                        id: stateIcon
                                         width: Kirigami.Units.iconSizes.smallMedium
                                         height: Kirigami.Units.iconSizes.smallMedium
                                         anchors.verticalCenter: parent.verticalCenter
