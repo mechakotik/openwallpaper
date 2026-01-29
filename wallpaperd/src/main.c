@@ -1,4 +1,5 @@
 #include <SDL3/SDL.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include "SDL3/SDL_error.h"
@@ -6,6 +7,7 @@
 #include "argparse.h"
 #include "error.h"
 #include "output.h"
+#include "ready.h"
 #include "state.h"
 
 static void print_help() {
@@ -28,6 +30,8 @@ static void print_help() {
 }
 
 int main(int argc, char* argv[]) {
+    wd_unset_ready();
+
     wd_state state;
     wd_init_state(&state);
     if(!wd_parse_args(&state.args, argc, argv)) {
@@ -187,14 +191,19 @@ int main(int argc, char* argv[]) {
             goto handle_error;
         }
 
-        first_draw = false;
+        if(first_draw) {
+            wd_set_ready();
+            first_draw = false;
+        }
     }
 
     wd_free_state(&state);
+    wd_unset_ready();
     return 0;
 
 handle_error:
     printf("error: %s\n", wd_get_last_error());
     wd_free_state(&state);
+    wd_unset_ready();
     return 1;
 }
