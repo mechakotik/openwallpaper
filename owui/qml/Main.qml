@@ -24,7 +24,9 @@ Kirigami.ApplicationWindow {
         id: initPage
 
         Kirigami.Page {
-            title: "OpenWallpaper UI"
+            id: page
+
+            title: ""
 
             padding: 0
             topPadding: 0
@@ -32,15 +34,54 @@ Kirigami.ApplicationWindow {
             leftPadding: 0
             rightPadding: 0
 
+            property alias selectedIndex: wallpaperGrid.selectedIndex
+            property string selectedWallpaperPath: selectedIndex >= 0 ? wallpaperList.wallpapers[selectedIndex].path : ""
+            property string selectedDisplay: ""
+
+            Kirigami.Action {
+                id: runAction
+                icon.name: "media-playback-start"
+                text: "Run wallpaper"
+                enabled: !runner.working && page.selectedIndex >= 0
+                onTriggered: runner.run(page.selectedWallpaperPath, page.selectedDisplay)
+            }
+
+            titleDelegate: RowLayout {
+                spacing: Kirigami.Units.largeSpacing
+
+                Kirigami.Icon {
+                    source: "monitor-symbolic"
+                    Layout.alignment: Qt.AlignVCenter
+                    Layout.preferredWidth: Kirigami.Units.iconSizes.smallMedium
+                    Layout.preferredHeight: Kirigami.Units.iconSizes.smallMedium
+                }
+
+                Controls.ComboBox {
+                    id: displaySelector
+                    model: displayList.displays
+                    Layout.alignment: Qt.AlignVCenter
+                    onCurrentTextChanged: page.selectedDisplay = currentText
+                    Component.onCompleted: page.selectedDisplay = currentText
+                }
+
+                Controls.ToolButton {
+                    action: runAction
+                    display: Controls.AbstractButton.TextBesideIcon
+                    Layout.alignment: Qt.AlignVCenter
+                }
+            }
+
             actions: [
                 Kirigami.Action {
-                    icon.name: "add"
+                    icon.name: "list-add"
                     text: "Add wallpaper"
+                    displayHint: Kirigami.DisplayHint.KeepVisible
                     onTriggered: showPassiveNotification("Add wallpaper")
                 },
                 Kirigami.Action {
                     icon.name: "settings"
                     text: "Options"
+                    displayHint: Kirigami.DisplayHint.KeepVisible
                     onTriggered: root.pageStack.layers.push(optionsPage)
                 }
             ]
@@ -54,93 +95,6 @@ Kirigami.ApplicationWindow {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     model: wallpaperList.wallpapers
-                }
-
-                Rectangle {
-                    id: bottomPanel
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: Kirigami.Units.gridUnit * 2.6
-                    color: Kirigami.Theme.alternateBackgroundColor
-
-                    RowLayout {
-                        anchors.left: parent.left
-                        anchors.right: parent.right
-                        anchors.verticalCenter: parent.verticalCenter
-                        anchors.leftMargin: Kirigami.Units.largeSpacing
-                        anchors.rightMargin: Kirigami.Units.largeSpacing
-
-                        height: implicitHeight
-                        spacing: Kirigami.Units.largeSpacing
-
-                        Item { Layout.fillWidth: true }
-
-                        Controls.Label {
-                            text: "Display"
-                            Layout.alignment: Qt.AlignVCenter
-                        }
-
-                        Controls.ComboBox {
-                            id: displaySelector
-                            model: displayList.displays
-                            Layout.alignment: Qt.AlignVCenter
-                        }
-
-                        Controls.Button {
-                            id: runButton
-                            enabled: !runner.working && wallpaperGrid.selectedIndex >= 0
-                            Layout.alignment: Qt.AlignVCenter
-                            Layout.preferredWidth: Kirigami.Units.gridUnit * 10
-                            onClicked: runner.run(wallpaperList.wallpapers[wallpaperGrid.selectedIndex].path, displaySelector.currentText)
-
-                            contentItem: Item {
-                                anchors.fill: parent
-
-                                Row {
-                                    anchors.centerIn: parent
-                                    spacing: Kirigami.Units.smallSpacing
-
-                                    Loader {
-                                        width: Kirigami.Units.iconSizes.smallMedium
-                                        height: Kirigami.Units.iconSizes.smallMedium
-                                        anchors.verticalCenter: parent.verticalCenter
-                                        sourceComponent: runner.working ? busyComp : playComp
-                                    }
-
-                                    Controls.Label {
-                                        text: runner.working ? "Running wallpaper" : "Run wallpaper"
-                                        anchors.verticalCenter: parent.verticalCenter
-                                    }
-                                }
-                            }
-
-                            Component {
-                                id: playComp
-                                Kirigami.Icon {
-                                    source: "media-playback-start"
-                                    width: Kirigami.Units.iconSizes.smallMedium
-                                    height: Kirigami.Units.iconSizes.smallMedium
-                                }
-                            }
-
-                            Component {
-                                id: busyComp
-                                Kirigami.Icon {
-                                    source: "process-working"
-                                    width: Kirigami.Units.iconSizes.smallMedium
-                                    height: Kirigami.Units.iconSizes.smallMedium
-                                    transformOrigin: Item.Center
-
-                                    NumberAnimation on rotation {
-                                        from: 0
-                                        to: 360
-                                        duration: 1500
-                                        loops: Animation.Infinite
-                                        running: true
-                                    }
-                                }
-                            }
-                        }
-                    }
                 }
             }
         }
