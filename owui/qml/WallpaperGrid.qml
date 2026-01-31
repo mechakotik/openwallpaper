@@ -56,48 +56,51 @@ FocusScope {
         }
     }
 
-    Keys.onPressed: (event) => {
+    function handleNavKey(key) {
         const n = gridRepeater.count
-        if (n <= 0) return
+        if (n <= 0) return false
 
         const cols = Math.max(1, flick.columns)
         let idx = selectedIndex
 
         if (idx < 0) {
-            if (event.key === Qt.Key_End) idx = n - 1
+            if (key === Qt.Key_End) idx = n - 1
             else idx = 0
             selectedIndex = idx
             ensureIndexVisible(idx)
-            event.accepted = true
-            return
+            return true
         }
 
         const row = Math.floor(idx / cols)
         const rows = Math.ceil(n / cols)
 
-        if (event.key === Qt.Key_Left) {
+        if (key === Qt.Key_Left) {
             moveSelection(-1)
-            event.accepted = true
-        } else if (event.key === Qt.Key_Right) {
+            return true
+        } else if (key === Qt.Key_Right) {
             moveSelection(1)
-            event.accepted = true
-        } else if (event.key === Qt.Key_Up) {
-            if (row > 0) {
-                moveSelection(-cols)
-            }
-            event.accepted = true
-        } else if (event.key === Qt.Key_Down) {
-            if (row < rows - 1) {
-                moveSelection(cols)
-            }
-            event.accepted = true
-        } else if (event.key === Qt.Key_Home) {
+            return true
+        } else if (key === Qt.Key_Up) {
+            if (row > 0) moveSelection(-cols)
+            return true
+        } else if (key === Qt.Key_Down) {
+            if (row < rows - 1) moveSelection(cols)
+            return true
+        } else if (key === Qt.Key_Home) {
             selectedIndex = 0
             ensureIndexVisible(0)
-            event.accepted = true
-        } else if (event.key === Qt.Key_End) {
+            return true
+        } else if (key === Qt.Key_End) {
             selectedIndex = n - 1
             ensureIndexVisible(n - 1)
+            return true
+        }
+
+        return false
+    }
+
+    Keys.onPressed: (event) => {
+        if (handleNavKey(event.key)) {
             event.accepted = true
         }
     }

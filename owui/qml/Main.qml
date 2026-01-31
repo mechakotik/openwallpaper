@@ -38,12 +38,22 @@ Kirigami.ApplicationWindow {
             property string selectedWallpaperPath: selectedIndex >= 0 ? wallpaperList.wallpapers[selectedIndex].path : ""
             property string selectedDisplay: ""
 
+            Keys.priority: Keys.AfterItem
+            Keys.onPressed: (event) => {
+                if (wallpaperGrid.handleNavKey(event.key)) {
+                    event.accepted = true
+                }
+            }
+
             Kirigami.Action {
                 id: runAction
                 icon.name: "media-playback-start"
                 text: "Run wallpaper"
                 enabled: !runner.working && page.selectedIndex >= 0
-                onTriggered: runner.run(page.selectedWallpaperPath, page.selectedDisplay)
+                onTriggered: {
+                    runner.run(page.selectedWallpaperPath, page.selectedDisplay)
+                    wallpaperGrid.forceActiveFocus()
+                }
             }
 
             titleDelegate: RowLayout {
