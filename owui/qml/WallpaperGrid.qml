@@ -15,31 +15,73 @@ FocusScope {
     property int tileGapMin: Kirigami.Units.largeSpacing
 
     property real previewH: (tileW - tileInnerPad * 2) / previewAspect
-    property real tileH: Math.ceil(
+    property int tileH: Math.ceil(
         tileInnerPad + previewH + Kirigami.Units.smallSpacing + Kirigami.Units.gridUnit * 1.4 + tileInnerPad
     )
 
     focus: true
 
-    function clamp(v, lo, hi) {
-        return Math.max(lo, Math.min(hi, v))
-    }
+    function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)) }
 
     function ensureIndexVisible(i) {
-        const it = gridRepeater.itemAt(i)
-        if (!it) return
+        const n = gridRepeater.count
+        if (n <= 0) return
+        i = clamp(i, 0, n - 1)
 
-        const p = it.mapToItem(flick.contentItem, 0, 0)
-        const x = p.x
-        const y = p.y
-        const w = it.width
-        const h = it.height
+        const flick = scroll.contentItem
+        const viewW = scroll.availableWidth
+        const viewH = scroll.availableHeight
 
-        if (y < flick.contentY) flick.contentY = y
-        else if (y + h > flick.contentY + flick.height) flick.contentY = y + h - flick.height
+        const cols = Math.max(1, contentWrap.columns)
+        const col = i % cols
+        const row = Math.floor(i / cols)
 
-        if (x < flick.contentX) flick.contentX = x
-        else if (x + w > flick.contentX + flick.width) flick.contentX = x + w - flick.width
+        const hGap = contentWrap.hGap
+        const vGap = contentWrap.vGap
+        const edgeH = contentWrap.edgeH
+
+        const x = edgeH + col * (root.tileW + hGap)
+        const y = vGap + row * (root.tileH + vGap)
+        const w = root.tileW
+        const h = root.tileH
+        const maxY = Math.max(0, contentWrap.contentH - viewH)
+
+        let newY = flick.contentY
+
+        if (y < newY + vGap) {
+            newY = y - vGap
+        } else if (y + h > newY + viewH - vGap) {
+            newY = y + h + vGap - viewH
+        }
+
+        newY = clamp(newY, 0, maxY)
+
+        if (y < newY) {
+            newY = y
+        } else if (y + h > newY + viewH) {
+            newY = y + h - viewH
+        }
+
+        flick.contentY = clamp(newY, 0, maxY)
+
+        const maxX = Math.max(0, contentWrap.contentW - viewW)
+        let newX = flick.contentX
+
+        if (x < newX) newX = x
+        else if (x + w > newX + viewW) newX = x + w - viewW
+
+        flick.contentX = clamp(newX, 0, maxX)
+    }
+
+    function setSelectionAndReveal(next) {
+        const n = gridRepeater.count
+        if (n <= 0) return
+
+        next = clamp(next, 0, n - 1)
+        if (next === selectedIndex) return
+
+        ensureIndexVisible(next)
+        selectedIndex = next
     }
 
     function moveSelection(delta) {
@@ -48,61 +90,39 @@ FocusScope {
 
         let idx = selectedIndex
         if (idx < 0) idx = 0
-
-        const next = clamp(idx + delta, 0, n - 1)
-        if (next !== selectedIndex) {
-            selectedIndex = next
-            ensureIndexVisible(next)
-        }
+        setSelectionAndReveal(idx + delta)
     }
 
     function handleNavKey(key) {
         const n = gridRepeater.count
         if (n <= 0) return false
 
-        const cols = Math.max(1, flick.columns)
+        const cols = Math.max(1, contentWrap.columns)
         let idx = selectedIndex
 
         if (idx < 0) {
-            if (key === Qt.Key_End) idx = n - 1
-            else idx = 0
-            selectedIndex = idx
-            ensureIndexVisible(idx)
-            return true
+            if (key === Qt.Key_Left || key === Qt.Key_Right || key === Qt.Key_Up || key === Qt.Key_Down) {
+                setSelectionAndReveal(0)
+                return true
+            }
+            return false
         }
 
         const row = Math.floor(idx / cols)
         const rows = Math.ceil(n / cols)
 
-        if (key === Qt.Key_Left) {
-            moveSelection(-1)
-            return true
-        } else if (key === Qt.Key_Right) {
-            moveSelection(1)
-            return true
-        } else if (key === Qt.Key_Up) {
-            if (row > 0) moveSelection(-cols)
-            return true
-        } else if (key === Qt.Key_Down) {
-            if (row < rows - 1) moveSelection(cols)
-            return true
-        } else if (key === Qt.Key_Home) {
-            selectedIndex = 0
-            ensureIndexVisible(0)
-            return true
-        } else if (key === Qt.Key_End) {
-            selectedIndex = n - 1
-            ensureIndexVisible(n - 1)
-            return true
-        }
+        if (key === Qt.Key_Left) { setSelectionAndReveal(idx - 1); return true }
+        if (key === Qt.Key_Right) { setSelectionAndReveal(idx + 1); return true }
+        if (key === Qt.Key_Up) { if (row > 0) setSelectionAndReveal(idx - cols); return true }
+        if (key === Qt.Key_Down) { if (row < rows - 1) setSelectionAndReveal(idx + cols); return true }
+        if (key === Qt.Key_Home) { setSelectionAndReveal(0); return true }
+        if (key === Qt.Key_End) { setSelectionAndReveal(n - 1); return true }
 
         return false
     }
 
     Keys.onPressed: (event) => {
-        if (handleNavKey(event.key)) {
-            event.accepted = true
-        }
+        if (handleNavKey(event.key)) event.accepted = true
     }
 
     Controls.ScrollView {
@@ -113,122 +133,135 @@ FocusScope {
 
         background: Rectangle { color: Kirigami.Theme.backgroundColor }
 
-        Controls.ScrollBar.vertical.policy: Controls.ScrollBar.AlwaysOff
+        contentWidth: contentWrap.contentW
+        contentHeight: contentWrap.contentH
+
         Controls.ScrollBar.horizontal.policy: Controls.ScrollBar.AlwaysOff
 
-        Flickable {
-            id: flick
-            clip: true
-            boundsBehavior: Flickable.StopAtBounds
+        Item {
+            id: contentWrap
+            width: scroll.availableWidth
 
-            contentWidth: width
-            contentHeight: contentWrap.height
+            readonly property int vGap: root.tileGapMin
 
-            property int columns: Math.max(1,
-                Math.floor((width + root.tileGapMin) / (root.tileW + root.tileGapMin))
-            )
-            property real gap: Math.max(root.tileGapMin,
-                (width - columns * root.tileW) / (columns + 1)
+            readonly property int columns: Math.max(1,
+                Math.floor(scroll.availableWidth / (root.tileW + root.tileGapMin))
             )
 
-            Item {
-                id: contentWrap
-                width: flick.width
-                height: grid.implicitHeight + 2 * flick.gap
+            readonly property real hGap: Math.max(root.tileGapMin,
+                (scroll.availableWidth / columns) - root.tileW
+            )
 
-                GridLayout {
-                    id: grid
-                    anchors.fill: parent
-                    anchors.margins: flick.gap
+            readonly property real edgeH: hGap / 2
 
-                    columns: flick.columns
-                    columnSpacing: flick.gap
-                    rowSpacing: flick.gap
+            readonly property int rows: gridRepeater.count > 0 ? Math.ceil(gridRepeater.count / columns) : 0
 
-                    Repeater {
-                        id: gridRepeater
-                        model: root.model
+            readonly property real contentH: rows > 0
+                ? (2 * vGap + rows * root.tileH + Math.max(0, rows - 1) * vGap)
+                : 0
 
-                        Item {
-                            id: tileItem
-                            required property int index
-                            required property var modelData
+            readonly property real contentW: scroll.availableWidth
 
-                            Layout.preferredWidth: root.tileW
-                            Layout.preferredHeight: root.tileH
+            implicitHeight: contentH
+            height: contentH
 
-                            property bool hovered: mouse.containsMouse
-                            property bool selected: root.selectedIndex === tileItem.index
-                            property bool pressed: mouse.pressed
+            onColumnsChanged: {
+                if (root.selectedIndex >= 0 && gridRepeater.count > 0) root.ensureIndexVisible(root.selectedIndex)
+            }
+
+            GridLayout {
+                id: grid
+
+                width: parent.width
+                height: implicitHeight
+
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.top: parent.top
+
+                anchors.leftMargin: contentWrap.edgeH
+                anchors.rightMargin: contentWrap.edgeH
+                anchors.topMargin: contentWrap.vGap
+
+                columns: contentWrap.columns
+                columnSpacing: contentWrap.hGap
+                rowSpacing: contentWrap.vGap
+
+                Repeater {
+                    id: gridRepeater
+                    model: root.model
+
+                    Item {
+                        id: tileItem
+                        required property int index
+                        required property var modelData
+
+                        Layout.preferredWidth: root.tileW
+                        Layout.preferredHeight: root.tileH
+
+                        property bool hovered: mouse.containsMouse
+                        property bool selected: root.selectedIndex === tileItem.index
+                        property bool pressed: mouse.pressed
+
+                        Rectangle {
+                            anchors.fill: parent
+                            radius: Kirigami.Units.smallSpacing
+                            visible: tileItem.pressed
+                            color: Kirigami.Theme.highlightColor
+                            opacity: 0.85
+                        }
+
+                        Rectangle {
+                            anchors.fill: parent
+                            radius: Kirigami.Units.smallSpacing
+                            visible: tileItem.selected && !tileItem.pressed
+                            color: Kirigami.Theme.highlightColor
+                            opacity: 0.18
+                        }
+
+                        Rectangle {
+                            anchors.fill: parent
+                            radius: Kirigami.Units.smallSpacing
+                            visible: tileItem.hovered || tileItem.selected || tileItem.pressed
+                            color: "transparent"
+                            border.width: 2
+                            border.color: Kirigami.Theme.highlightColor
+                        }
+
+                        ColumnLayout {
+                            anchors.fill: parent
+                            anchors.margins: root.tileInnerPad
+                            spacing: Kirigami.Units.smallSpacing
 
                             Rectangle {
-                                anchors.fill: parent
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: root.previewH
                                 radius: Kirigami.Units.smallSpacing
-                                visible: tileItem.pressed
-                                color: Kirigami.Theme.highlightColor
-                                opacity: 0.85
-                            }
-
-                            Rectangle {
-                                anchors.fill: parent
-                                radius: Kirigami.Units.smallSpacing
-                                visible: tileItem.selected && !tileItem.pressed
-                                color: Kirigami.Theme.highlightColor
-                                opacity: 0.18
-                            }
-
-                            Rectangle {
-                                anchors.fill: parent
-                                radius: Kirigami.Units.smallSpacing
-                                visible: tileItem.hovered || tileItem.selected || tileItem.pressed
-                                color: "transparent"
-                                border.width: 2
-                                border.color: Kirigami.Theme.highlightColor
-                            }
-
-                            ColumnLayout {
-                                anchors.fill: parent
-                                anchors.margins: root.tileInnerPad
-                                spacing: Kirigami.Units.smallSpacing
-
-                                Rectangle {
-                                    Layout.fillWidth: true
-                                    Layout.preferredHeight: root.previewH
-                                    radius: Kirigami.Units.smallSpacing
-                                    color: Kirigami.Theme.alternateBackgroundColor
-                                    border.width: 0
-                                    clip: true
-
-                                    Controls.Label {
-                                        anchors.centerIn: parent
-                                        text: "Preview"
-                                        color: tileItem.pressed
-                                               ? Kirigami.Theme.highlightedTextColor
-                                               : Kirigami.Theme.textColor
-                                    }
-                                }
+                                color: Kirigami.Theme.alternateBackgroundColor
+                                clip: true
 
                                 Controls.Label {
-                                    Layout.fillWidth: true
-                                    text: (modelData && modelData.name) ? modelData.name : "Wallpaper"
-                                    elide: Text.ElideRight
-                                    horizontalAlignment: Text.AlignHCenter
-                                    color: tileItem.pressed
-                                           ? Kirigami.Theme.highlightedTextColor
-                                           : Kirigami.Theme.textColor
+                                    anchors.centerIn: parent
+                                    text: "Preview"
+                                    color: tileItem.pressed ? Kirigami.Theme.highlightedTextColor : Kirigami.Theme.textColor
                                 }
                             }
 
-                            MouseArea {
-                                id: mouse
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                onPressed: root.forceActiveFocus()
-                                onClicked: {
-                                    root.selectedIndex = tileItem.index
-                                    root.ensureIndexVisible(tileItem.index)
-                                }
+                            Controls.Label {
+                                Layout.fillWidth: true
+                                text: (modelData && modelData.name) ? modelData.name : "Wallpaper"
+                                elide: Text.ElideRight
+                                horizontalAlignment: Text.AlignHCenter
+                                color: tileItem.pressed ? Kirigami.Theme.highlightedTextColor : Kirigami.Theme.textColor
                             }
+                        }
+
+                        MouseArea {
+                            id: mouse
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            onPressed: root.forceActiveFocus()
+                            onClicked: root.setSelectionAndReveal(tileItem.index)
                         }
                     }
                 }
