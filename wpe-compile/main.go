@@ -158,6 +158,7 @@ var (
 	args struct {
 		Input       string `arg:"positional,required"`
 		Output      string `arg:"positional,required"`
+		Project     string `arg:"--project"`
 		Particles   bool   `arg:"--particles" default:"true"`
 		KeepSources bool   `arg:"--keep-sources"`
 	}
@@ -204,6 +205,10 @@ func main() {
 	pkgMap, err = extractPkg(pkgFile)
 	if err != nil {
 		panic("extract pkg failed: " + err.Error())
+	}
+
+	if args.Project != "" {
+		makeMetadata(args.Project, &outputMap)
 	}
 
 	scene, err = ParseScene(&pkgMap)
