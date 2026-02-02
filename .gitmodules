@@ -25,3 +25,6 @@
 [submodule "wallpaperd/external/fftw3"]
 	path = wallpaperd/external/fftw3
 	url = https://github.com/mechakotik/fftw3
+[submodule "owui/external/toml11"]
+	path = owui/external/toml11
+	url = https://github.com/ToruNiina/toml11

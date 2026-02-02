@@ -1,18 +1,57 @@
 #include "wallpaper_list.h"
+#include <kzip.h>
 #include <qdir.h>
+#include <qimage.h>
 #include <qstandardpaths.h>
+#include <exception>
 #include <filesystem>
-#include "src/wallpaper_list_item.h"
+#include <toml.hpp>
+#include "wallpaper_list_item.h"
+
+using namespace Qt::StringLiterals;
+
+static void readWallpaperListItem(WallpaperListItem* item, const std::filesystem::path& path) {
+    item->setName(QString::fromStdString(path.filename().string()));
+    item->setPath(QString::fromStdString(path.string()));
+
+    KZip zip(QString::fromStdString(path.string()));
+    if(!zip.open(QIODevice::ReadOnly)) {
+        qWarning() << "failed to open zip file" << path;
+        return;
+    }
+
+    const KArchiveEntry* metaEntry = zip.directory()->entry(u"metadata.toml"_s);
+    if(metaEntry == nullptr) {
+        return;
+    }
+
+    const KArchiveFile* metaFile = static_cast<const KArchiveFile*>(metaEntry);
+    QByteArray metaBytes = metaFile->data();
+
+    toml::value meta;
+    try {
+        meta = toml::parse_str(metaBytes.data());
+    } catch(std::exception& e) {
+        qWarning() << "failed to parse metadata.toml" << path << e.what();
+        return;
+    }
+
+    if(meta.contains("info")) {
+        const toml::value& info = meta.at("info");
+        if(info.contains("name") && info.at("name").is_string()) {
+            item->setName(QString::fromStdString(info.at("name").as_string()));
+        }
+    }
+}
 
 WallpaperList::WallpaperList(QObject* parent) : QObject(parent) {
     QString dataPath = QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation);
     QDir().mkpath(dataPath);
 
     for(const auto& entry : std::filesystem::directory_iterator(dataPath.toStdString())) {
-        if(entry.is_regular_file()) {
+        if(entry.is_regular_file() && entry.path().filename().string().ends_with(".owf")) {
             WallpaperListItem* item = new WallpaperListItem(this);
-            item->setName(QString::fromStdString(entry.path().filename().string()));
-            item->setPath(QString::fromStdString(entry.path().string()));
+            readWallpaperListItem(item, entry.path());
             mWallpapers.push_back(item);
         }
     }
