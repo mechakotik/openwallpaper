@@ -11,3 +11,8 @@ void WallpaperListItem::setPath(const QString& path) {
     mPath = path;
     pathChanged();
 }
+
+void WallpaperListItem::setPreviewID(const QString& id) {
+    mPreviewID = id;
+    previewIDChanged();
+}

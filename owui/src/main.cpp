@@ -8,8 +8,11 @@
 #include <QUrl>
 #include <QtQml>
 #include "src/display_list.h"
+#include "src/preview_provider.h"
 #include "src/runner.h"
 #include "src/wallpaper_list.h"
+
+using namespace Qt::StringLiterals;
 
 int main(int argc, char* argv[]) {
     KIconTheme::initTheme();
@@ -30,6 +33,7 @@ int main(int argc, char* argv[]) {
     engine.rootContext()->setContextProperty(QStringLiteral("displayList"), &displayList);
     engine.rootContext()->setContextProperty(QStringLiteral("wallpaperList"), &wallpaperList);
     engine.rootContext()->setContextProperty(QStringLiteral("runner"), &runner);
+    engine.addImageProvider(u"preview"_s, new PreviewProvider(&wallpaperList));
 
     engine.loadFromModule("org.openwallpaper.ui", "Main");
     if(engine.rootObjects().isEmpty()) {

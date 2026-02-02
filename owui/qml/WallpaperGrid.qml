@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls as Controls
 import org.kde.kirigami as Kirigami
+import Qt5Compat.GraphicalEffects as Effects
 
 FocusScope {
     id: root
@@ -234,15 +235,38 @@ FocusScope {
                             spacing: Kirigami.Units.smallSpacing
 
                             Rectangle {
+                                id: previewBox
                                 Layout.fillWidth: true
                                 Layout.preferredHeight: root.previewH
                                 radius: Kirigami.Units.smallSpacing
                                 color: Kirigami.Theme.alternateBackgroundColor
                                 clip: true
 
+                                Rectangle {
+                                    id: previewMask
+                                    anchors.fill: parent
+                                    radius: previewBox.radius
+                                    visible: false
+                                }
+
+                                Image {
+                                    id: previewImg
+                                    anchors.fill: parent
+                                    fillMode: Image.PreserveAspectCrop
+                                    cache: true
+                                    sourceSize.width: width
+                                    sourceSize.height: height
+                                    source: (modelData && modelData.previewID && modelData.previewID.length > 0)
+                                        ? ("image://preview/" + modelData.previewID)
+                                        : ""
+                                    layer.enabled: true
+                                    layer.effect: Effects.OpacityMask { maskSource: previewMask }
+                                }
+
                                 Controls.Label {
                                     anchors.centerIn: parent
-                                    text: "Preview"
+                                    visible: previewImg.source === "" || previewImg.status !== Image.Ready
+                                    text: "No preview"
                                     color: tileItem.pressed ? Kirigami.Theme.highlightedTextColor : Kirigami.Theme.textColor
                                 }
                             }

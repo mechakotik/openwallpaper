@@ -51,6 +51,7 @@ target_sources(owui
     src/wallpaper_list_item.cpp
     src/runner.cpp
     src/runner_worker.cpp
+    src/preview_provider.cpp
 )
 
 ecm_target_qml_sources(owui

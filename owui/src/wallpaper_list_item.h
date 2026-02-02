@@ -7,19 +7,23 @@ class WallpaperListItem : public QObject {
     Q_OBJECT
     Q_PROPERTY(QString name MEMBER mName NOTIFY nameChanged)
     Q_PROPERTY(QString path MEMBER mPath NOTIFY pathChanged)
+    Q_PROPERTY(QString previewID MEMBER mPreviewID NOTIFY previewIDChanged)
 
 public:
     WallpaperListItem(QObject* parent = nullptr);
     void setName(const QString& name);
     void setPath(const QString& path);
+    void setPreviewID(const QString& id);
 
 Q_SIGNALS:
     void nameChanged();
     void pathChanged();
+    void previewIDChanged();
 
 private:
     QString mName;
     QString mPath;
+    QString mPreviewID;
 };
 
 #endif
