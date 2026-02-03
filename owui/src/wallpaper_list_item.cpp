@@ -16,3 +16,8 @@ void WallpaperListItem::setPreviewID(const QString& id) {
     mPreviewID = id;
     previewIDChanged();
 }
+
+void WallpaperListItem::setDescription(const QString& description) {
+    mDescription = description;
+    descriptionChanged();
+}

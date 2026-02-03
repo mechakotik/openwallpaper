@@ -1,7 +1,6 @@
 import QtQuick
-import QtQuick.Layouts
-import QtQuick.Controls as Controls
 import org.kde.kirigami as Kirigami
+import org.kde.kirigami.layouts as KirigamiLayouts
 
 Kirigami.ApplicationWindow {
     id: root
@@ -10,103 +9,70 @@ Kirigami.ApplicationWindow {
 
     minimumWidth: Kirigami.Units.gridUnit * 20
     minimumHeight: Kirigami.Units.gridUnit * 20
-    width: minimumWidth
+    width: Kirigami.Units.gridUnit * 60
     height: minimumHeight
 
-    pageStack.initialPage: initPage
+    pageStack.globalToolBar.style: Kirigami.ApplicationHeaderStyle.ToolBar
+    pageStack.columnView.columnResizeMode: KirigamiLayouts.ColumnView.DynamicColumns
+
+    readonly property int previewColumnWidth: Kirigami.Units.gridUnit * 24
+
+    property var wallpaperGridObj: null
+
+    property int selectedIndex: wallpaperGridObj ? wallpaperGridObj.selectedIndex : 0
+    property var selectedWallpaper: (wallpaperList.wallpapers && wallpaperList.wallpapers.length > 0)
+        ? wallpaperList.wallpapers[Math.min(selectedIndex, wallpaperList.wallpapers.length - 1)]
+        : ({})
+    property string selectedWallpaperPath: selectedWallpaper.path ? selectedWallpaper.path : ""
+    property string selectedWallpaperName: selectedWallpaper.name ? selectedWallpaper.name : ""
+    property string selectedPreviewID: selectedWallpaper.previewID ? selectedWallpaper.previewID : ""
+    property string selectedWallpaperDescription: selectedWallpaper.description ? selectedWallpaper.description : ""
 
     Component {
         id: optionsPage
         OptionsPage {}
     }
 
-    Component {
-        id: initPage
-
-        Kirigami.Page {
-            id: page
-
-            title: ""
-
-            padding: 0
-            topPadding: 0
-            bottomPadding: 0
-            leftPadding: 0
-            rightPadding: 0
-
-            property alias selectedIndex: wallpaperGrid.selectedIndex
-            property string selectedWallpaperPath: selectedIndex >= 0 ? wallpaperList.wallpapers[selectedIndex].path : ""
-            property string selectedDisplay: ""
-
-            Keys.priority: Keys.AfterItem
-            Keys.onPressed: (event) => {
-                if (wallpaperGrid.handleNavKey(event.key)) {
-                    event.accepted = true
-                }
-            }
-
-            Kirigami.Action {
-                id: runAction
-                icon.name: "media-playback-start"
-                text: "Run wallpaper"
-                enabled: !runner.working && page.selectedIndex >= 0
-                onTriggered: {
-                    runner.run(page.selectedWallpaperPath, page.selectedDisplay)
-                    wallpaperGrid.forceActiveFocus()
-                }
-            }
-
-            titleDelegate: RowLayout {
-                spacing: Kirigami.Units.largeSpacing
-
-                Kirigami.Icon {
-                    source: "monitor-symbolic"
-                    Layout.alignment: Qt.AlignVCenter
-                    Layout.preferredWidth: Kirigami.Units.iconSizes.smallMedium
-                    Layout.preferredHeight: Kirigami.Units.iconSizes.smallMedium
-                }
-
-                Controls.ComboBox {
-                    id: displaySelector
-                    model: displayList.displays
-                    Layout.alignment: Qt.AlignVCenter
-                    onCurrentTextChanged: page.selectedDisplay = currentText
-                    Component.onCompleted: page.selectedDisplay = currentText
-                }
-
-                Controls.ToolButton {
-                    action: runAction
-                    display: Controls.AbstractButton.TextBesideIcon
-                    Layout.alignment: Qt.AlignVCenter
-                }
-            }
-
-            actions: [
-                Kirigami.Action {
-                    icon.name: "list-add"
-                    text: "Add wallpaper"
-                    displayHint: Kirigami.DisplayHint.KeepVisible
-                    onTriggered: showPassiveNotification("Add wallpaper")
-                },
-                Kirigami.Action {
-                    icon.name: "settings"
-                    text: "Options"
-                    displayHint: Kirigami.DisplayHint.KeepVisible
-                    onTriggered: root.pageStack.layers.push(optionsPage)
-                }
-            ]
-
-            ColumnLayout {
-                anchors.fill: parent
-                spacing: 0
-
-                WallpaperGrid {
-                    id: wallpaperGrid
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
-                    model: wallpaperList.wallpapers
-                }
-            }
+    Keys.priority: Keys.AfterItem
+    Keys.onPressed: (event) => {
+        if (root.wallpaperGridObj && root.wallpaperGridObj.handleNavKey(event.key)) {
+            event.accepted = true
         }
+    }
+
+    Component {
+        id: selectedWallpaperPageComponent
+
+        SelectedWallpaperPage {
+            id: selectedWallpaperPage
+            mainWindow: root
+            previewColumnWidth: root.previewColumnWidth
+            selectedWallpaperPath: root.selectedWallpaperPath
+            selectedWallpaperName: root.selectedWallpaperName
+            selectedPreviewID: root.selectedPreviewID
+            selectedWallpaperDescription: root.selectedWallpaperDescription
+            wallpaperGridObj: root.wallpaperGridObj
+        }
+    }
+
+    Component {
+        id: libraryPageComponent
+
+        LibraryPage {
+            id: libraryPage
+            mainWindow: root
+            optionsPageComponent: optionsPage
+            onGridReady: root.wallpaperGridObj = grid
+        }
+    }
+
+    pageStack.initialPage: libraryPageComponent
+
+    Component.onCompleted: {
+        pageStack.push(selectedWallpaperPageComponent)
+        pageStack.currentIndex = 0
+        Qt.callLater(() => {
+            if (root.wallpaperGridObj) root.wallpaperGridObj.forceActiveFocus()
+        })
     }
 }

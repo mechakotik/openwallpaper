@@ -8,7 +8,7 @@ FocusScope {
     id: root
 
     property var model: null
-    property int selectedIndex: -1
+    property int selectedIndex: 0
 
     property int tileW: Kirigami.Units.gridUnit * 10
     property real previewAspect: 16 / 9
@@ -23,6 +23,13 @@ FocusScope {
     focus: true
 
     function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)) }
+
+    function normalizeSelection() {
+        const n = gridRepeater.count
+        if (n <= 0) return
+        if (selectedIndex < 0 || selectedIndex >= n) selectedIndex = 0
+        ensureIndexVisible(selectedIndex)
+    }
 
     function ensureIndexVisible(i) {
         const n = gridRepeater.count
@@ -88,10 +95,7 @@ FocusScope {
     function moveSelection(delta) {
         const n = gridRepeater.count
         if (n <= 0) return
-
-        let idx = selectedIndex
-        if (idx < 0) idx = 0
-        setSelectionAndReveal(idx + delta)
+        setSelectionAndReveal(selectedIndex + delta)
     }
 
     function handleNavKey(key) {
@@ -99,16 +103,7 @@ FocusScope {
         if (n <= 0) return false
 
         const cols = Math.max(1, contentWrap.columns)
-        let idx = selectedIndex
-
-        if (idx < 0) {
-            if (key === Qt.Key_Left || key === Qt.Key_Right || key === Qt.Key_Up || key === Qt.Key_Down) {
-                setSelectionAndReveal(0)
-                return true
-            }
-            return false
-        }
-
+        const idx = selectedIndex
         const row = Math.floor(idx / cols)
         const rows = Math.ceil(n / cols)
 
@@ -167,7 +162,7 @@ FocusScope {
             height: contentH
 
             onColumnsChanged: {
-                if (root.selectedIndex >= 0 && gridRepeater.count > 0) root.ensureIndexVisible(root.selectedIndex)
+                if (gridRepeater.count > 0) root.ensureIndexVisible(root.selectedIndex)
             }
 
             GridLayout {
@@ -191,6 +186,7 @@ FocusScope {
                 Repeater {
                     id: gridRepeater
                     model: root.model
+                    onCountChanged: root.normalizeSelection()
 
                     Item {
                         id: tileItem
@@ -292,4 +288,6 @@ FocusScope {
             }
         }
     }
+
+    Component.onCompleted: normalizeSelection()
 }

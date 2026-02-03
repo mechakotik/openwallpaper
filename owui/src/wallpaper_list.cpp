@@ -57,6 +57,9 @@ void WallpaperList::readWallpaperListItem(WallpaperListItem* item, const std::fi
         if(info.contains("name") && info.at("name").is_string()) {
             item->setName(QString::fromStdString(info.at("name").as_string()));
         }
+        if(info.contains("description") && info.at("description").is_string()) {
+            item->setDescription(QString::fromStdString(info.at("description").as_string()));
+        }
 
         if(info.contains("preview") && info.at("preview").is_string()) {
             QString previewPath = QString::fromStdString(info.at("preview").as_string());

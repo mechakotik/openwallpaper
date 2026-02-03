@@ -57,6 +57,8 @@ target_sources(owui
 ecm_target_qml_sources(owui
     SOURCES
     qml/Main.qml
+    qml/LibraryPage.qml
+    qml/SelectedWallpaperPage.qml
     qml/WallpaperGrid.qml
     qml/OptionsPage.qml
 )
