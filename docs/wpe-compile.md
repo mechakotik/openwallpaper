@@ -1,6 +1,6 @@
 \page wpe-compile wpe-compile
 
-A tool to make OpenWallpaper scenes from Wallpaper Engine PKG scenes using code generation. It supports basic Wallpaper Engine subset used by most scenes (no SceneScript and 3D).
+A tool to make OpenWallpaper scenes from Wallpaper Engine pkg scenes using code generation. It supports basic Wallpaper Engine subset used by most scenes (no SceneScript and 3D).
 
 ## Build
 
@@ -21,7 +21,7 @@ go build .
 
 ## Usage
 
-Assuming you have Steam Wallpaper Engine installed. Get PKG scenes from `SteamLibrary/steamapps/workshop/content/431960`. You will also need Wallpaper Engine assets directory, it is located in `SteamLibrary/steamapps/common/wallpaper_engine/assets`.
+Assuming you have Steam Wallpaper Engine installed. Get pkg scenes from `SteamLibrary/steamapps/workshop/content/431960`. You will also need Wallpaper Engine assets directory, it is located in `SteamLibrary/steamapps/common/wallpaper_engine/assets`.
 
 Usage example:
 

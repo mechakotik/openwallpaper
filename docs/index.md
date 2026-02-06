@@ -10,14 +10,14 @@
 </div>
 \endhtmlonly
 
-OpenWallpaper is a powerful open source platform for interactive live wallpapers. In OpenWallpaper, a scene is a WebAssembly module that does rendering to screen and other platform-dependent stuff using standardized host-implemented API. This gives a next level of freedom to scene creators, while being simple and easily portable to many platforms.
+OpenWallpaper is a powerful open source platform for interactive live wallpapers. It combines the performance of Wallpaper Engine scenes with the flexibility of web wallpapers. In OpenWallpaper, a scene is a WASM module -- meaning if you can code it, you can make it a wallpaper, platform-independent, with lightweight runtime and near-native performance.
 
-The API is close to being stabilized, but breaking changes are still possible. Basic ecosystem is in active development phase. [wallpaperd](\ref wallpaperd) (renderer) works on KDE Plasma Wayland, Hyprland and wlroots based compositors. Many Wallpaper Engine pkg scenes may be converted into OpenWallpaper owf scenes with [wpe-compile](\ref wpe-compile), but conversion is not 100% accurate.
+The API is close to being stabilized, but breaking changes are still possible. [wallpaperd](\ref wallpaperd) (renderer) works on most Linux Wayland desktops, including KDE Plasma, Hyprland and wlroots based compositors. Many Wallpaper Engine pkg scenes may be converted into OpenWallpaper owf scenes with [wpe-compile](\ref wpe-compile), but conversion is not 100% accurate. There is a user-friendly GUI in early development.
 
 Ecosystem:
 
 - [wallpaperd](\ref wallpaperd) -- OpenWallpaper scene renderer made with C and SDL3 GPU
-- [wpe-compile](\ref wpe-compile) -- A tool to make OpenWallpaper scenes from Wallpaper Engine PKG scenes using code generation
+- [wpe-compile](\ref wpe-compile) -- A tool to make OpenWallpaper scenes from Wallpaper Engine pkg scenes using code generation
 
 Format documentation:
 
