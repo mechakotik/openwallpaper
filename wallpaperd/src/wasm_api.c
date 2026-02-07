@@ -226,7 +226,7 @@ uint32_t ow_create_index_buffer(wasm_exec_env_t exec_env, uint32_t size, uint32_
     wd_state* state = wasm_runtime_get_custom_data(instance);
 
     SDL_GPUBufferCreateInfo info = {0};
-    info.usage = SDL_GPU_BUFFERUSAGE_VERTEX;
+    info.usage = SDL_GPU_BUFFERUSAGE_INDEX;
     info.size = size;
 
     SDL_GPUBuffer* buffer = SDL_CreateGPUBuffer(state->output.gpu, &info);
