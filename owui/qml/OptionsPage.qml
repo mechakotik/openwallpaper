@@ -1,6 +1,8 @@
 import QtQuick
+import QtQuick.Layouts
 import org.kde.kirigami as Kirigami
 import org.kde.kirigamiaddons.formcard as FormCard
+import QtQuick.Controls as Controls
 
 FormCard.FormCardPage {
     title: "Options"
@@ -17,14 +19,35 @@ FormCard.FormCardPage {
         FormCard.FormTextFieldDelegate {
             label: "wallpaperd path"
             placeholderText: "wallpaperd"
+            trailing: RowLayout {
+                Item {
+                    Layout.preferredWidth: Kirigami.Units.smallSpacing
+                    Layout.preferredHeight: 1
+                }
+                Kirigami.Icon {
+                    source: "qrc:/icons/check.svg"
+                    implicitWidth: Kirigami.Units.iconSizes.smallMedium
+                    implicitHeight: Kirigami.Units.iconSizes.smallMedium
+                }
+                Controls.Label {
+                    text: "0.1.0"
+                    color: Kirigami.Theme.textColor
+                }
+            }
         }
 
         FormCard.FormSwitchDelegate {
-            text: "VSync"
+            text: "V-Sync"
+            leading: Kirigami.Icon {
+                source: "qrc:/icons/vsync.svg"
+                color: Kirigami.Theme.textColor
+                implicitWidth: Kirigami.Units.iconSizes.smallMedium
+                implicitHeight: Kirigami.Units.iconSizes.smallMedium
+            }
         }
 
         FormCard.FormSpinBoxDelegate {
-            label: "FPS cap"
+            label: "FPS limit"
             from: 0
             to: 720
             value: 30
@@ -32,14 +55,32 @@ FormCard.FormCardPage {
 
         FormCard.FormSwitchDelegate {
             text: "Prefer discrete GPU"
+            leading: Kirigami.Icon {
+                source: "qrc:/icons/chip.svg"
+                color: Kirigami.Theme.textColor
+                implicitWidth: Kirigami.Units.iconSizes.smallMedium
+                implicitHeight: Kirigami.Units.iconSizes.smallMedium
+            }
         }
 
         FormCard.FormSwitchDelegate {
             text: "Pause when wallpaper is hidden"
+            leading: Kirigami.Icon {
+                source: "qrc:/icons/hidden.svg"
+                color: Kirigami.Theme.textColor
+                implicitWidth: Kirigami.Units.iconSizes.smallMedium
+                implicitHeight: Kirigami.Units.iconSizes.smallMedium
+            }
         }
 
         FormCard.FormSwitchDelegate {
             text: "Pause when laptop is on battery power"
+            leading: Kirigami.Icon {
+                source: "qrc:/icons/battery.svg"
+                color: Kirigami.Theme.textColor
+                implicitWidth: Kirigami.Units.iconSizes.smallMedium
+                implicitHeight: Kirigami.Units.iconSizes.smallMedium
+            }
         }
     }
 
@@ -53,6 +94,12 @@ FormCard.FormCardPage {
 
         FormCard.FormSwitchDelegate {
             text: "Enable audio visualization"
+            leading: Kirigami.Icon {
+                source: "qrc:/icons/audio.svg"
+                color: Kirigami.Theme.textColor
+                implicitWidth: Kirigami.Units.iconSizes.smallMedium
+                implicitHeight: Kirigami.Units.iconSizes.smallMedium
+            }
         }
 
         FormCard.FormComboBoxDelegate {
@@ -97,6 +144,12 @@ FormCard.FormCardPage {
 
         FormCard.FormSwitchDelegate {
             text: "Automatically import wallpapers from library"
+            leading: Kirigami.Icon {
+                source: "qrc:/icons/wallpaper.svg"
+                color: Kirigami.Theme.textColor
+                implicitWidth: Kirigami.Units.iconSizes.smallMedium
+                implicitHeight: Kirigami.Units.iconSizes.smallMedium
+            }
         }
 
         FormCard.FormTextFieldDelegate {

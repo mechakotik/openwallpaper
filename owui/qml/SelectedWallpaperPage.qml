@@ -36,7 +36,9 @@ Kirigami.Page {
                     spacing: Kirigami.Units.smallSpacing
 
                     Kirigami.Icon {
-                        source: "monitor-symbolic"
+                        source: "qrc:/icons/display.svg"
+                        isMask: true
+                        color: Kirigami.Theme.textColor
                         Layout.alignment: Qt.AlignVCenter
                         Layout.preferredWidth: Kirigami.Units.iconSizes.smallMedium
                         Layout.preferredHeight: Kirigami.Units.iconSizes.smallMedium
@@ -53,7 +55,8 @@ Kirigami.Page {
             }
         },
         Kirigami.Action {
-            icon.name: "media-playback-start"
+            icon.source: "qrc:/icons/play.svg"
+            icon.color: !runner.working ? Kirigami.Theme.textColor : Kirigami.Theme.disabledTextColor
             text: "Run wallpaper"
             enabled: !runner.working
             onTriggered: {
@@ -160,8 +163,13 @@ Kirigami.Page {
             }
 
             FormCard.FormButtonDelegate {
-                icon.name: "utilities-terminal-symbolic"
                 text: "Custom commands"
+                leading: Kirigami.Icon {
+                    source: "qrc:/icons/terminal.svg"
+                    color: Kirigami.Theme.textColor
+                    implicitWidth: Kirigami.Units.iconSizes.smallMedium
+                    implicitHeight: Kirigami.Units.iconSizes.smallMedium
+                }
                 onClicked: {
                     if (mainWindow) mainWindow.showPassiveNotification("Custom commands")
                 }

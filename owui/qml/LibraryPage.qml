@@ -23,7 +23,8 @@ Kirigami.Page {
 
     actions: [
         Kirigami.Action {
-            icon.name: "list-add"
+            icon.source: "qrc:/icons/add.svg"
+            icon.color: Kirigami.Theme.textColor
             text: "Add wallpaper"
             displayHint: Kirigami.DisplayHint.KeepVisible
             onTriggered: {
@@ -31,7 +32,8 @@ Kirigami.Page {
             }
         },
         Kirigami.Action {
-            icon.name: "settings"
+            icon.source: "qrc:/icons/settings.svg"
+            icon.color: Kirigami.Theme.textColor
             text: "Options"
             displayHint: Kirigami.DisplayHint.KeepVisible
             onTriggered: {

@@ -63,6 +63,26 @@ ecm_target_qml_sources(owui
     qml/OptionsPage.qml
 )
 
+qt_add_resources(owui "icons"
+    PREFIX "/icons"
+    BASE "res/icons"
+    FILES
+    res/icons/add.svg
+    res/icons/display.svg
+    res/icons/play.svg
+    res/icons/settings.svg
+    res/icons/file-path.svg
+    res/icons/vsync.svg
+    res/icons/chip.svg
+    res/icons/hidden.svg
+    res/icons/battery.svg
+    res/icons/audio.svg
+    res/icons/wallpaper.svg
+    res/icons/check.svg
+    res/icons/error.svg
+    res/icons/terminal.svg
+)
+
 target_link_libraries(owui
     PRIVATE
     Qt6::Quick
