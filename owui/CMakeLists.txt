@@ -52,6 +52,7 @@ target_sources(owui
     src/runner.cpp
     src/runner_worker.cpp
     src/preview_provider.cpp
+    src/options_manager.cpp
 )
 
 ecm_target_qml_sources(owui
@@ -82,6 +83,8 @@ qt_add_resources(owui "icons"
     res/icons/error.svg
     res/icons/terminal.svg
 )
+
+target_compile_options(owui PRIVATE -UQT_NO_CAST_FROM_ASCII)
 
 target_link_libraries(owui
     PRIVATE

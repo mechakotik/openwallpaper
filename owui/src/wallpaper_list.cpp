@@ -8,8 +8,6 @@
 #include <toml.hpp>
 #include "wallpaper_list_item.h"
 
-using namespace Qt::StringLiterals;
-
 WallpaperList::WallpaperList(QObject* parent) : QObject(parent) {
     QString dataPath = QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation);
     QDir().mkpath(dataPath);
@@ -35,7 +33,7 @@ void WallpaperList::readWallpaperListItem(WallpaperListItem* item, const std::fi
         return;
     }
 
-    const KArchiveEntry* metaEntry = zip.directory()->entry(u"metadata.toml"_s);
+    const KArchiveEntry* metaEntry = zip.directory()->entry("metadata.toml");
     if(metaEntry == nullptr) {
         return;
     }

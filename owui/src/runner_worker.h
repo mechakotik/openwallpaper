@@ -2,6 +2,7 @@
 #define RUNNER_WORKER_H
 
 #include <QObject>
+#include <QSettings>
 
 class RunnerWorker : public QObject {
     Q_OBJECT
@@ -14,6 +15,9 @@ public Q_SLOTS:
 
 Q_SIGNALS:
     void finished();
+
+private:
+    QSettings mSettings;
 };
 
 #endif

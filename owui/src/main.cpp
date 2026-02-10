@@ -8,20 +8,19 @@
 #include <QUrl>
 #include <QtQml>
 #include "src/display_list.h"
+#include "src/options_manager.h"
 #include "src/preview_provider.h"
 #include "src/runner.h"
 #include "src/wallpaper_list.h"
-
-using namespace Qt::StringLiterals;
 
 int main(int argc, char* argv[]) {
     KIconTheme::initTheme();
     QApplication app(argc, argv);
 
-    QApplication::setStyle(QStringLiteral("breeze"));
-    QIcon::setThemeName(QStringLiteral("breeze"));
+    QApplication::setStyle("breeze");
+    QIcon::setThemeName("breeze");
     if(qEnvironmentVariableIsEmpty("QT_QUICK_CONTROLS_STYLE")) {
-        QQuickStyle::setStyle(QStringLiteral("org.kde.desktop"));
+        QQuickStyle::setStyle("org.kde.desktop");
     }
 
     QQmlApplicationEngine engine;
@@ -30,10 +29,13 @@ int main(int argc, char* argv[]) {
     DisplayList displayList;
     WallpaperList wallpaperList;
     Runner runner;
-    engine.rootContext()->setContextProperty(QStringLiteral("displayList"), &displayList);
-    engine.rootContext()->setContextProperty(QStringLiteral("wallpaperList"), &wallpaperList);
-    engine.rootContext()->setContextProperty(QStringLiteral("runner"), &runner);
-    engine.addImageProvider(u"preview"_s, new PreviewProvider(&wallpaperList));
+    OptionsManager optionsManager;
+
+    engine.rootContext()->setContextProperty("displayList", &displayList);
+    engine.rootContext()->setContextProperty("wallpaperList", &wallpaperList);
+    engine.rootContext()->setContextProperty("runner", &runner);
+    engine.rootContext()->setContextProperty("optionsManager", &optionsManager);
+    engine.addImageProvider("preview", new PreviewProvider(&wallpaperList));
 
     engine.loadFromModule("org.openwallpaper.ui", "Main");
     if(engine.rootObjects().isEmpty()) {
