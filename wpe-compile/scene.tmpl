@@ -134,7 +134,7 @@ __attribute__((export_name("init"))) void init() {
         ow_texture_info temp_buffer_info = {
             .width = {{$buffer.Width}},
             .height = {{$buffer.Height}},
-            .format = OW_TEXTURE_RGBA8_UNORM,
+            .format = OW_TEXTURE_SWAPCHAIN,
             .render_target = true,
             .mip_levels = 1,
         };
@@ -219,7 +219,7 @@ __attribute__((export_name("update"))) void update(float delta) {
         ow_texture_info screen_buffer_info = {
             .width = screen_width,
             .height = screen_height,
-            .format = OW_TEXTURE_RGBA8_UNORM,
+            .format = OW_TEXTURE_SWAPCHAIN,
             .render_target = true,
             .mip_levels = 1,
         };
@@ -477,7 +477,6 @@ __attribute__((export_name("update"))) void update(float delta) {
         .vertex_bindings_count = 2,
         .vertex_attributes = particle_vertex_attributes,
         .vertex_attributes_count = 6,
-        .color_target_format = {{.ColorTargetFormat}},
         .vertex_shader = particle_vertex,
         .fragment_shader = particle_fragment,
         .blend_mode = {{.BlendMode}},
@@ -494,7 +493,6 @@ __attribute__((export_name("update"))) void update(float delta) {
         .vertex_bindings_count = 1,
         .vertex_attributes = vertex_attributes,
         .vertex_attributes_count = 2,
-        .color_target_format = {{.ColorTargetFormat}},
         .vertex_shader = shader{{.ShaderID}}_vertex,
         .fragment_shader = shader{{.ShaderID}}_fragment,
         .blend_mode = {{.BlendMode}},

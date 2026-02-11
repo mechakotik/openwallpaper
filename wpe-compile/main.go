@@ -48,7 +48,7 @@ type UniformCodegenContext struct {
 	StructName  string
 	Uniforms    []UniformInfo
 	Constants   map[string][]float32
-	Resolutions [][4]float32
+	Resolutions [][4]string
 	Color       [3]float32
 	Alpha       float32
 	Brightness  float32
@@ -94,20 +94,19 @@ type CodegenTransformData struct {
 }
 
 type CodegenPassData struct {
-	ObjectID          int
-	PassID            int
-	ShaderID          int
-	ColorTarget       string
-	ColorTargetFormat string
-	ClearColor        bool
-	BlendMode         string
-	TextureBindings   []CodegenTextureBindingData
-	UniformSetupCode  string
-	Transform         CodegenTransformData
-	IsParticle        bool
-	InstanceCount     int
-	SpritesheetCols   float32
-	SpritesheetRows   float32
+	ObjectID         int
+	PassID           int
+	ShaderID         int
+	ColorTarget      string
+	ClearColor       bool
+	BlendMode        string
+	TextureBindings  []CodegenTextureBindingData
+	UniformSetupCode string
+	Transform        CodegenTransformData
+	IsParticle       bool
+	InstanceCount    int
+	SpritesheetCols  float32
+	SpritesheetRows  float32
 }
 
 type TempBufferParameters struct {
@@ -352,6 +351,13 @@ func processImageObject(object ImageObject) {
 	}
 
 	lastIdx := len(codegenData.Passes) - 1
+	if codegenData.Passes[lastIdx].TextureBindings[0].Texture == "screen_buffer" {
+		processImageObjectFinalPassthrough(object)
+		lastIdx = len(codegenData.Passes) - 1
+	} else {
+		codegenData.Passes[lastIdx].ColorTarget = "screen_buffer"
+	}
+
 	if !screenCleared {
 		codegenData.Passes[lastIdx].ClearColor = true
 		screenCleared = true
@@ -373,8 +379,6 @@ func processImageObject(object ImageObject) {
 		codegenData.Passes[lastIdx].BlendMode = "blend_normal"
 	}
 
-	codegenData.Passes[lastIdx].ColorTarget = "screen_buffer"
-	codegenData.Passes[lastIdx].ColorTargetFormat = "OW_TEXTURE_RGBA8_UNORM"
 	if !object.Fullscreen {
 		codegenData.Passes[lastIdx].Transform.Enabled = true
 	}
@@ -407,24 +411,23 @@ func processImageObjectInit(object ImageObject, tempBuffers *[2]int) (CodegenPas
 	}
 
 	passData := CodegenPassData{
-		ObjectID:          lastObjectID,
-		PassID:            0,
-		ShaderID:          shader.ID,
-		ColorTarget:       fmt.Sprintf("%s[%d]", tempBuffersArray, tempBuffers[0]),
-		ColorTargetFormat: "OW_TEXTURE_RGBA8_UNORM",
-		ClearColor:        true,
-		BlendMode:         "blend_disabled",
-		InstanceCount:     1,
+		ObjectID:      lastObjectID,
+		PassID:        0,
+		ShaderID:      shader.ID,
+		ColorTarget:   fmt.Sprintf("%s[%d]", tempBuffersArray, tempBuffers[0]),
+		ClearColor:    true,
+		BlendMode:     "blend_disabled",
+		InstanceCount: 1,
 	}
 
-	resolutions := [][4]float32{}
+	resolutions := [][4]string{}
 	if object.Config.Passthrough || len(textures) == 0 {
 		passData.TextureBindings = append(passData.TextureBindings, CodegenTextureBindingData{
 			Slot:    0,
 			Texture: "screen_buffer",
 			Sampler: "linear_clamp_sampler",
 		})
-		resolutions = append(resolutions, [4]float32{1920, 1080, 1920, 1080})
+		resolutions = append(resolutions, [4]string{"screen_width", "screen_height", "screen_width", "screen_height"})
 	}
 	for slot, texture := range textures {
 		passData.TextureBindings = append(passData.TextureBindings, CodegenTextureBindingData{
@@ -432,7 +435,12 @@ func processImageObjectInit(object ImageObject, tempBuffers *[2]int) (CodegenPas
 			Texture: fmt.Sprintf("texture%d", texture.ID),
 			Sampler: getTextureSampler(texture),
 		})
-		resolutions = append(resolutions, [4]float32{float32(texture.Width), float32(texture.Height), float32(texture.Width), float32(texture.Height)})
+		resolutions = append(resolutions, [4]string{
+			fmt.Sprintf("%d", texture.Width),
+			fmt.Sprintf("%d", texture.Height),
+			fmt.Sprintf("%d", texture.Width),
+			fmt.Sprintf("%d", texture.Height),
+		})
 	}
 
 	passData.Transform = CodegenTransformData{
@@ -483,12 +491,13 @@ func processImageObjectInit(object ImageObject, tempBuffers *[2]int) (CodegenPas
 }
 
 func processImageEffect(object ImageObject, effect ImageEffect, tempBuffers *[2]int) ([]CodegenPassData, error) {
+	if len(effect.Materials) < len(effect.Passes) {
+		return []CodegenPassData{}, fmt.Errorf("effect %s has %d passes but only %d materials", effect.Name, len(effect.Passes), len(effect.Materials))
+	}
+
 	allBoundTextures := [][]bool{}
-	for _, pass := range effect.Passes {
-		boundTextures := []bool{}
-		for _, textureName := range pass.Textures {
-			boundTextures = append(boundTextures, textureName != "")
-		}
+	for idx, pass := range effect.Passes {
+		boundTextures := getEffectBoundTextures(effect.Materials[idx], pass)
 		allBoundTextures = append(allBoundTextures, boundTextures)
 	}
 
@@ -498,13 +507,13 @@ func processImageEffect(object ImageObject, effect ImageEffect, tempBuffers *[2]
 			fbos[fbo.Name] = getTempScreenBuffer(TempScreenBufferParameters{
 				ScaleX: 1 / float32(fbo.Scale),
 				ScaleY: 1 / float32(fbo.Scale),
-				Number: idx,
+				Number: idx + 2,
 			})
 		} else {
 			fbos[fbo.Name] = getTempBuffer(TempBufferParameters{
 				Width:  int(object.Size[0]/float32(fbo.Scale) + 0.5),
 				Height: int(object.Size[1]/float32(fbo.Scale) + 0.5),
-				Number: idx,
+				Number: idx + 2,
 			})
 		}
 	}
@@ -520,12 +529,11 @@ func processImageEffect(object ImageObject, effect ImageEffect, tempBuffers *[2]
 		lastPassID++
 
 		passData := CodegenPassData{
-			ObjectID:          lastObjectID,
-			PassID:            lastPassID,
-			ColorTargetFormat: "OW_TEXTURE_RGBA8_UNORM",
-			ClearColor:        true,
-			BlendMode:         "blend_disabled",
-			InstanceCount:     1,
+			ObjectID:      lastObjectID,
+			PassID:        lastPassID,
+			ClearColor:    true,
+			BlendMode:     "blend_disabled",
+			InstanceCount: 1,
 		}
 
 		compiledShader, err := compileShader(effect.Materials[idx].Shader, allBoundTextures[idx], pass.Combos)
@@ -534,64 +542,112 @@ func processImageEffect(object ImageObject, effect ImageEffect, tempBuffers *[2]
 		}
 		passData.ShaderID = compiledShader.ID
 
-		resolutions := [][4]float32{}
-		textureNames := make([]string, len(compiledShader.Samplers))
-		for idx, sampler := range compiledShader.Samplers {
-			textureNames[idx] = sampler.Default
-		}
-		for _, binding := range pass.Bind {
-			if binding.Name != "previous" {
-				textureNames[binding.Index] = binding.Name
+		resolutions := [][4]string{}
+		samplerSlots := make([]int, len(compiledShader.Samplers))
+		maxSlot := -1
+		for samplerIndex, sampler := range compiledShader.Samplers {
+			slot := samplerIndex
+			if parsedSlot, ok := parseTextureSlotFromSamplerName(sampler.Name); ok {
+				slot = parsedSlot
+			}
+			samplerSlots[samplerIndex] = slot
+			if slot > maxSlot {
+				maxSlot = slot
 			}
 		}
-		for slot, texture := range pass.Textures {
-			if texture != "" {
-				textureNames[slot] = texture
+		if len(effect.Materials[idx].Textures)-1 > maxSlot {
+			maxSlot = len(effect.Materials[idx].Textures) - 1
+		}
+		if len(pass.Textures)-1 > maxSlot {
+			maxSlot = len(pass.Textures) - 1
+		}
+		for _, binding := range pass.Bind {
+			if binding.Index > maxSlot {
+				maxSlot = binding.Index
 			}
 		}
 
-		for slot, textureName := range textureNames {
-			if textureName == "" || strings.HasPrefix(textureName, "_rt_imageLayerComposite") {
-				passData.TextureBindings = append(passData.TextureBindings, CodegenTextureBindingData{
-					Slot:    slot,
-					Texture: fmt.Sprintf("%s[%d]", tempBuffersArray, tempBuffers[0]),
-					Sampler: "linear_clamp_sampler",
-				})
-				resolutions = append(resolutions, [4]float32{
-					float32(object.Size[0] + 0.5),
-					float32(object.Size[1] + 0.5),
-					float32(object.Size[0] + 0.5),
-					float32(object.Size[1] + 0.5),
-				})
-			} else if fbo, exists := fbos[textureName]; exists {
-				passData.TextureBindings = append(passData.TextureBindings, CodegenTextureBindingData{
-					Slot:    slot,
-					Texture: fmt.Sprintf("%s[%d]", tempBuffersArray, fbo),
-					Sampler: "linear_clamp_sampler",
-				})
-				resolutions = append(resolutions, [4]float32{
-					float32(object.Size[0] + 0.5),
-					float32(object.Size[1] + 0.5),
-					float32(object.Size[0] + 0.5),
-					float32(object.Size[1] + 0.5),
-				})
-			} else {
-				texture, err := importTexture(textureName)
-				if err != nil {
-					return []CodegenPassData{}, fmt.Errorf("importing texture %s failed: %s", textureName, err)
-				}
-				passData.TextureBindings = append(passData.TextureBindings, CodegenTextureBindingData{
-					Slot:    slot,
-					Texture: fmt.Sprintf("texture%d", texture.ID),
-					Sampler: getTextureSampler(texture),
-				})
-				resolutions = append(resolutions, [4]float32{
-					float32(texture.Width),
-					float32(texture.Height),
-					float32(texture.Width),
-					float32(texture.Height),
-				})
+		textureNamesBySlot := []string{}
+		if maxSlot >= 0 {
+			textureNamesBySlot = make([]string, maxSlot+1)
+		}
+		for samplerIndex, sampler := range compiledShader.Samplers {
+			if sampler.Default != "" {
+				textureNamesBySlot[samplerSlots[samplerIndex]] = sampler.Default
 			}
+		}
+		for slot, textureName := range effect.Materials[idx].Textures {
+			if textureName != "" {
+				textureNamesBySlot[slot] = textureName
+			}
+		}
+		for slot, textureName := range pass.Textures {
+			if textureName != "" {
+				textureNamesBySlot[slot] = textureName
+			}
+		}
+		for _, binding := range pass.Bind {
+			if binding.Index < 0 {
+				continue
+			}
+			if binding.Name == "previous" {
+				textureNamesBySlot[binding.Index] = "__previous__"
+			} else if binding.Name != "" {
+				textureNamesBySlot[binding.Index] = binding.Name
+			}
+		}
+
+		for samplerIndex, slot := range samplerSlots {
+			textureName := textureNamesBySlot[slot]
+			binding := CodegenTextureBindingData{
+				Slot:    samplerIndex,
+				Texture: fmt.Sprintf("%s[%d]", tempBuffersArray, tempBuffers[0]),
+				Sampler: "linear_clamp_sampler",
+			}
+
+			var resolution [4]string
+			if object.Fullscreen {
+				resolution = [4]string{"screen_width", "screen_height", "screen_width", "screen_height"}
+			} else {
+				resolution = [4]string{
+					fmt.Sprintf("%f", object.Size[0]),
+					fmt.Sprintf("%f", object.Size[1]),
+					fmt.Sprintf("%f", object.Size[0]),
+					fmt.Sprintf("%f", object.Size[1]),
+				}
+			}
+
+			if textureName != "__previous__" && textureName != "" && !strings.HasPrefix(textureName, "_rt_imageLayerComposite") {
+				if fbo, exists := fbos[textureName]; exists {
+					binding.Texture = fmt.Sprintf("%s[%d]", tempBuffersArray, fbo)
+					if object.Fullscreen {
+						resolution = [4]string{"screen_width", "screen_height", "screen_width", "screen_height"}
+					} else {
+						resolution = [4]string{
+							fmt.Sprintf("%f", object.Size[0]),
+							fmt.Sprintf("%f", object.Size[1]),
+							fmt.Sprintf("%f", object.Size[0]),
+							fmt.Sprintf("%f", object.Size[1]),
+						}
+					}
+				} else {
+					texture, err := importTexture(textureName)
+					if err != nil {
+						return []CodegenPassData{}, fmt.Errorf("importing texture %s failed: %s", textureName, err)
+					}
+					binding.Texture = fmt.Sprintf("texture%d", texture.ID)
+					binding.Sampler = getTextureSampler(texture)
+					resolution = [4]string{
+						fmt.Sprintf("%d", texture.Width),
+						fmt.Sprintf("%d", texture.Height),
+						fmt.Sprintf("%d", texture.Width),
+						fmt.Sprintf("%d", texture.Height),
+					}
+				}
+			}
+
+			passData.TextureBindings = append(passData.TextureBindings, binding)
+			resolutions = append(resolutions, resolution)
 		}
 
 		colorTarget := fmt.Sprintf("%s[%d]", tempBuffersArray, tempBuffers[1])
@@ -650,6 +706,94 @@ func processImageEffect(object ImageObject, effect ImageEffect, tempBuffers *[2]
 	}
 
 	return passes, nil
+}
+
+func ensureBoolSlots(slots []bool, slotCount int) []bool {
+	if len(slots) >= slotCount {
+		return slots
+	}
+	resized := make([]bool, slotCount)
+	copy(resized, slots)
+	return resized
+}
+
+func getEffectBoundTextures(material Material, pass MaterialPass) []bool {
+	boundTextures := make([]bool, len(material.Textures))
+
+	for slot, textureName := range material.Textures {
+		if textureName != "" {
+			boundTextures[slot] = true
+		}
+	}
+	for slot, textureName := range pass.Textures {
+		boundTextures = ensureBoolSlots(boundTextures, slot+1)
+		if textureName != "" {
+			boundTextures[slot] = true
+		}
+	}
+	for _, binding := range pass.Bind {
+		if binding.Index < 0 {
+			continue
+		}
+		boundTextures = ensureBoolSlots(boundTextures, binding.Index+1)
+		if binding.Name != "" {
+			boundTextures[binding.Index] = true
+		}
+	}
+
+	return boundTextures
+}
+
+func processImageObjectFinalPassthrough(object ImageObject) {
+	shader, err := compileShader("passthrough", []bool{true}, map[string]int{})
+	if err != nil {
+		panic("compile passthrough shader failed: " + err.Error())
+	}
+
+	passData := CodegenPassData{
+		ObjectID:    9999,
+		PassID:      0,
+		ShaderID:    shader.ID,
+		ColorTarget: "screen_buffer",
+		ClearColor:  true,
+		BlendMode:   "blend_disabled",
+		TextureBindings: []CodegenTextureBindingData{
+			{
+				Slot:    0,
+				Texture: codegenData.Passes[lastPassID].ColorTarget,
+				Sampler: "linear_clamp_sampler",
+			},
+		},
+		UniformSetupCode: "",
+		Transform: CodegenTransformData{
+			Enabled:                false,
+			SceneWidth:             float32(scene.General.Ortho.Width),
+			SceneHeight:            float32(scene.General.Ortho.Height),
+			OriginX:                float32(object.Origin[0]),
+			OriginY:                float32(object.Origin[1]),
+			OriginZ:                float32(object.Origin[2]),
+			SizeX:                  float32(object.Size[0]),
+			SizeY:                  float32(object.Size[1]),
+			ScaleX:                 float32(object.Scale[0]),
+			ScaleY:                 float32(object.Scale[1]),
+			ScaleZ:                 float32(object.Scale[2]),
+			AngleX:                 float32(object.Angles[0]),
+			AngleY:                 float32(object.Angles[1]),
+			AngleZ:                 float32(object.Angles[2]),
+			ParallaxDepthX:         float32(object.ParallaxDepth[0]),
+			ParallaxDepthY:         float32(object.ParallaxDepth[1]),
+			ParallaxEnabled:        scene.General.Parallax,
+			ParallaxAmount:         float32(scene.General.ParallaxAmount),
+			ParallaxMouseInfluence: float32(scene.General.ParallaxMouseInfluence),
+			Perspective:            false,
+			NearZ:                  float32(scene.General.NearZ),
+			FarZ:                   float32(scene.General.FarZ),
+			FOV:                    float32(scene.General.FOV),
+		},
+		InstanceCount: 1,
+	}
+
+	codegenData.Passes = append(codegenData.Passes, passData)
 }
 
 func processParticleObject(object ParticleObject) {
@@ -797,12 +941,11 @@ func processParticleObject(object ParticleObject) {
 `, textureRatio)
 
 	passData := CodegenPassData{
-		ObjectID:          lastObjectID,
-		PassID:            0,
-		ColorTarget:       "screen_buffer",
-		ColorTargetFormat: "OW_TEXTURE_RGBA8_UNORM",
-		ClearColor:        false,
-		BlendMode:         blendMode,
+		ObjectID:    lastObjectID,
+		PassID:      0,
+		ColorTarget: "screen_buffer",
+		ClearColor:  false,
+		BlendMode:   blendMode,
 		TextureBindings: []CodegenTextureBindingData{{
 			Slot:    0,
 			Texture: fmt.Sprintf("texture%d", texture.ID),
@@ -851,13 +994,12 @@ func processFinalPassthrough() {
 	}
 
 	passData := CodegenPassData{
-		ObjectID:          9999,
-		PassID:            0,
-		ShaderID:          shader.ID,
-		ColorTarget:       "(ow_texture_id){0}",
-		ColorTargetFormat: "OW_TEXTURE_SWAPCHAIN",
-		ClearColor:        true,
-		BlendMode:         "blend_disabled",
+		ObjectID:    9999,
+		PassID:      0,
+		ShaderID:    shader.ID,
+		ColorTarget: "(ow_texture_id){0}",
+		ClearColor:  true,
+		BlendMode:   "blend_disabled",
 		TextureBindings: []CodegenTextureBindingData{
 			{
 				Slot:    0,
@@ -893,7 +1035,7 @@ func generateUniformSetupCode(ctx UniformCodegenContext) string {
 			idxString, _ = strings.CutSuffix(idxString, "Resolution")
 			idx, _ := strconv.Atoi(idxString)
 			if idx < len(ctx.Resolutions) {
-				code += fmt.Sprintf("%s.%s = (glsl_vec4){.at = {%f, %f, %f, %f}};\n", ctx.StructName, uniform.Name,
+				code += fmt.Sprintf("%s.%s = (glsl_vec4){.at = {%s, %s, %s, %s}};\n", ctx.StructName, uniform.Name,
 					ctx.Resolutions[idx][0], ctx.Resolutions[idx][1], ctx.Resolutions[idx][2], ctx.Resolutions[idx][3])
 			}
 		} else if uniform.Name == "g_Time" {

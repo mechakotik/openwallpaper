@@ -343,12 +343,34 @@ func parseSamplerCombos(source string, boundTextures []bool) (map[string]int, ma
 			fmt.Printf("warning: unable to parse combo JSON %s: %s\n", metaJSON, err.Error())
 			continue
 		}
-		if meta.Combo != "" && idx < len(boundTextures) && boundTextures[idx] {
+		textureSlot := idx
+		if parsedSlot, ok := parseTextureSlotFromSamplerName(match[1]); ok {
+			textureSlot = parsedSlot
+		}
+		if meta.Combo != "" && textureSlot >= 0 && textureSlot < len(boundTextures) && boundTextures[textureSlot] {
 			combos[meta.Combo] = 1
 		}
 		defaults[match[1]] = meta.Default
 	}
 	return combos, defaults
+}
+
+func parseTextureSlotFromSamplerName(name string) (int, bool) {
+	if !strings.HasPrefix(name, "g_Texture") {
+		return 0, false
+	}
+
+	slotText, ok := strings.CutPrefix(name, "g_Texture")
+	if !ok || slotText == "" {
+		return 0, false
+	}
+
+	slot, err := strconv.Atoi(slotText)
+	if err != nil {
+		return 0, false
+	}
+
+	return slot, true
 }
 
 func runGLSLCPreprocessor(source, includePath string, defines map[string]int) (string, error) {
