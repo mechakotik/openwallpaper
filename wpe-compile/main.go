@@ -356,13 +356,12 @@ func processImageObject(object ImageObject) {
 		lastIdx = len(codegenData.Passes) - 1
 	} else {
 		codegenData.Passes[lastIdx].ColorTarget = "screen_buffer"
-	}
-
-	if !screenCleared {
-		codegenData.Passes[lastIdx].ClearColor = true
-		screenCleared = true
-	} else {
-		codegenData.Passes[lastIdx].ClearColor = false
+		if !screenCleared {
+			codegenData.Passes[lastIdx].ClearColor = true
+			screenCleared = true
+		} else {
+			codegenData.Passes[lastIdx].ClearColor = false
+		}
 	}
 
 	switch object.Material.Blending {
@@ -944,7 +943,6 @@ func processParticleObject(object ParticleObject) {
 		ObjectID:    lastObjectID,
 		PassID:      0,
 		ColorTarget: "screen_buffer",
-		ClearColor:  false,
 		BlendMode:   blendMode,
 		TextureBindings: []CodegenTextureBindingData{{
 			Slot:    0,
@@ -982,6 +980,13 @@ func processParticleObject(object ParticleObject) {
 		NearZ:                  float32(scene.General.NearZ),
 		FarZ:                   float32(scene.General.FarZ),
 		FOV:                    float32(scene.General.FOV),
+	}
+
+	if !screenCleared {
+		passData.ClearColor = true
+		screenCleared = true
+	} else {
+		passData.ClearColor = false
 	}
 
 	codegenData.Passes = append(codegenData.Passes, passData)
