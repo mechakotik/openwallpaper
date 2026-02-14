@@ -142,6 +142,22 @@ static glsl_mat4 mat4_scale_xy(float sx, float sy) {
     return m;
 }
 
+static glsl_mat4 mat4_scale_xyz(float sx, float sy, float sz) {
+    glsl_mat4 m = mat4_identity();
+    m.at[0][0] = sx;
+    m.at[1][1] = sy;
+    m.at[2][2] = sz;
+    return m;
+}
+
+static glsl_mat4 mat4_translate_xyz(float tx, float ty, float tz) {
+    glsl_mat4 m = mat4_identity();
+    m.at[3][0] = tx;
+    m.at[3][1] = ty;
+    m.at[3][2] = tz;
+    return m;
+}
+
 static glsl_mat4 mat4_multiply(glsl_mat4 a, glsl_mat4 b) {
     glsl_mat4 res;
     for(int col = 0; col < 4; ++col) {
@@ -208,6 +224,21 @@ static glsl_mat4 mat4_look_at(glsl_vec3 eye, glsl_vec3 center, glsl_vec3 up) {
     return res;
 }
 
+static glsl_mat4 mat4_ortho(float left, float right, float bottom, float top, float near_z, float far_z) {
+    if(right == left || top == bottom || far_z == near_z) {
+        return mat4_identity();
+    }
+
+    glsl_mat4 trans = mat4_identity();
+    trans = mat4_multiply(
+        mat4_translate_xyz(-(left + right) * 0.5f, -(top + bottom) * 0.5f, -(near_z + far_z) * 0.5f), trans);
+    trans = mat4_multiply(mat4_scale_xyz(2.0f / (right - left), 2.0f / (top - bottom), 2.0f / (far_z - near_z)), trans);
+    trans = mat4_multiply(trans, mat4_scale_xyz(1.0f, 1.0f, -1.0f));
+    trans = mat4_multiply(mat4_scale_xyz(1.0f, 1.0f, 0.5f), trans);
+    trans = mat4_multiply(mat4_translate_xyz(0.0f, 0.0f, 0.5f), trans);
+    return trans;
+}
+
 static glsl_mat4 mat4_perspective(float fov_radians, float aspect, float near_z, float far_z) {
     if(fov_radians == 0.0f || aspect == 0.0f) {
         return mat4_identity();
@@ -219,14 +250,18 @@ static glsl_mat4 mat4_perspective(float fov_radians, float aspect, float near_z,
         far_z = near_z + 1.0f;
     }
 
-    float f = 1.0f / tanf(fov_radians * 0.5f);
-    glsl_mat4 res = {0};
-    res.at[0][0] = f / aspect;
-    res.at[1][1] = f;
-    res.at[2][2] = (far_z + near_z) / (near_z - far_z);
-    res.at[2][3] = -1.0f;
-    res.at[3][2] = (2.0f * far_z * near_z) / (near_z - far_z);
-    return res;
+    glsl_mat4 trans = mat4_identity();
+    trans = mat4_multiply(mat4_scale_xyz(near_z, near_z, near_z + far_z), trans);
+    trans.at[2][3] = 1.0f;
+    trans.at[3][3] = 0.0f;
+    trans.at[3][2] = -near_z * far_z;
+
+    float top = tanf(fov_radians * 0.5f) * fabsf(near_z);
+    float right = top * aspect;
+
+    trans = mat4_multiply(trans, mat4_scale_xyz(1.0f, 1.0f, -1.0f));
+    trans = mat4_multiply(mat4_scale_xyz(1.0f, 1.0f, -1.0f), trans);
+    return mat4_multiply(mat4_ortho(-right, right, -top, top, near_z, far_z), trans);
 }
 
 static transform_matrices_t default_transform_matrices() {
@@ -403,14 +438,14 @@ static transform_matrices_t compute_transform_matrices(transform_parameters_t pa
 
     glsl_mat4 rot_x = mat4_identity();
     rot_x.at[1][1] = cx;
-    rot_x.at[1][2] = -sx_rot;
-    rot_x.at[2][1] = sx_rot;
+    rot_x.at[1][2] = sx_rot;
+    rot_x.at[2][1] = -sx_rot;
     rot_x.at[2][2] = cx;
 
     glsl_mat4 rot_y = mat4_identity();
     rot_y.at[0][0] = cy;
-    rot_y.at[0][2] = sy_rot;
-    rot_y.at[2][0] = -sy_rot;
+    rot_y.at[0][2] = -sy_rot;
+    rot_y.at[2][0] = sy_rot;
     rot_y.at[2][2] = cy;
 
     glsl_mat4 rot_z = mat4_identity();
@@ -419,7 +454,7 @@ static transform_matrices_t compute_transform_matrices(transform_parameters_t pa
     rot_z.at[1][0] = -sz_rot;
     rot_z.at[1][1] = cz;
 
-    glsl_mat4 rotation = mat4_multiply(rot_y, mat4_multiply(rot_x, rot_z));
+    glsl_mat4 rotation = mat4_multiply(rot_z, mat4_multiply(rot_y, rot_x));
     glsl_mat4 model = mat4_multiply(translation, mat4_multiply(rotation, scale));
 
     res.model = model;
