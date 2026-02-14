@@ -25,6 +25,8 @@ cmake --build . -j$(nproc)
 sudo cmake --install .
 ```
 
+Optionally, build and install [wamrc](http://github.com/bytecodealliance/wasm-micro-runtime/blob/main/wamr-compiler/README.md) to enable AOT (ahead-of-time) compilation of scene modules and slightly improve performance. This is not a build dependency of wallpaperd and is detected at runtime.
+
 ## Usage
 
 To run the scene:
