@@ -59,7 +59,12 @@ You can check out this list to see what is not yet implemented or can be improve
 
 - [x] Camera
   - [x] Orthographic
-  - [x] Perspective (*)
+  - [x] Perspective
+  - [x] Object transform
+    - [x] Translate
+    - [x] Scale
+    - [x] Rotate
+      - [x] Rotate Y (*) *(logic is different from X/Z for some reason)*
   - [x] Parallax (*)
   - [ ] Shake
   - [ ] Fade
