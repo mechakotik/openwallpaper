@@ -13,6 +13,7 @@ public:
     Runner(QObject* parent = nullptr);
     ~Runner();
     Q_INVOKABLE void run(const QString& path, const QString& display);
+    void autorun();
 
 public Q_SLOTS:
     void onWorkerFinished();
@@ -25,6 +26,9 @@ private:
     RunnerWorker* mWorker = nullptr;
     QThread mWorkerThread;
     bool mWorking = false;
+
+    QVariantMap mAutorunWallpapers;
+    QSettings mSettings;
 };
 
 #endif

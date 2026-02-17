@@ -17,6 +17,17 @@ int main(int argc, char* argv[]) {
     KIconTheme::initTheme();
     QApplication app(argc, argv);
 
+    QCommandLineParser parser;
+    QCommandLineOption autorunOption(QStringList() << "a" << "autorun", "Run previously selected wallpapers and exit");
+    parser.addOption(autorunOption);
+    parser.process(app);
+
+    if(parser.isSet(autorunOption)) {
+        Runner runner;
+        runner.autorun();
+        return 0;
+    }
+
     QApplication::setStyle("breeze");
     QIcon::setThemeName("breeze");
     if(qEnvironmentVariableIsEmpty("QT_QUICK_CONTROLS_STYLE")) {

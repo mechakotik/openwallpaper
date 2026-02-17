@@ -10,6 +10,10 @@ Runner::Runner(QObject* parent) : QObject(parent) {
     connect(this, &Runner::runRequested, mWorker, &RunnerWorker::run, Qt::QueuedConnection);
     connect(mWorker, &RunnerWorker::finished, this, &Runner::onWorkerFinished, Qt::QueuedConnection);
     mWorkerThread.start();
+
+    if(mSettings.contains("autorunWallpapers")) {
+        mAutorunWallpapers = mSettings.value("autorunWallpapers").toMap();
+    }
 }
 
 Runner::~Runner() {
@@ -22,8 +26,19 @@ void Runner::run(const QString& path, const QString& display) {
         return;
     }
     mWorking = true;
+
+    mAutorunWallpapers.insert(display, path);
+    mSettings.setValue("autorunWallpapers", mAutorunWallpapers);
+
     Q_EMIT workingChanged();
     Q_EMIT runRequested(path, display);
+}
+
+void Runner::autorun() {
+    QProcess::execute("killall", {"wallpaperd"});
+    for(const auto& [display, path] : mAutorunWallpapers.asKeyValueRange()) {
+        mWorker->run(path.toString(), display);
+    }
 }
 
 void Runner::onWorkerFinished() {
