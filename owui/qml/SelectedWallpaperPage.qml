@@ -122,6 +122,7 @@ Kirigami.Page {
         Controls.ScrollView {
             Layout.fillWidth: true
             Layout.maximumHeight: Kirigami.Units.gridUnit * 10
+            visible: selectedWallpaperDescription.length > 0
 
             Controls.TextArea {
                 text: selectedWallpaperDescription
