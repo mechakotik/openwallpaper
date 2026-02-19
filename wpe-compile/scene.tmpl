@@ -244,9 +244,9 @@ __attribute__((export_name("update"))) void update(float delta) {
         mouse_y /= screen_height;
     }
 
-{{if .UseAudioSpectrum}}
-    float spectrum[16];
-    ow_get_audio_spectrum(spectrum, 16);
+{{if ne .AudioSpectrumSize 0 }}
+    float spectrum[{{.AudioSpectrumSize}}];
+    ow_get_audio_spectrum(spectrum, {{.AudioSpectrumSize}});
 {{end}}
 
     if(!parallax_initialized) {

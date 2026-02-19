@@ -145,7 +145,7 @@ type CodegenData struct {
 	TempScreenBuffers []TempScreenBufferParameters
 	Particles         []CodegenParticleData
 	Parallax          CodegenParallaxData
-	UseAudioSpectrum  bool
+	AudioSpectrumSize int
 }
 
 var (
@@ -1130,8 +1130,11 @@ func generateUniformSetupCode(ctx UniformCodegenContext) string {
 		} else if uniform.Name == "g_Brightness" {
 			code += fmt.Sprintf("%s.g_Brightness = (glsl_float){.at = {%f}};\n", ctx.StructName, ctx.Brightness)
 		} else if uniform.Name == "g_AudioSpectrum16Left" || uniform.Name == "g_AudioSpectrum16Right" {
-			codegenData.UseAudioSpectrum = true
+			codegenData.AudioSpectrumSize = max(codegenData.AudioSpectrumSize, 16)
 			code += fmt.Sprintf("for(int i = 0; i < 16; i++) { %s.%s[i] = (glsl_array_float){.at = {spectrum[i]}}; }\n", ctx.StructName, uniform.Name)
+		} else if uniform.Name == "g_AudioSpectrum32Left" || uniform.Name == "g_AudioSpectrum32Right" {
+			codegenData.AudioSpectrumSize = max(codegenData.AudioSpectrumSize, 32)
+			code += fmt.Sprintf("for(int i = 0; i < 32; i++) { %s.%s[i] = (glsl_array_float){.at = {spectrum[i]}}; }\n", ctx.StructName, uniform.Name)
 		} else if uniform.DefaultSet {
 			code += fmt.Sprintf("%s.%s = (glsl_%s){.at = {", ctx.StructName, uniform.Name, uniform.Type)
 			value := uniform.Default
