@@ -803,14 +803,19 @@ func getEffectBoundTextures(material Material, pass MaterialPass) []bool {
 }
 
 func processImageObjectFinalPassthrough(object ImageObject) {
-	shader, err := compileShader("passthrough", []bool{true}, map[string]int{})
+	lastPassID++
+
+	defines := map[string]int{}
+	defines["TRANSFORM"] = 1
+
+	shader, err := compileShader("passthrough", []bool{true}, defines)
 	if err != nil {
 		panic("compile passthrough shader failed: " + err.Error())
 	}
 
 	passData := CodegenPassData{
-		ObjectID:    9999,
-		PassID:      0,
+		ObjectID:    lastObjectID,
+		PassID:      lastPassID,
 		ShaderID:    shader.ID,
 		ColorTarget: "screen_buffer",
 		ClearColor:  true,
@@ -822,7 +827,7 @@ func processImageObjectFinalPassthrough(object ImageObject) {
 				Sampler: "linear_clamp_sampler",
 			},
 		},
-		UniformSetupCode: "",
+		UniformSetupCode: "vertex_uniforms.g_ModelViewProjectionMatrix = matrices.model_view_projection;\n",
 		Transform: CodegenTransformData{
 			Enabled:                false,
 			SceneWidth:             float32(scene.General.Ortho.Width),
