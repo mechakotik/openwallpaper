@@ -341,7 +341,18 @@ func processImageObject(object ImageObject) {
 	}
 	codegenData.Passes = append(codegenData.Passes, initialPass)
 
-	for _, effect := range object.Effects {
+	effects := make([]ImageEffect, 0, len(object.Effects)+1)
+	effects = append(effects, object.Effects...)
+	if object.ColorBlendMode != 0 {
+		effectPassthrough, err := makeEffectPassthrough(object.ColorBlendMode)
+		if err != nil {
+			fmt.Printf("warning: skipping image object %s colorBlendMode because creating effectpassthrough failed: %s\n", object.Name, err)
+		} else {
+			effects = append(effects, effectPassthrough)
+		}
+	}
+
+	for _, effect := range effects {
 		passes, err := processImageEffect(object, effect, &tempBuffers)
 		if err != nil {
 			fmt.Printf("warning: skipping image object %s effect %s because processing effect failed: %s\n", object.Name, effect.Name, err)
@@ -351,17 +362,26 @@ func processImageObject(object ImageObject) {
 	}
 
 	lastIdx := len(codegenData.Passes) - 1
-	if codegenData.Passes[lastIdx].TextureBindings[0].Texture == "screen_buffer" {
+	usesScreenBuffer := false
+	for _, binding := range codegenData.Passes[lastIdx].TextureBindings {
+		if binding.Texture == "screen_buffer" {
+			usesScreenBuffer = true
+			break
+		}
+	}
+
+	if usesScreenBuffer {
 		processImageObjectFinalPassthrough(object)
 		lastIdx = len(codegenData.Passes) - 1
 	} else {
 		codegenData.Passes[lastIdx].ColorTarget = "screen_buffer"
-		if !screenCleared {
-			codegenData.Passes[lastIdx].ClearColor = true
-			screenCleared = true
-		} else {
-			codegenData.Passes[lastIdx].ClearColor = false
-		}
+	}
+
+	if !screenCleared {
+		codegenData.Passes[lastIdx].ClearColor = true
+		screenCleared = true
+	} else {
+		codegenData.Passes[lastIdx].ClearColor = false
 	}
 
 	switch object.Material.Blending {
@@ -381,6 +401,39 @@ func processImageObject(object ImageObject) {
 	if !object.Fullscreen {
 		codegenData.Passes[lastIdx].Transform.Enabled = true
 	}
+}
+
+func makeEffectPassthrough(colorBlendMode int) (ImageEffect, error) {
+	materialBytes, err := loadBytesFromPackage(&pkgMap, "materials/util/effectpassthrough.json")
+	if err != nil {
+		return ImageEffect{}, fmt.Errorf("loading effectpassthrough material failed: %w", err)
+	}
+
+	var material Material
+	if err := material.parseFromJSON(materialBytes); err != nil {
+		return ImageEffect{}, fmt.Errorf("parsing effectpassthrough material failed: %w", err)
+	}
+
+	if material.Combos == nil {
+		material.Combos = map[string]int{}
+	}
+	material.Combos["BONECOUNT"] = 1
+	material.Combos["BLENDMODE"] = colorBlendMode
+	material.Blending = "disabled"
+
+	pass := MaterialPass{
+		Combos: map[string]int{
+			"BONECOUNT": 1,
+			"BLENDMODE": colorBlendMode,
+		},
+	}
+
+	return ImageEffect{
+		Name:      "effectpassthrough",
+		Visible:   true,
+		Passes:    []MaterialPass{pass},
+		Materials: []Material{material},
+	}, nil
 }
 
 func processImageObjectInit(object ImageObject, tempBuffers *[2]int) (CodegenPassData, error) {
@@ -634,13 +687,19 @@ func processImageEffect(object ImageObject, effect ImageEffect, tempBuffers *[2]
 					if err != nil {
 						return []CodegenPassData{}, fmt.Errorf("importing texture %s failed: %s", textureName, err)
 					}
-					binding.Texture = fmt.Sprintf("texture%d", texture.ID)
-					binding.Sampler = getTextureSampler(texture)
-					resolution = [4]string{
-						fmt.Sprintf("%d", texture.Width),
-						fmt.Sprintf("%d", texture.Height),
-						fmt.Sprintf("%d", texture.Width),
-						fmt.Sprintf("%d", texture.Height),
+					if texture.ID < 0 {
+						binding.Texture = "screen_buffer"
+						binding.Sampler = "linear_clamp_sampler"
+						resolution = [4]string{"screen_width", "screen_height", "screen_width", "screen_height"}
+					} else {
+						binding.Texture = fmt.Sprintf("texture%d", texture.ID)
+						binding.Sampler = getTextureSampler(texture)
+						resolution = [4]string{
+							fmt.Sprintf("%d", texture.Width),
+							fmt.Sprintf("%d", texture.Height),
+							fmt.Sprintf("%d", texture.Width),
+							fmt.Sprintf("%d", texture.Height),
+						}
 					}
 				}
 			}
@@ -759,7 +818,7 @@ func processImageObjectFinalPassthrough(object ImageObject) {
 		TextureBindings: []CodegenTextureBindingData{
 			{
 				Slot:    0,
-				Texture: codegenData.Passes[lastPassID].ColorTarget,
+				Texture: codegenData.Passes[len(codegenData.Passes)-1].ColorTarget,
 				Sampler: "linear_clamp_sampler",
 			},
 		},

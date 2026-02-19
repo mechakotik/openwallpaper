@@ -80,9 +80,7 @@ func preprocessShader(vertexSource, fragmentSource, includePath string, boundTex
 	maps.Copy(combos, fragmentCombos)
 
 	for combo, value := range comboOverrides {
-		if _, exists := combos[combo]; exists {
-			combos[combo] = value
-		}
+		combos[combo] = value
 	}
 
 	vertexSource, err := runGLSLCPreprocessor(vertexSource, includePath, combos)
