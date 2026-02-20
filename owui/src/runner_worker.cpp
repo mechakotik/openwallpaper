@@ -91,7 +91,14 @@ void RunnerWorker::run(QString path, QString display) {
         if(QFile::exists(readyFile)) {
             break;
         }
+        if(wallpaperd.state() == QProcess::NotRunning) {
+            break;
+        }
         QThread::msleep(100);
+    }
+    if(wallpaperd.exitCode() != 0) {
+        Q_EMIT finished();
+        return;
     }
 
     for(const QString& pidStr : pids) {
