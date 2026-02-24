@@ -27,6 +27,7 @@ static void print_help() {
 
     printf("  --list-displays\n");
     printf("  --help\n");
+    printf("  --version\n");
 }
 
 int main(int argc, char* argv[]) {
@@ -40,6 +41,12 @@ int main(int argc, char* argv[]) {
 
     if(wd_get_option(&state.args, "help") != NULL) {
         print_help();
+        wd_free_state(&state);
+        return 0;
+    }
+
+    if(wd_get_option(&state.args, "version") != NULL) {
+        printf("wallpaperd 0.1.0\n");
         wd_free_state(&state);
         return 0;
     }
