@@ -11,6 +11,7 @@
 #include "src/options_manager.h"
 #include "src/preview_provider.h"
 #include "src/runner.h"
+#include "src/toolchain_checker.h"
 #include "src/wallpaper_list.h"
 
 int main(int argc, char* argv[]) {
@@ -41,11 +42,13 @@ int main(int argc, char* argv[]) {
     WallpaperList wallpaperList;
     Runner runner;
     OptionsManager optionsManager;
+    ToolchainChecker toolchainChecker;
 
     engine.rootContext()->setContextProperty("displayList", &displayList);
     engine.rootContext()->setContextProperty("wallpaperList", &wallpaperList);
     engine.rootContext()->setContextProperty("runner", &runner);
     engine.rootContext()->setContextProperty("optionsManager", &optionsManager);
+    engine.rootContext()->setContextProperty("toolchainChecker", &toolchainChecker);
     engine.addImageProvider("preview", new PreviewProvider(&wallpaperList));
 
     engine.loadFromModule("org.openwallpaper.ui", "Main");

@@ -20,20 +20,24 @@ FormCard.FormCardPage {
             label: "wallpaperd path"
             placeholderText: "wallpaperd"
             text: optionsManager.wallpaperdPath
-            onEditingFinished: optionsManager.wallpaperdPath = text
+            onEditingFinished: {
+                optionsManager.wallpaperdPath = text
+                toolchainChecker.check()
+            }
             trailing: RowLayout {
                 Item {
                     Layout.preferredWidth: Kirigami.Units.smallSpacing
                     Layout.preferredHeight: 1
                 }
                 Kirigami.Icon {
-                    source: "qrc:/icons/check.svg"
+                    source: toolchainChecker.wallpaperdValid ? "qrc:/icons/check.svg" : "qrc:/icons/error.svg"
                     implicitWidth: Kirigami.Units.iconSizes.smallMedium
                     implicitHeight: Kirigami.Units.iconSizes.smallMedium
                 }
                 Controls.Label {
-                    text: "0.1.0"
+                    text: toolchainChecker.wallpaperdVersion
                     color: Kirigami.Theme.textColor
+                    visible: toolchainChecker.wallpaperdValid
                 }
             }
         }

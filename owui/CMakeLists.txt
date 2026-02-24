@@ -53,6 +53,7 @@ target_sources(owui
     src/runner_worker.cpp
     src/preview_provider.cpp
     src/options_manager.cpp
+    src/toolchain_checker.cpp
 )
 
 ecm_target_qml_sources(owui
