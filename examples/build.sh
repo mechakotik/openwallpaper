@@ -8,3 +8,4 @@ cd "$(dirname "$0")" || exit 1
 ./image/build.sh
 ./rain/build.sh
 ./visualizer/build.sh
+./doom/build.sh
