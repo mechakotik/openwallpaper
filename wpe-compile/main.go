@@ -7,6 +7,7 @@ import (
 	"math"
 	"os"
 	"os/exec"
+	"reflect"
 	"strconv"
 	"strings"
 	"text/template"
@@ -148,6 +149,14 @@ type CodegenData struct {
 	AudioSpectrumSize int
 }
 
+type ShaderCacheElement struct {
+	Name          string
+	BoundTextures []bool
+	Defines       map[string]int
+	Compiled      CompiledShader
+	Error         error
+}
+
 var (
 	env struct {
 		Assets string
@@ -166,6 +175,7 @@ var (
 	scene               Scene
 	outputMap           = map[string][]byte{}
 	textureMap          = map[string]ImportedTexture{}
+	shaderCache         = []ShaderCacheElement{}
 	lastObjectID        = -1
 	lastPassID          = 0
 	lastShaderID        = -1
@@ -1252,6 +1262,20 @@ func scalesEqual(scale1, scale2 float32) bool {
 }
 
 func compileShader(shaderName string, boundTextures []bool, defines map[string]int) (CompiledShader, error) {
+	for _, elem := range shaderCache {
+		if elem.Name == shaderName && reflect.DeepEqual(elem.BoundTextures, boundTextures) && reflect.DeepEqual(elem.Defines, defines) {
+			return elem.Compiled, elem.Error
+		}
+	}
+
+	shaderCache = append(shaderCache, ShaderCacheElement{
+		Name:          shaderName,
+		BoundTextures: boundTextures,
+		Defines:       defines,
+		Error:         nil,
+	})
+	elemError := &(shaderCache[len(shaderCache)-1].Error)
+
 	lastShaderID++
 	vertexShaderPath := "shaders/" + shaderName + ".vert"
 	fragmentShaderPath := "shaders/" + shaderName + ".frag"
@@ -1271,15 +1295,18 @@ func compileShader(shaderName string, boundTextures []bool, defines map[string]i
 
 	vertexShaderBytes, err := getAssetBytes(vertexShaderPath)
 	if err != nil {
+		*elemError = err
 		return CompiledShader{}, err
 	}
 	fragmentShaderBytes, err := getAssetBytes(fragmentShaderPath)
 	if err != nil {
+		*elemError = err
 		return CompiledShader{}, err
 	}
 
 	transformed, err := preprocessShader(string(vertexShaderBytes), string(fragmentShaderBytes), "assets/shaders", boundTextures, defines)
 	if err != nil {
+		*elemError = err
 		return CompiledShader{}, err
 	}
 
@@ -1294,7 +1321,8 @@ func compileShader(shaderName string, boundTextures []bool, defines map[string]i
 	}
 	vertexSPIRVBytes, err := compileRawShader([]byte(transformed.VertexGLSL), glslcArgs)
 	if err != nil {
-		return CompiledShader{}, fmt.Errorf("compiling vertex shader failed: %s", err)
+		*elemError = fmt.Errorf("compiling vertex shader failed: %s", err)
+		return CompiledShader{}, *elemError
 	}
 
 	glslcArgs = []string{"-fshader-stage=fragment"}
@@ -1303,7 +1331,8 @@ func compileShader(shaderName string, boundTextures []bool, defines map[string]i
 	}
 	fragmentSPIRVBytes, err := compileRawShader([]byte(transformed.FragmentGLSL), glslcArgs)
 	if err != nil {
-		return CompiledShader{}, fmt.Errorf("compiling fragment shader failed: %s", err)
+		*elemError = fmt.Errorf("compiling fragment shader failed: %s", err)
+		return CompiledShader{}, *elemError
 	}
 
 	outputMap[fmt.Sprintf("assets/shader%d_vertex.spv", lastShaderID)] = vertexSPIRVBytes
@@ -1323,6 +1352,7 @@ func compileShader(shaderName string, boundTextures []bool, defines map[string]i
 	}
 
 	codegenData.Shaders = append(codegenData.Shaders, compiledShader)
+	shaderCache[len(shaderCache)-1].Compiled = compiledShader
 	return compiledShader, nil
 }
 
