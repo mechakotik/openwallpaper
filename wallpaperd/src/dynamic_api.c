@@ -29,16 +29,24 @@ static bool dynapi_import(void* handle, const char* name, void** fn) {
     return *fn != NULL && dlerror() == NULL;
 }
 
-#define DECLARE(ret, name, args, call_args) \
-    static ret(*impl_##name) args;          \
-    ret name args {                         \
-        return impl_##name call_args;       \
+// NOTE:
+// __attribute__((visibility("hidden"))) marks exported symbols as "local",
+// signaling the dynamic linker that only *this* binary (shared object) can
+// resolve them, including the statically linked CAVA, while allowing
+// dynamically linked SDL to resolve to symbols from its explicitly linked .so
+// dependencies instead of our symbols, since they can remain uninitialized.
+// Also see: https://gcc.gnu.org/onlinedocs/gcc/Common-Attributes.html#index-visibility
+
+#define DECLARE(ret, name, args, call_args)               \
+    static ret(*impl_##name) args;                        \
+    __attribute__((visibility("hidden"))) ret name args { \
+        return impl_##name call_args;                     \
     }
 
-#define DECLARE_VOID(name, args, call_args) \
-    static void(*impl_##name) args;         \
-    void name args {                        \
-        impl_##name call_args;              \
+#define DECLARE_VOID(name, args, call_args)                \
+    static void(*impl_##name) args;                        \
+    __attribute__((visibility("hidden"))) void name args { \
+        impl_##name call_args;                             \
     }
 
 #define IMPORT(handle, name, cleanup)                         \
@@ -64,8 +72,9 @@ DECLARE_VOID(wl_display_disconnect, (struct wl_display * display), (display));
 static struct wl_proxy* (*impl_wl_proxy_marshal_flags)(struct wl_proxy* proxy, uint32_t opcode,
     const struct wl_interface* interface, uint32_t version, uint32_t flags, ...);
 
-__attribute__((naked)) struct wl_proxy* wl_proxy_marshal_flags(struct wl_proxy* proxy, uint32_t opcode,
-    const struct wl_interface* interface, uint32_t version, uint32_t flags, ...) {
+__attribute__((visibility("hidden"))) __attribute__((naked)) struct wl_proxy* wl_proxy_marshal_flags(
+    struct wl_proxy* proxy, uint32_t opcode, const struct wl_interface* interface, uint32_t version, uint32_t flags,
+    ...) {
     __asm__ volatile("jmp *%0" : : "m"(impl_wl_proxy_marshal_flags));
 }
 
@@ -130,17 +139,18 @@ static int (*impl_pw_properties_setf)(struct pw_properties*, const char*, const 
 static void (*impl_pw_log_logt)(enum spa_log_level level, const struct spa_log_topic* topic, const char* file, int line,
     const char* func, const char* fmt, ...);
 
-__attribute__((naked)) struct pw_properties* pw_properties_new(const char* key, ...) {
+__attribute__((visibility("hidden"))) __attribute__((naked)) struct pw_properties* pw_properties_new(
+    const char* key, ...) {
     __asm__ volatile("jmp *%0" : : "m"(impl_pw_properties_new));
 }
 
-__attribute__((naked)) int pw_properties_setf(
+__attribute__((visibility("hidden"))) __attribute__((naked)) int pw_properties_setf(
     struct pw_properties* properties, const char* key, const char* format, ...) {
     __asm__ volatile("jmp *%0" : : "m"(impl_pw_properties_setf));
 }
 
-__attribute__((naked)) void pw_log_logt(enum spa_log_level level, const struct spa_log_topic* topic, const char* file,
-    int line, const char* func, const char* fmt, ...) {
+__attribute__((visibility("hidden"))) __attribute__((naked)) void pw_log_logt(enum spa_log_level level,
+    const struct spa_log_topic* topic, const char* file, int line, const char* func, const char* fmt, ...) {
     __asm__ volatile("jmp *%0" : : "m"(impl_pw_log_logt));
 }
 
