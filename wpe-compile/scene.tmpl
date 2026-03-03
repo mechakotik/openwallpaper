@@ -250,17 +250,36 @@ __attribute__((export_name("update"))) void update(float delta) {
 {{end}}
 
     if(!parallax_initialized) {
-        parallax_mouse_x = mouse_x;
-        parallax_mouse_y = mouse_y;
+        parallax_mouse_x = 0.5f;
+        parallax_mouse_y = 0.5f;
         parallax_initialized = true;
     }
+
     if({{.Parallax.Enabled}}) {
-        float factor = 1 - exp(-delta * 12.0f / {{.Parallax.Delay}});
-        parallax_mouse_x += (mouse_x - parallax_mouse_x) * factor;
-        parallax_mouse_y += (mouse_y - parallax_mouse_y) * factor;
+        float u = fmaxf(0.0f, 1.0f - mouse_y);
+        float v = fmaxf(0.0f, mouse_x);
+        if(u > 1.0f) {
+            u = 1.0f;
+        }
+        if(v > 1.0f) {
+            v = 1.0f;
+        }
+
+        float influence = {{.Parallax.MouseInfluence}};
+        float target_x = v * influence + 0.5f * (1.0f - influence);
+        float target_y = u * influence + 0.5f * (1.0f - influence);
+
+        if({{.Parallax.Delay}} > 0.0f) {
+            float factor = fminf(1.0f, (1.0f - {{.Parallax.Delay}} / 3.0f) * 10.0f * delta);
+            parallax_mouse_x += (target_x - parallax_mouse_x) * factor;
+            parallax_mouse_y += (target_y - parallax_mouse_y) * factor;
+        } else {
+            parallax_mouse_x = target_x;
+            parallax_mouse_y = target_y;
+        }
     } else {
-        parallax_mouse_x = mouse_x;
-        parallax_mouse_y = mouse_y;
+        parallax_mouse_x = 0.5f;
+        parallax_mouse_y = 0.5f;
     }
 
     ow_begin_copy_pass();
