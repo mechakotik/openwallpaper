@@ -67,12 +67,15 @@ static bool run_wamrc(const char* wasm_path, const char* aot_path) {
 
     SDL_PropertiesID props = SDL_CreateProperties();
     if(props == 0) {
+        printf("warning: failed to create wamrc process properties, using interpreter mode\n");
         return false;
     }
 
     if(!SDL_SetPointerProperty(props, SDL_PROP_PROCESS_CREATE_ARGS_POINTER, (void*)args) ||
         !SDL_SetNumberProperty(props, SDL_PROP_PROCESS_CREATE_STDOUT_NUMBER, (Sint64)SDL_PROCESS_STDIO_NULL) ||
-        !SDL_SetNumberProperty(props, SDL_PROP_PROCESS_CREATE_STDERR_NUMBER, (Sint64)SDL_PROCESS_STDIO_NULL)) {
+        !SDL_SetNumberProperty(props, SDL_PROP_PROCESS_CREATE_STDERR_NUMBER, (Sint64)SDL_PROCESS_STDIO_INHERITED) ||
+        !SDL_SetBooleanProperty(props, SDL_PROP_PROCESS_CREATE_STDERR_TO_STDOUT_BOOLEAN, true)) {
+        printf("warning: failed to set wamrc process properties, using interpreter mode\n");
         SDL_DestroyProperties(props);
         return false;
     }
@@ -80,12 +83,15 @@ static bool run_wamrc(const char* wasm_path, const char* aot_path) {
     SDL_Process* process = SDL_CreateProcessWithProperties(props);
     SDL_DestroyProperties(props);
     if(process == NULL) {
+        printf("warning: failed to run wamrc (is it installed?), using interpreter mode\n");
         return false;
     }
 
     int exit_code = -255;
     if(SDL_WaitProcess(process, true, &exit_code) && exit_code == 0) {
         result = true;
+    } else {
+        printf("warning: wamrc failed (exit code %d), using interpreter mode\n", exit_code);
     }
 
     SDL_DestroyProcess(process);
@@ -98,18 +104,21 @@ static bool compile_aot_to_cache(
 
     char tmp_dir[WD_MAX_PATH] = {0};
     if(!wd_cache_get_namespace_dir("tmp", tmp_dir, sizeof(tmp_dir))) {
+        printf("warning: failed to get tmp cache dir for AOT compilation, using interpreter mode\n");
         goto cleanup;
     }
 
     char wasm_path[WD_MAX_PATH] = {0};
     size_t ret = snprintf(wasm_path, sizeof(wasm_path), "%s/%s.tmp-wasm", tmp_dir, cache_key);
     if(ret < 0 || ret >= sizeof(wasm_path)) {
+        printf("warning: failed to get tmp cache path for AOT compilation, using interpreter mode\n");
         goto cleanup;
     }
 
     char aot_path[WD_MAX_PATH] = {0};
     ret = snprintf(aot_path, sizeof(aot_path), "%s/%s.tmp-aot", tmp_dir, cache_key);
     if(ret < 0 || ret >= sizeof(aot_path)) {
+        printf("warning: failed to get tmp cache path for AOT compilation, using interpreter mode\n");
         goto cleanup;
     }
 
@@ -117,6 +126,7 @@ static bool compile_aot_to_cache(
     wd_cache_remove_file(aot_path);
 
     if(!wd_cache_write_file(wasm_path, wasm_buffer, wasm_size)) {
+        printf("warning: failed to write wasm file for AOT compilation, using interpreter mode\n");
         goto cleanup;
     }
     if(!run_wamrc(wasm_path, aot_path)) {
@@ -125,9 +135,11 @@ static bool compile_aot_to_cache(
 
     SDL_PathInfo info;
     if(!SDL_GetPathInfo(aot_path, &info) || info.type != SDL_PATHTYPE_FILE || info.size == 0) {
+        printf("warning: failed to find compiled AOT file, using interpreter mode\n");
         goto cleanup;
     }
     if(!SDL_RenamePath(aot_path, cache_path)) {
+        printf("warning: failed to move compiled AOT file to cache, using interpreter mode\n");
         goto cleanup;
     }
 
@@ -151,18 +163,21 @@ static bool load_aot_module(
 
     char cache_dir[WD_MAX_PATH];
     if(!wd_cache_get_namespace_dir("aot", cache_dir, sizeof(cache_dir))) {
+        printf("warning: failed to get AOT cache dir, using interpreter mode\n");
         goto cleanup;
     }
 
     char key[17];
     int ret = snprintf(key, sizeof(key), "%016" PRIx64, fnv1a64(wasm_buffer, wasm_size));
     if(ret < 0 || (size_t)ret >= sizeof(key)) {
+        printf("warning: failed to get AOT cache key, using interpreter mode\n");
         goto cleanup;
     }
 
     char cache_path[WD_MAX_PATH];
     ret = snprintf(cache_path, sizeof(cache_path), "%s/%s.aot", cache_dir, key);
     if(ret < 0 || ret >= sizeof(cache_path)) {
+        printf("warning: failed to get AOT cache path, using interpreter mode\n");
         goto cleanup;
     }
 
@@ -171,12 +186,14 @@ static bool load_aot_module(
             goto cleanup;
         }
         if(!wd_cache_read_file(cache_path, &aot_buffer, &aot_size)) {
+            printf("warning: failed to read compiled AOT module, using interpreter mode\n");
             goto cleanup;
         }
     }
 
     scene->module = wasm_runtime_load(aot_buffer, aot_size, error_buf, error_buf_size);
     if(scene->module == NULL) {
+        printf("warning: failed to load AOT module, using interpreter mode\n");
         wd_cache_remove_file(cache_path);
         goto cleanup;
     }
