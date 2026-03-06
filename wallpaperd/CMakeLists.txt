@@ -17,6 +17,9 @@ option(WD_FFTW_SHARED "Dynamically link to system FFTW" OFF)
 
 option(WD_SANITIZE "Build with sanitizers" OFF)
 
+set(WD_WAMRC_PATH "wamrc" CACHE STRING "Path to wamr AOT compiler (wamrc)")
+add_compile_definitions(WD_WAMRC_PATH="${WD_WAMRC_PATH}")
+
 set(BUILD_SHARED_LIBS OFF)
 
 if(WD_SANITIZE)
