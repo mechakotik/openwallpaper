@@ -61,9 +61,9 @@ static uint64_t fnv1a64(const uint8_t* data, size_t size) {
     return hash;
 }
 
-static bool run_wamrc(const char* wasm_path, const char* aot_path) {
+static bool run_wamrc(const char* wamrc_path, const char* wasm_path, const char* aot_path) {
     bool result = false;
-    const char* args[] = {WD_WAMRC_PATH, "-o", aot_path, wasm_path, NULL};
+    const char* args[] = {wamrc_path, "-o", aot_path, wasm_path, NULL};
 
     SDL_PropertiesID props = SDL_CreateProperties();
     if(props == 0) {
@@ -99,7 +99,7 @@ static bool run_wamrc(const char* wasm_path, const char* aot_path) {
 }
 
 static bool compile_aot_to_cache(
-    const char* cache_path, const char* cache_key, const uint8_t* wasm_buffer, size_t wasm_size) {
+    wd_state* state, const char* cache_path, const char* cache_key, const uint8_t* wasm_buffer, size_t wasm_size) {
     bool result = false;
 
     char tmp_dir[WD_MAX_PATH] = {0};
@@ -129,7 +129,13 @@ static bool compile_aot_to_cache(
         printf("warning: failed to write wasm file for AOT compilation, using interpreter mode\n");
         goto cleanup;
     }
-    if(!run_wamrc(wasm_path, aot_path)) {
+
+    const char* wamrc_path = wd_get_option(&state->args, "wamrc");
+    if (wamrc_path == NULL) {
+        wamrc_path = WD_WAMRC_PATH;
+    }
+
+    if(!run_wamrc(wamrc_path, wasm_path, aot_path)) {
         goto cleanup;
     }
 
@@ -155,8 +161,8 @@ cleanup:
     return result;
 }
 
-static bool load_aot_module(
-    wd_scene_state* scene, const uint8_t* wasm_buffer, size_t wasm_size, char* error_buf, size_t error_buf_size) {
+static bool load_aot_module(wd_state* state, wd_scene_state* scene, const uint8_t* wasm_buffer, size_t wasm_size,
+    char* error_buf, size_t error_buf_size) {
     bool loaded = false;
     uint8_t* aot_buffer = NULL;
     size_t aot_size = 0;
@@ -182,7 +188,7 @@ static bool load_aot_module(
     }
 
     if(!wd_cache_read_file(cache_path, &aot_buffer, &aot_size)) {
-        if(!compile_aot_to_cache(cache_path, key, wasm_buffer, wasm_size)) {
+        if(!compile_aot_to_cache(state, cache_path, key, wasm_buffer, wasm_size)) {
             goto cleanup;
         }
         if(!wd_cache_read_file(cache_path, &aot_buffer, &aot_size)) {
@@ -270,7 +276,7 @@ bool wd_init_scene(wd_state* state, wd_args_state* args) {
     // compile the doom example with debug info.
     // Related issue: https://github.com/bytecodealliance/wasm-micro-runtime/issues/3187
     if(wd_get_option(&state->args, "no-aot") == NULL && init_args.instance_port == 0 &&
-        load_aot_module(scene, wasm_buffer, module_size, error_buf, sizeof(error_buf))) {
+        load_aot_module(state, scene, wasm_buffer, module_size, error_buf, sizeof(error_buf))) {
         free(wasm_buffer);
     } else {
         scene->module = wasm_runtime_load(scene->module_buffer, module_size, error_buf, sizeof(error_buf));

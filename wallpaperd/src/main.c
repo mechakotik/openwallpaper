@@ -25,6 +25,7 @@ static void print_help() {
     printf("  --audio-source=<source>\n");
     printf("  --no-audio\n");
     printf("  --no-aot\n");
+    printf("  --wamrc=<path>\n");
     printf("  --debug-port=<port>\n");
     printf("  --debug-addr=<addr> [default: 127.0.0.1]\n");
     printf("\n");
