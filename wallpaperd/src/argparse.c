@@ -161,7 +161,7 @@ bool wd_parse_args(wd_args_state* args, int argc, char* argv[]) {
                 return false;
             }
             args->version = true;
-        } else {
+        } else if(strcmp(key, "owui-tag") != 0) {
             wd_set_error("unknown option --%s", key);
             return false;
         }
