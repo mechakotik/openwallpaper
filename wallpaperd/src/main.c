@@ -39,19 +39,19 @@ int main(int argc, char* argv[]) {
         goto handle_error;
     }
 
-    if(wd_get_option(&state.args, "help") != NULL) {
+    if(state.args.help) {
         print_help();
         wd_free_state(&state);
         return 0;
     }
 
-    if(wd_get_option(&state.args, "version") != NULL) {
+    if(state.args.version) {
         printf("wallpaperd 0.1.0\n");
         wd_free_state(&state);
         return 0;
     }
 
-    if(wd_get_option(&state.args, "list-displays") != NULL) {
+    if(state.args.list_displays) {
         if(!wd_list_displays(&state.args)) {
             goto handle_error;
         }
@@ -65,12 +65,8 @@ int main(int argc, char* argv[]) {
     }
 
     float speed = 1;
-    if(wd_get_option(&state.args, "speed") != NULL) {
-        speed = atof(wd_get_option(&state.args, "speed"));
-        if(speed <= 0) {
-            wd_set_error("invalid speed value");
-            goto handle_error;
-        }
+    if(state.args.speed != 0) {
+        speed = state.args.speed;
     }
 
     if(!wd_init_audio_visualizer(&state.audio_visualizer, &state.args)) {
@@ -95,26 +91,19 @@ int main(int argc, char* argv[]) {
         goto handle_error;
     }
 
-    uint32_t fps = 0, frame_time = 0;
-    if(wd_get_option(&state.args, "fps") != NULL) {
-        fps = atoi(wd_get_option(&state.args, "fps"));
-        if(fps <= 0) {
-            wd_set_error("invalid fps value");
-            goto handle_error;
-        }
+    uint32_t fps = state.args.fps, frame_time = 0;
+    if(fps != 0) {
         frame_time = 1000000000 / fps;
     }
 
     uint64_t prev_time = SDL_GetTicksNS();
 
-    bool pause_hidden = (wd_get_option(&state.args, "pause-hidden") != NULL);
-    bool pause_on_bat = (wd_get_option(&state.args, "pause-on-bat") != NULL);
     bool frame_skipped = false;
     uint64_t last_pause_check = prev_time;
     bool first_draw = true;
     float delta_factor = 1;
 
-    if(pause_on_bat) {
+    if(state.args.pause_on_bat) {
         wd_init_battery(&state.battery);
     }
 
@@ -154,8 +143,8 @@ int main(int argc, char* argv[]) {
         }
 
         if(!first_draw && last_pause_check < cur_time - 2e8) {
-            if((pause_hidden && wd_output_hidden(&state.output)) ||
-                (pause_on_bat && wd_battery_discharging(&state.battery))) {
+            if((state.args.pause_hidden && wd_output_hidden(&state.output)) ||
+                (state.args.pause_on_bat && wd_battery_discharging(&state.battery))) {
                 SDL_Delay(200);
                 frame_skipped = true;
                 delta_factor = 0;

@@ -72,7 +72,101 @@ bool wd_parse_args(wd_args_state* args, int argc, char* argv[]) {
         if(!split_option(argv[i + 1] + 2, &args->options_keys[i], &args->options_values[i])) {
             return false;
         }
+
+        const char* key = args->options_keys[i];
+        const char* value = args->options_values[i];
+        if(strcmp(key, "window") == 0) {
+            if(value[0] != '\0') {
+                wd_set_error("--window is a flag, cannot set value");
+                return false;
+            }
+            args->window = true;
+        } else if(strcmp(key, "display") == 0) {
+            if(value[0] == '\0') {
+                wd_set_error("no value for --display is set");
+                return false;
+            }
+            args->display = value;
+        } else if(strcmp(key, "fps") == 0) {
+            if(value[0] == '\0') {
+                wd_set_error("no value for --fps is set");
+                return false;
+            }
+            args->fps = atoi(value);
+            if(args->fps <= 0) {
+                wd_set_error("invalid --fps value, must be a positive integer");
+                return false;
+            }
+        } else if(strcmp(key, "speed") == 0) {
+            if(value[0] == '\0') {
+                wd_set_error("no value for --speed is set");
+                return false;
+            }
+            args->speed = atof(value);
+            if(args->speed <= 0) {
+                wd_set_error("invalid --speed value, must be a positive real");
+                return false;
+            }
+        } else if(strcmp(key, "prefer-dgpu") == 0) {
+            if(value[0] != '\0') {
+                wd_set_error("--prefer-dgpu is a flag, cannot set value");
+                return false;
+            }
+            args->prefer_dgpu = true;
+        } else if(strcmp(key, "pause-hidden") == 0) {
+            if(value[0] != '\0') {
+                wd_set_error("--pause-hidden is a flag, cannot set value");
+                return false;
+            }
+            args->pause_hidden = true;
+        } else if(strcmp(key, "pause-on-bat") == 0) {
+            if(value[0] != '\0') {
+                wd_set_error("--pause-on-bat is a flag, cannot set value");
+                return false;
+            }
+            args->pause_on_bat = true;
+        } else if(strcmp(key, "audio-backend") == 0) {
+            if(value[0] == '\0') {
+                wd_set_error("no value for --audio-backend is set");
+                return false;
+            }
+            args->audio_backend = value;
+        } else if(strcmp(key, "audio-source") == 0) {
+            if(value[0] == '\0') {
+                wd_set_error("no value for --audio-source is set");
+                return false;
+            }
+            args->audio_source = value;
+        } else if(strcmp(key, "no-audio") == 0) {
+            if(value[0] != '\0') {
+                wd_set_error("--no-audio is a flag, cannot set value");
+                return false;
+            }
+            args->no_audio = true;
+        } else if(strcmp(key, "list-displays") == 0) {
+            if(value[0] != '\0') {
+                wd_set_error("--list-displays is a flag, cannot set value");
+                return false;
+            }
+            args->list_displays = true;
+        } else if(strcmp(key, "help") == 0) {
+            if(value[0] != '\0') {
+                wd_set_error("--help is a flag, cannot set value");
+                return false;
+            }
+            args->help = true;
+        } else if(strcmp(key, "version") == 0) {
+            if(value[0] != '\0') {
+                wd_set_error("--version is a flag, cannot set value");
+                return false;
+            }
+            args->version = true;
+        } else {
+            wd_set_error("unknown option --%s", key);
+            return false;
+        }
     }
+
     for(int i = 0; i < args->num_wallpaper_options; i++) {
         if(!split_option(argv[i + args->num_options + 2] + 2, &args->wallpaper_options_keys[i],
                &args->wallpaper_options_values[i])) {
@@ -97,15 +191,6 @@ void wd_free_args(wd_args_state* args) {
     free(args->wallpaper_path);
     free(args->wallpaper_options_keys);
     free(args->wallpaper_options_values);
-}
-
-const char* wd_get_option(wd_args_state* args, const char* name) {
-    for(int i = 0; i < args->num_options; i++) {
-        if(strcmp(args->options_keys[i], name) == 0) {
-            return args->options_values[i];
-        }
-    }
-    return NULL;
 }
 
 const char* wd_get_wallpaper_path(wd_args_state* args) {

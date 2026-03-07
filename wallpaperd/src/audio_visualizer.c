@@ -113,12 +113,12 @@ bool wd_init_audio_visualizer(wd_audio_visualizer_state* state, wd_args_state* a
     if(!WD_AUDIO_VISUALIZER) {
         return true;
     }
-    state->allowed = (wd_get_option(args, "no-audio") == NULL);
+    state->allowed = !args->no_audio;
     if(!state->allowed) {
         return true;
     }
 
-    const char* custom_backend = wd_get_option(args, "audio-backend");
+    const char* custom_backend = args->audio_backend;
     if(custom_backend != NULL) {
         wd_audio_backend parsed = parse_backend(custom_backend);
         if(parsed == WD_AUDIO_BACKEND_NONE) {
@@ -131,7 +131,7 @@ bool wd_init_audio_visualizer(wd_audio_visualizer_state* state, wd_args_state* a
         }
         state->custom_backend = parsed;
     }
-    state->custom_source = wd_get_option(args, "audio-source");
+    state->custom_source = args->audio_source;
 
     return true;
 }

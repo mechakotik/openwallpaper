@@ -12,7 +12,7 @@
 #include "wlroots.h"
 
 static const char* get_output(wd_args_state* args) {
-    if(wd_get_option(args, "window") != NULL) {
+    if(args->window) {
         return "window";
     }
     if(getenv("WAYLAND_DISPLAY") != NULL && wd_dynapi_load_wayland()) {
@@ -23,7 +23,6 @@ static const char* get_output(wd_args_state* args) {
 
 bool wd_init_output(wd_output_state* output, wd_args_state* args) {
     const char* name = get_output(args);
-    const char* display_name = wd_get_option(args, "display");
 
     if(strcmp(name, "window") == 0) {
         if(!wd_window_output_init(&output->data)) {
@@ -33,7 +32,7 @@ bool wd_init_output(wd_output_state* output, wd_args_state* args) {
         output->free_output = wd_window_output_free;
     } else if(strcmp(name, "wlroots") == 0) {
 #ifdef WD_WLROOTS
-        if(!wd_wlroots_output_init(&output->data, display_name)) {
+        if(!wd_wlroots_output_init(&output->data, args->display)) {
             return false;
         }
         output->window = wd_wlroots_output_get_window(output->data);
@@ -49,8 +48,7 @@ bool wd_init_output(wd_output_state* output, wd_args_state* args) {
     }
 
     SDL_PropertiesID gpu_properties = SDL_CreateProperties();
-    bool prefer_dgpu = (wd_get_option(args, "prefer-dgpu") != NULL);
-    if(!SDL_SetBooleanProperty(gpu_properties, SDL_PROP_GPU_DEVICE_CREATE_PREFERLOWPOWER_BOOLEAN, !prefer_dgpu)) {
+    if(!SDL_SetBooleanProperty(gpu_properties, SDL_PROP_GPU_DEVICE_CREATE_PREFERLOWPOWER_BOOLEAN, !args->prefer_dgpu)) {
         printf("warning: failed to set preffered GPU: %s\n", SDL_GetError());
     }
     if(!SDL_SetBooleanProperty(gpu_properties, SDL_PROP_GPU_DEVICE_CREATE_SHADERS_SPIRV_BOOLEAN, true)) {
@@ -68,7 +66,7 @@ bool wd_init_output(wd_output_state* output, wd_args_state* args) {
         return false;
     }
 
-    if(wd_get_option(args, "fps") == NULL) {
+    if(args->fps == 0) {
         bool ok = SDL_SetGPUSwapchainParameters(
             output->gpu, output->window, SDL_GPU_SWAPCHAINCOMPOSITION_SDR, SDL_GPU_PRESENTMODE_VSYNC);
         if(!ok) {
