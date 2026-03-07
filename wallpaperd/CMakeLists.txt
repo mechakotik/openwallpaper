@@ -4,6 +4,8 @@ project(wallpaperd)
 include(GNUInstallDirs)
 find_package(PkgConfig)
 
+option(WD_DEBUG "Enable wasm debugging facilities" OFF)
+
 option(WD_WLROOTS "Enable wlroots output support" ON)
 option(WD_AUDIO_VISUALIZER "Enable audio visualization support" ON)
 
@@ -14,6 +16,9 @@ option(WD_LIBZIP_SHARED "Dynamically link to system libzip" OFF)
 option(WD_FFTW_SHARED "Dynamically link to system FFTW" OFF)
 
 option(WD_SANITIZE "Build with sanitizers" OFF)
+
+set(WD_WAMRC_PATH "wamrc" CACHE STRING "Path to wamr AOT compiler (wamrc)")
+add_compile_definitions(WD_WAMRC_PATH="${WD_WAMRC_PATH}")
 
 set(BUILD_SHARED_LIBS OFF)
 
@@ -105,7 +110,14 @@ endif()
 set(WAMR_BUILD_PLATFORM "linux")
 set(WAMR_BUILD_TARGET "X86_64")
 set(WAMR_BUILD_INTERP 1)
-set(WAMR_BUILD_FAST_INTERP 1)
+if(WD_DEBUG)
+    add_compile_definitions(WD_DEBUG=1)
+    set(WAMR_BUILD_DEBUG_INTERP 1)
+    set(WAMR_BUILD_FAST_INTERP 0)
+else()
+    set(WAMR_BUILD_DEBUG_INTERP 0)
+    set(WAMR_BUILD_FAST_INTERP 1)
+endif()
 set(WAMR_BUILD_AOT 1)
 set(WAMR_BUILD_LIBC_BUILTIN 1)
 set(WAMR_BUILD_LIBC_WASI 1)

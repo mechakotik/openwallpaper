@@ -61,9 +61,9 @@ static uint64_t fnv1a64(const uint8_t* data, size_t size) {
     return hash;
 }
 
-static bool run_wamrc(const char* wasm_path, const char* aot_path) {
+static bool run_wamrc(const char* wamrc_path, const char* wasm_path, const char* aot_path) {
     bool result = false;
-    const char* args[] = {"wamrc", "-o", aot_path, wasm_path, NULL};
+    const char* args[] = {wamrc_path, "-o", aot_path, wasm_path, NULL};
 
     SDL_PropertiesID props = SDL_CreateProperties();
     if(props == 0) {
@@ -99,7 +99,7 @@ static bool run_wamrc(const char* wasm_path, const char* aot_path) {
 }
 
 static bool compile_aot_to_cache(
-    const char* cache_path, const char* cache_key, const uint8_t* wasm_buffer, size_t wasm_size) {
+    wd_state* state, const char* cache_path, const char* cache_key, const uint8_t* wasm_buffer, size_t wasm_size) {
     bool result = false;
 
     char tmp_dir[WD_MAX_PATH] = {0};
@@ -129,7 +129,13 @@ static bool compile_aot_to_cache(
         printf("warning: failed to write wasm file for AOT compilation, using interpreter mode\n");
         goto cleanup;
     }
-    if(!run_wamrc(wasm_path, aot_path)) {
+
+    const char* wamrc_path = wd_get_option(&state->args, "wamrc");
+    if (wamrc_path == NULL) {
+        wamrc_path = WD_WAMRC_PATH;
+    }
+
+    if(!run_wamrc(wamrc_path, wasm_path, aot_path)) {
         goto cleanup;
     }
 
@@ -155,8 +161,8 @@ cleanup:
     return result;
 }
 
-static bool load_aot_module(
-    wd_scene_state* scene, const uint8_t* wasm_buffer, size_t wasm_size, char* error_buf, size_t error_buf_size) {
+static bool load_aot_module(wd_state* state, wd_scene_state* scene, const uint8_t* wasm_buffer, size_t wasm_size,
+    char* error_buf, size_t error_buf_size) {
     bool loaded = false;
     uint8_t* aot_buffer = NULL;
     size_t aot_size = 0;
@@ -182,7 +188,7 @@ static bool load_aot_module(
     }
 
     if(!wd_cache_read_file(cache_path, &aot_buffer, &aot_size)) {
-        if(!compile_aot_to_cache(cache_path, key, wasm_buffer, wasm_size)) {
+        if(!compile_aot_to_cache(state, cache_path, key, wasm_buffer, wasm_size)) {
             goto cleanup;
         }
         if(!wd_cache_read_file(cache_path, &aot_buffer, &aot_size)) {
@@ -213,8 +219,36 @@ bool wd_init_scene(wd_state* state, wd_args_state* args) {
     wd_scene_state* scene = &state->scene;
     const uint32_t stack_size = 4 * 1024 * 1024;
 
-    if(!wasm_runtime_init()) {
-        wd_set_error("wasm_runtime_init failed");
+    RuntimeInitArgs init_args = {
+        .mem_alloc_type = Alloc_With_System_Allocator,
+    };
+
+    if(wd_get_option(&state->args, "debug-port") != NULL) {
+#if WD_DEBUG != 1
+        wd_set_error("wasm debugging requires wallpaperd compiled with -DWD_DEBUG=ON");
+        return false;
+#endif
+
+        init_args.instance_port = atoi(wd_get_option(&state->args, "debug-port"));
+        if(init_args.instance_port == 0) {
+            wd_set_error("invalid --debug-port");
+            return false;
+        }
+
+        const char* debug_addr = wd_get_option(&state->args, "debug-addr");
+        if(debug_addr == NULL) {
+            debug_addr = "127.0.0.1";
+        }
+
+        strncpy(init_args.ip_addr, debug_addr, sizeof(init_args.ip_addr));
+        if(init_args.ip_addr[sizeof(init_args.ip_addr) - 1] != '\0') {
+            wd_set_error("--debug-addr is too long");
+            return false;
+        }
+    }
+
+    if(!wasm_runtime_full_init(&init_args)) {
+        wd_set_error("wasm_runtime_full_init failed");
         return false;
     }
 
@@ -237,7 +271,12 @@ bool wd_init_scene(wd_state* state, wd_args_state* args) {
 
     char error_buf[128];
     uint8_t* wasm_buffer = scene->module_buffer;
-    if(load_aot_module(scene, wasm_buffer, module_size, error_buf, sizeof(error_buf))) {
+    // AOT/JIT debugging seems to be less supported, wamrc fails to build with
+    // -DWAMR_BUILD_DEBUG_AOT=1 against LLVM past 18, and then it even couldn't
+    // compile the doom example with debug info.
+    // Related issue: https://github.com/bytecodealliance/wasm-micro-runtime/issues/3187
+    if(wd_get_option(&state->args, "no-aot") == NULL && init_args.instance_port == 0 &&
+        load_aot_module(state, scene, wasm_buffer, module_size, error_buf, sizeof(error_buf))) {
         free(wasm_buffer);
     } else {
         scene->module = wasm_runtime_load(scene->module_buffer, module_size, error_buf, sizeof(error_buf));
@@ -260,6 +299,30 @@ bool wd_init_scene(wd_state* state, wd_args_state* args) {
         wd_set_error("wasm_runtime_create_exec_env failed");
         return false;
     }
+
+#if WD_DEBUG == 1
+    if(init_args.instance_port != 0) {
+        uint32_t debug_port = wasm_runtime_start_debug_instance_with_port(scene->exec_env, -1);
+        if(debug_port == 0) {
+            wd_set_error("failed to start debug endpoint at port %u", init_args.instance_port);
+            return false;
+        }
+
+        printf("Debug endpoint is up. Attach to it using:\n");
+        printf("\n");
+        printf("    $ lldb\n");
+        printf("    (lldb) process connect -p wasm connect://%s:%i\n", init_args.ip_addr, debug_port);
+        printf("    (lldb) b init\n");
+        printf("    (lldb) b update\n");
+        printf("    (lldb) b scene.c:<line num>\n");
+        printf("    (lldb) c\n");
+        printf("\n");
+        printf("Note: If lldb doesn't see the source code, make sure you compile with -g flag: $WASMCC -g [...]\n");
+        printf(
+            "Note: lldb received adequate wasm support only in LLVM 22, make sure your lldb --version is at least "
+            "that\n");
+    }
+#endif
 
     wasm_function_inst_t init_func = wasm_runtime_lookup_function(scene->instance, "init");
     if(init_func == NULL) {

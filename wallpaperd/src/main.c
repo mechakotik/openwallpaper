@@ -12,8 +12,9 @@
 
 static void print_help() {
     printf("Usage: wallpaperd [OPTIONS] [WALLPAPER_PATH] [WALLPAPER_OPTIONS]\n");
-    printf("Interactive live wallpaper daemon\n\n");
-
+    printf("Interactive live wallpaper daemon\n");
+    printf("\n");
+    printf("  --window\n");
     printf("  --display=<display>\n");
     printf("  --fps=<fps>\n");
     printf("  --speed=<speed>\n");
@@ -23,8 +24,11 @@ static void print_help() {
     printf("  --audio-backend=<backend>\n");
     printf("  --audio-source=<source>\n");
     printf("  --no-audio\n");
-    printf("  --window\n\n");
-
+    printf("  --no-aot\n");
+    printf("  --wamrc=<path>\n");
+    printf("  --debug-port=<port>\n");
+    printf("  --debug-addr=<addr> [default: 127.0.0.1]\n");
+    printf("\n");
     printf("  --list-displays\n");
     printf("  --help\n");
     printf("  --version\n");
