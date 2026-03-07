@@ -17,7 +17,7 @@ if ! command -v zip >/dev/null 2>&1; then
     exit 1
 fi
 
-$WASM_CC scene.c -o scene.wasm -I../../include -Wl,--allow-undefined
+$WASM_CC -O2 -g scene.c -o scene.wasm -I../../include -Wl,--allow-undefined
 glslc -fshader-stage=vertex vertex.glsl -o vertex.spv
 glslc -fshader-stage=fragment fragment.glsl -o fragment.spv
 rm -f fullscreen-shader.owf
