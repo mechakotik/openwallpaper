@@ -201,7 +201,8 @@ typedef struct {
 void init();
 void update(float delta);
 
-void ow_load_file(wasm_exec_env_t exec_env, uint32_t path_ptr, uint32_t data_ptr, uint32_t size_ptr);
+uint32_t ow_get_file_size(wasm_exec_env_t exec_env, uint32_t path_ptr);
+void ow_read_file(wasm_exec_env_t exec_env, uint32_t path_ptr, uint32_t data_ptr);
 
 void ow_begin_copy_pass(wasm_exec_env_t exec_env);
 void ow_end_copy_pass(wasm_exec_env_t exec_env);

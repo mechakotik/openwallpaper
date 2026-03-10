@@ -25,32 +25,47 @@
         return 0;                                 \
     }
 
-void ow_load_file(wasm_exec_env_t exec_env, uint32_t path_ptr, uint32_t data_ptr, uint32_t size_ptr) {
+uint32_t ow_get_file_size(wasm_exec_env_t exec_env, uint32_t path_ptr) {
     wasm_module_inst_t instance = wasm_runtime_get_module_inst(exec_env);
     wd_state* state = wasm_runtime_get_custom_data(instance);
 
     const char* path = wasm_runtime_addr_app_to_native(instance, path_ptr);
-    uint8_t* data;
     size_t size;
-    if(!wd_read_from_zip(&state->zip, path, &data, &size)) {
+    if(!wd_zip_get_file_size(&state->zip, path, &size)) {
+        wasm_runtime_set_exception(instance, "");
+        return 0;
+    }
+
+    if(size > UINT32_MAX) {
+        wd_set_error("decompressed size of %s exceeds wasm size limits", path);
+        wasm_runtime_set_exception(instance, "");
+        return 0;
+    }
+
+    return (uint32_t)size;
+}
+
+void ow_read_file(wasm_exec_env_t exec_env, uint32_t path_ptr, uint32_t data_ptr) {
+    wasm_module_inst_t instance = wasm_runtime_get_module_inst(exec_env);
+    wd_state* state = wasm_runtime_get_custom_data(instance);
+
+    const char* path = wasm_runtime_addr_app_to_native(instance, path_ptr);
+    size_t size = 0;
+    if(!wd_zip_get_file_size(&state->zip, path, &size)) {
         wasm_runtime_set_exception(instance, "");
         return;
     }
 
-    void* data_wasm_native = NULL;
-    uint32_t data_wasm = wasm_runtime_module_malloc(state->scene.instance, size, &data_wasm_native);
-    if(data_wasm == 0) {
-        wd_set_error("failed to allocate wasm memory for file data");
+    if(size > UINT32_MAX) {
+        wd_set_error("file size for %s exceeds wasm32 size limits", path);
         wasm_runtime_set_exception(instance, "");
         return;
     }
-    memcpy(data_wasm_native, data, size);
-    free(data);
 
-    uint32_t* data_ptr_real = wasm_runtime_addr_app_to_native(instance, data_ptr);
-    *data_ptr_real = data_wasm;
-    uint32_t* size_ptr_real = wasm_runtime_addr_app_to_native(instance, size_ptr);
-    *size_ptr_real = size;
+    uint8_t* data_ptr_real = wasm_runtime_addr_app_to_native(instance, data_ptr);
+    if(!wd_zip_read_file(&state->zip, path, data_ptr_real)) {
+        wasm_runtime_set_exception(instance, "");
+    }
 }
 
 void ow_begin_copy_pass(wasm_exec_env_t exec_env) {
@@ -169,9 +184,15 @@ static uint32_t create_shader_from_file(wasm_exec_env_t exec_env, uint32_t path_
     wd_state* state = wasm_runtime_get_custom_data(instance);
     const char* path_ptr_real = wasm_runtime_addr_app_to_native(instance, path_ptr);
 
-    uint8_t* bytecode;
-    size_t size;
-    if(!wd_read_from_zip(&state->zip, path_ptr_real, &bytecode, &size)) {
+    size_t size = 0;
+    if(!wd_zip_get_file_size(&state->zip, path_ptr_real, &size)) {
+        wasm_runtime_set_exception(instance, "");
+        return 0;
+    }
+
+    uint8_t* bytecode = wd_malloc(size == 0 ? 1 : size);
+    if(!wd_zip_read_file(&state->zip, path_ptr_real, bytecode)) {
+        free(bytecode);
         wasm_runtime_set_exception(instance, "");
         return 0;
     }
@@ -374,9 +395,15 @@ uint32_t ow_create_texture_from_image(wasm_exec_env_t exec_env, uint32_t path_pt
         return 0;
     }
 
-    size_t image_size;
-    uint8_t* image_data;
-    if(!wd_read_from_zip(&state->zip, path, &image_data, &image_size)) {
+    size_t image_size = 0;
+    if(!wd_zip_get_file_size(&state->zip, path, &image_size)) {
+        wasm_runtime_set_exception(instance, "");
+        return 0;
+    }
+
+    uint8_t* image_data = wd_malloc(image_size == 0 ? 1 : image_size);
+    if(!wd_zip_read_file(&state->zip, path, image_data)) {
+        free(image_data);
         wasm_runtime_set_exception(instance, "");
         return 0;
     }

@@ -1,9 +1,7 @@
 #include "zip.h"
-#include <stdlib.h>
 #include <string.h>
 #include <zip.h>
 #include "error.h"
-#include "malloc.h"
 
 bool wd_init_zip(wd_zip_state* zip, const char* path) {
     int error = 0;
@@ -19,10 +17,37 @@ bool wd_init_zip(wd_zip_state* zip, const char* path) {
     return true;
 }
 
-bool wd_read_from_zip(wd_zip_state* zip, const char* path, uint8_t** result, size_t* size) {
+bool wd_zip_get_file_size(wd_zip_state* zip, const char* path, size_t* size) {
     zip_stat_t stat = {0};
     memset(&stat, 0, sizeof(stat));
-    bool has_stat = (zip_stat(zip->archive, path, 0, &stat) == 0);
+    if(zip_stat(zip->archive, path, 0, &stat) != 0) {
+        wd_set_error("zip_stat for %s failed: %s", path, zip_strerror(zip->archive));
+        return false;
+    }
+
+    if((stat.valid & ZIP_STAT_SIZE) == 0) {
+        // TODO: handle this?
+        wd_set_error("decompressed size of %s is unknown, unsupported for now", path);
+        return false;
+    }
+
+    if(stat.size >= SIZE_MAX) {
+        wd_set_error("decompressed size of %s is too large", path);
+        return false;
+    }
+
+    *size = (size_t)stat.size;
+    return true;
+}
+
+bool wd_zip_read_file(wd_zip_state* zip, const char* path, uint8_t* result) {
+    size_t size = 0;
+    if(!wd_zip_get_file_size(zip, path, &size)) {
+        return false;
+    }
+    if(size == 0) {
+        return true;
+    }
 
     zip_file_t* file = zip_fopen(zip->archive, path, 0);
     if(file == NULL) {
@@ -30,41 +55,29 @@ bool wd_read_from_zip(wd_zip_state* zip, const char* path, uint8_t** result, siz
         return false;
     }
 
-    uint8_t* buffer = NULL;
-    zip_uint64_t total = 0;
-    size_t capacity = 0;
-
-    if(has_stat && (stat.valid & ZIP_STAT_SIZE) != 0) {
-        capacity = (size_t)stat.size;
-        buffer = wd_malloc(capacity + 1);
-
-        size_t offset = 0;
-        while(offset < capacity) {
-            zip_int64_t read = zip_fread(file, buffer + offset, capacity - offset);
-            if(read < 0) {
-                zip_error_t* file_error = zip_file_get_error(file);
-                wd_set_error("zip_fread for %s failed: %s", path, zip_error_strerror(file_error));
-                zip_fclose(file);
-                return false;
-            }
-            if(read == 0) {
-                break;
-            }
-            offset += read;
+    size_t offset = 0;
+    while(offset < size) {
+        zip_int64_t read = zip_fread(file, result + offset, size - offset);
+        if(read < 0) {
+            zip_error_t* file_error = zip_file_get_error(file);
+            wd_set_error("zip_fread for %s failed: %s", path, zip_error_strerror(file_error));
+            zip_fclose(file);
+            return false;
         }
+        if(read == 0) {
+            break;
+        }
+        offset += read;
+    }
 
-        total = offset;
-        buffer[total] = '\0';
-    } else {
-        // FIXME: still read file by chunks
-        wd_set_error("decompressed file size is unknown for %s, unsupported for now", path);
+    if(offset != size) {
+        wd_set_error(
+            "zip_fread for %s failed: unexpected EOF (read %zu bytes, expected %zu bytes)", path, offset, size);
         zip_fclose(file);
         return false;
     }
 
     zip_fclose(file);
-    *result = buffer;
-    *size = total;
     return true;
 }
 

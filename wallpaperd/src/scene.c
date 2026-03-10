@@ -16,7 +16,8 @@
 #include "zip.h"
 
 static NativeSymbol native_symbols[] = {
-    {"ow_load_file", ow_load_file, "(iii)"},
+    {"ow_get_file_size", ow_get_file_size, "(i)i"},
+    {"ow_read_file", ow_read_file, "(ii)"},
     {"ow_begin_copy_pass", ow_begin_copy_pass, "()"},
     {"ow_end_copy_pass", ow_end_copy_pass, "()"},
     {"ow_begin_render_pass", ow_begin_render_pass, "(i)"},
@@ -231,7 +232,14 @@ bool wd_init_scene(wd_state* state, wd_args_state* args) {
     }
 
     size_t module_size = 0;
-    if(!wd_read_from_zip(&state->zip, "scene.wasm", &scene->module_buffer, &module_size)) {
+    if(!wd_zip_get_file_size(&state->zip, "scene.wasm", &module_size)) {
+        return false;
+    }
+
+    scene->module_buffer = wd_malloc(module_size == 0 ? 1 : module_size);
+    if(!wd_zip_read_file(&state->zip, "scene.wasm", scene->module_buffer)) {
+        free(scene->module_buffer);
+        scene->module_buffer = NULL;
         return false;
     }
 
