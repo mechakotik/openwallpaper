@@ -334,14 +334,21 @@ void init();
 void update(float delta);
 
 /**
- * Loads a file from the scene archive into module memory. Panics if file is not found. Memory for loaded data is
- * allocated by the host application during function call, and after that owned by user.
+ * Gets the size of a file from the scene archive in bytes. Panics if file is not found.
  *
  * \param path Path to the file to load, absolute in the scene archive. A null-terminated byte string
- * \param data Loaded data
- * \param size Size of loaded data in bytes
+ * \return Size of the file in bytes
  */
-extern void ow_load_file(const char* path, uint8_t** data, size_t* size);
+extern size_t ow_get_file_size(const char* path);
+
+/**
+ * Loads a file from the scene archive into provided data buffer. Panics if file is not found. Use `ow_get_file_size` to
+ * get required size of the data buffer.
+ *
+ * \param path Path to the file to load, absolute in the scene archive. A null-terminated byte string
+ * \param data Buffer to load data into
+ */
+extern void ow_read_file(const char* path, uint8_t* data);
 
 /**
  * Begins a copy pass. Can be called only if no pass is currently active, panics elsewhere.
