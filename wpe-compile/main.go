@@ -525,7 +525,7 @@ func processImageObjectInit(object ImageObject, tempBuffers *[2]int) (CodegenPas
 		ParallaxEnabled:        scene.General.Parallax,
 		ParallaxAmount:         float32(scene.General.ParallaxAmount),
 		ParallaxMouseInfluence: float32(scene.General.ParallaxMouseInfluence),
-		Perspective:            false,
+		Perspective:            object.Perspective,
 		NearZ:                  float32(scene.General.NearZ),
 		FarZ:                   float32(scene.General.FarZ),
 		FOV:                    float32(scene.General.FOV),
@@ -746,7 +746,7 @@ func processImageEffect(object ImageObject, effect ImageEffect, tempBuffers *[2]
 			ParallaxEnabled:        scene.General.Parallax,
 			ParallaxAmount:         float32(scene.General.ParallaxAmount),
 			ParallaxMouseInfluence: float32(scene.General.ParallaxMouseInfluence),
-			Perspective:            false,
+			Perspective:            object.Perspective,
 			NearZ:                  float32(scene.General.NearZ),
 			FarZ:                   float32(scene.General.FarZ),
 			FOV:                    float32(scene.General.FOV),
@@ -858,7 +858,7 @@ func processImageObjectFinalPassthrough(object ImageObject) {
 			ParallaxEnabled:        scene.General.Parallax,
 			ParallaxAmount:         float32(scene.General.ParallaxAmount),
 			ParallaxMouseInfluence: float32(scene.General.ParallaxMouseInfluence),
-			Perspective:            false,
+			Perspective:            object.Perspective,
 			NearZ:                  float32(scene.General.NearZ),
 			FarZ:                   float32(scene.General.FarZ),
 			FOV:                    float32(scene.General.FOV),
@@ -1010,6 +1010,9 @@ func processParticleObject(object ParticleObject) {
 	}
 
 	uniformSetupCode := fmt.Sprintf(`vertex_uniforms.mvp = matrices.model_view_projection;
+		vertex_uniforms.orientation_up = matrices.orientation_up;
+		vertex_uniforms.orientation_right = matrices.orientation_right;
+		vertex_uniforms.orientation_forward = matrices.orientation_forward;
 		vertex_uniforms.texture_ratio = %f;
 `, textureRatio)
 

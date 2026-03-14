@@ -110,27 +110,18 @@ typedef struct {
     glsl_mat4 model;
     glsl_mat4 view_projection;
     glsl_mat4 model_view_projection;
+    glsl_vec4 orientation_up;
+    glsl_vec4 orientation_right;
+    glsl_vec4 orientation_forward;
     float parallax_position_x;
     float parallax_position_y;
 } transform_matrices_t;
 
 static glsl_mat4 mat4_identity() {
-    glsl_mat4 res;
+    glsl_mat4 res = {0};
     res.at[0][0] = 1.0f;
-    res.at[0][1] = 0.0f;
-    res.at[0][2] = 0.0f;
-    res.at[0][3] = 0.0f;
-    res.at[1][0] = 0.0f;
     res.at[1][1] = 1.0f;
-    res.at[1][2] = 0.0f;
-    res.at[1][3] = 0.0f;
-    res.at[2][0] = 0.0f;
-    res.at[2][1] = 0.0f;
     res.at[2][2] = 1.0f;
-    res.at[2][3] = 0.0f;
-    res.at[3][0] = 0.0f;
-    res.at[3][1] = 0.0f;
-    res.at[3][2] = 0.0f;
     res.at[3][3] = 1.0f;
     return res;
 }
@@ -171,18 +162,90 @@ static glsl_mat4 mat4_multiply(glsl_mat4 a, glsl_mat4 b) {
     return res;
 }
 
-static glsl_vec3 vec3_sub(glsl_vec3 a, glsl_vec3 b) {
-    glsl_vec3 res = {{a.at[0] - b.at[0], a.at[1] - b.at[1], a.at[2] - b.at[2]}};
+static glsl_mat3 mat3_identity() {
+    glsl_mat3 res = {0};
+    res.at[0][0] = 1.0f;
+    res.at[1][1] = 1.0f;
+    res.at[2][2] = 1.0f;
     return res;
 }
 
+static glsl_mat3 mat3_from_mat4(glsl_mat4 m) {
+    glsl_mat3 res = {0};
+    for(int col = 0; col < 3; ++col) {
+        for(int row = 0; row < 3; ++row) {
+            res.at[col][row] = m.at[col][row];
+        }
+    }
+    return res;
+}
+
+static glsl_vec3 mat3_multiply(glsl_mat3 m, glsl_vec3 v) {
+    return (glsl_vec3){{
+        m.at[0][0] * v.at[0] + m.at[1][0] * v.at[1] + m.at[2][0] * v.at[2],
+        m.at[0][1] * v.at[0] + m.at[1][1] * v.at[1] + m.at[2][1] * v.at[2],
+        m.at[0][2] * v.at[0] + m.at[1][2] * v.at[1] + m.at[2][2] * v.at[2],
+    }};
+}
+
+static glsl_mat3 mat3_inverse(glsl_mat3 m) {
+    float m00 = m.at[0][0];
+    float m01 = m.at[1][0];
+    float m02 = m.at[2][0];
+    float m10 = m.at[0][1];
+    float m11 = m.at[1][1];
+    float m12 = m.at[2][1];
+    float m20 = m.at[0][2];
+    float m21 = m.at[1][2];
+    float m22 = m.at[2][2];
+
+    float c00 = m11 * m22 - m12 * m21;
+    float c01 = m12 * m20 - m10 * m22;
+    float c02 = m10 * m21 - m11 * m20;
+    float c10 = m02 * m21 - m01 * m22;
+    float c11 = m00 * m22 - m02 * m20;
+    float c12 = m01 * m20 - m00 * m21;
+    float c20 = m01 * m12 - m02 * m11;
+    float c21 = m02 * m10 - m00 * m12;
+    float c22 = m00 * m11 - m01 * m10;
+
+    float det = m00 * c00 + m01 * c01 + m02 * c02;
+    if(fabsf(det) < 0.0000001f) {
+        return mat3_identity();
+    }
+
+    float inv_det = 1.0f / det;
+    glsl_mat3 inv = {0};
+    inv.at[0][0] = c00 * inv_det;
+    inv.at[1][0] = c10 * inv_det;
+    inv.at[2][0] = c20 * inv_det;
+    inv.at[0][1] = c01 * inv_det;
+    inv.at[1][1] = c11 * inv_det;
+    inv.at[2][1] = c21 * inv_det;
+    inv.at[0][2] = c02 * inv_det;
+    inv.at[1][2] = c12 * inv_det;
+    inv.at[2][2] = c22 * inv_det;
+    return inv;
+}
+
+static glsl_vec4 vec4_from_vec3(glsl_vec3 v) {
+    return (glsl_vec4){v.at[0], v.at[1], v.at[2], 0.0f};
+}
+
+static glsl_vec3 vec3_sub(glsl_vec3 a, glsl_vec3 b) {
+    return (glsl_vec3){{a.at[0] - b.at[0], a.at[1] - b.at[1], a.at[2] - b.at[2]}};
+}
+
+static glsl_vec3 vec3_scale(glsl_vec3 v, float s) {
+    return (glsl_vec3){{v.at[0] * s, v.at[1] * s, v.at[2] * s}};
+}
+
 static glsl_vec3 vec3_cross(glsl_vec3 a, glsl_vec3 b) {
-    glsl_vec3 res = {{
+    return (glsl_vec3){{
         a.at[1] * b.at[2] - a.at[2] * b.at[1],
         a.at[2] * b.at[0] - a.at[0] * b.at[2],
         a.at[0] * b.at[1] - a.at[1] * b.at[0],
     }};
-    return res;
 }
 
 static float vec3_dot(glsl_vec3 a, glsl_vec3 b) {
@@ -198,6 +261,10 @@ static glsl_vec3 vec3_normalize(glsl_vec3 v) {
         v.at[2] *= inv_len;
     }
     return v;
+}
+
+static float wrap_angle(float angle) {
+    return remainderf(angle, 2.0f * (float)M_PI);
 }
 
 static glsl_mat4 mat4_look_at(glsl_vec3 eye, glsl_vec3 center, glsl_vec3 up) {
@@ -269,6 +336,9 @@ static transform_matrices_t default_transform_matrices() {
     res.model = mat4_identity();
     res.view_projection = mat4_identity();
     res.model_view_projection = mat4_identity();
+    res.orientation_up = (glsl_vec4){{0.0f, 1.0f, 0.0f, 0.0f}};
+    res.orientation_right = (glsl_vec4){{1.0f, 0.0f, 0.0f, 0.0f}};
+    res.orientation_forward = (glsl_vec4){{0.0f, 0.0f, 1.0f, 0.0f}};
     res.parallax_position_x = 0.5f;
     res.parallax_position_y = 0.5f;
     return res;
@@ -411,9 +481,9 @@ static transform_matrices_t compute_transform_matrices(transform_parameters_t pa
     float sy = 0.5f * params.size_y * params.scale_y;
     float sz = params.scale_z;
 
-    float rx = params.angle_x;
-    float ry = params.angle_y;
-    float rz = params.angle_z;
+    float rx = wrap_angle(params.angle_x);
+    float ry = wrap_angle(params.angle_y);
+    float rz = wrap_angle(params.angle_z);
 
     glsl_mat4 translation = mat4_identity();
     translation.at[3][0] = tx;
@@ -453,9 +523,40 @@ static transform_matrices_t compute_transform_matrices(transform_parameters_t pa
     glsl_mat4 rotation = mat4_multiply(rot_z, mat4_multiply(rot_y, rot_x));
     glsl_mat4 model = mat4_multiply(translation, mat4_multiply(rotation, scale));
 
+    glsl_mat3 model3 = mat3_from_mat4(model);
+    glsl_mat3 inv_model3 = mat3_inverse(model3);
+
+    glsl_vec3 world_x = {{model3.at[0][0], model3.at[0][1], model3.at[0][2]}};
+    glsl_vec3 world_y = {{model3.at[1][0], model3.at[1][1], model3.at[1][2]}};
+    glsl_vec3 screen_forward = {{0.0f, 0.0f, 1.0f}};
+    glsl_vec3 projected_world_x = vec3_sub(world_x, vec3_scale(screen_forward, vec3_dot(world_x, screen_forward)));
+    glsl_vec3 projected_world_y = vec3_sub(world_y, vec3_scale(screen_forward, vec3_dot(world_y, screen_forward)));
+
+    glsl_vec3 desired_world_up = projected_world_y;
+    if(vec3_dot(desired_world_up, desired_world_up) < 0.000000000001f) {
+        desired_world_up = projected_world_x;
+    }
+    desired_world_up = vec3_normalize(desired_world_up);
+
+    glsl_vec3 desired_world_right = vec3_cross(desired_world_up, screen_forward);
+    if(vec3_dot(desired_world_right, desired_world_right) < 0.000000000001f) {
+        desired_world_right = (glsl_vec3){{1.0f, 0.0f, 0.0f}};
+    }
+    desired_world_right = vec3_normalize(desired_world_right);
+
+    glsl_vec3 raw_orientation_right = mat3_multiply(inv_model3, desired_world_right);
+    glsl_vec3 raw_orientation_up = mat3_multiply(inv_model3, desired_world_up);
+    glsl_vec3 orientation_right = vec3_normalize(raw_orientation_right);
+    glsl_vec3 orientation_forward = vec3_normalize(vec3_cross(raw_orientation_right, raw_orientation_up));
+    glsl_vec3 orientation_screen_forward = vec3_normalize(mat3_multiply(inv_model3, screen_forward));
+    glsl_vec3 orientation_up = vec3_normalize(vec3_cross(orientation_screen_forward, orientation_right));
+
     res.model = model;
     res.view_projection = vp;
     res.model_view_projection = mat4_multiply(vp, model);
+    res.orientation_right = vec4_from_vec3(orientation_right);
+    res.orientation_up = vec4_from_vec3(orientation_up);
+    res.orientation_forward = vec4_from_vec3(orientation_forward);
     res.parallax_position_x = parallax_pos_x;
     res.parallax_position_y = parallax_pos_y;
     return res;

@@ -38,11 +38,15 @@ typedef struct {
 
 typedef struct {
     glsl_mat4 mvp;
+    glsl_vec4 orientation_up;
+    glsl_vec4 orientation_right;
+    glsl_vec4 orientation_forward;
     float texture_ratio;
 } particle_vertex_uniforms_t;
 
 typedef struct {
     glsl_ivec2 spritesheet_size;
+    glsl_vec2 screen_size;
 } particle_fragment_uniforms_t;
 
 vertex_data_t vertex_quad[4] = {
@@ -53,10 +57,10 @@ vertex_data_t vertex_quad[4] = {
 };
 
 particle_vertex_data_t particle_vertex_data[4] = {
-    { {0.0f, 1.0f} },
-    { {1.0f, 1.0f} },
     { {0.0f, 0.0f} },
+    { {0.0f, 1.0f} },
     { {1.0f, 0.0f} },
+    { {1.0f, 1.0f} },
 };
 
 ow_vertex_attribute vertex_attributes[2] = {
@@ -555,6 +559,7 @@ __attribute__((export_name("update"))) void update(float delta) {
     particle_vertex_uniforms_t vertex_uniforms = {0};
     particle_fragment_uniforms_t fragment_uniforms = {0};
     fragment_uniforms.spritesheet_size = (glsl_ivec2){ .at = { {{.SpritesheetCols}}, {{.SpritesheetRows}} } };
+    fragment_uniforms.screen_size = (glsl_vec2){ .at = { (float)screen_width, (float)screen_height } };
 {{else}}
     ow_bindings_info bindings_info = {
         .vertex_buffers = &vertex_quad_buffer,

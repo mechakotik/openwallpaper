@@ -717,6 +717,7 @@ type ImageObject struct {
 	Scale          Vector3
 	Angles         Vector3
 	Size           Vector2
+	Perspective    bool
 	ParallaxDepth  Vector2
 	Color          Vector3
 	ColorBlendMode int
@@ -761,6 +762,7 @@ func (imageObject *ImageObject) parseFromSceneJSON(raw json.RawMessage, pkgMap *
 		Scale           Vector3           `json:"scale"`
 		Angles          Vector3           `json:"angles"`
 		Size            Vector2           `json:"size"`
+		Perspective     BoolValue         `json:"perspective"`
 		ParallaxDepth   Vector2           `json:"parallaxDepth"`
 		Color           Vector3           `json:"color"`
 		ColorBlendMode  IntValue          `json:"colorBlendMode"`
@@ -808,6 +810,7 @@ func (imageObject *ImageObject) parseFromSceneJSON(raw json.RawMessage, pkgMap *
 	imageObject.Origin = payload.Origin
 	imageObject.Angles = payload.Angles
 	imageObject.Scale = payload.Scale
+	imageObject.Perspective = bool(payload.Perspective)
 	imageObject.ParallaxDepth = payload.ParallaxDepth
 	imageObject.Color = payload.Color
 	imageObject.Alpha = float32(payload.Alpha)

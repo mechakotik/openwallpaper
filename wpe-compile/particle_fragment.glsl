@@ -10,6 +10,7 @@ layout(set = 2, binding = 0) uniform sampler2D u_texture;
 
 layout(std140, set = 3, binding = 0) uniform uniforms_t {
     ivec2 spritesheet_size;
+    vec2 screen_size;
 };
 
 void main() {
