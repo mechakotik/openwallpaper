@@ -481,6 +481,40 @@ func (material *Material) parseFromJSON(raw json.RawMessage) error {
 	return nil
 }
 
+type EmptyObject struct {
+	ID     int
+	Parent int
+	Name   string
+	Origin Vector3
+	Scale  Vector3
+	Angles Vector3
+}
+
+func (object *EmptyObject) parseFromSceneJSON(raw json.RawMessage) error {
+	payload := struct {
+		ID     IntValue `json:"id"`
+		Parent IntValue `json:"parent"`
+		Name   StringValue
+		Origin Vector3
+		Scale  Vector3
+		Angles Vector3
+	}{
+		Parent: -1,
+		Scale:  Vector3{1, 1, 1},
+	}
+
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		return fmt.Errorf("cannot parse empty object: %w", err)
+	}
+	object.ID = int(payload.ID)
+	object.Parent = int(payload.Parent)
+	object.Name = string(payload.Name)
+	object.Origin = payload.Origin
+	object.Scale = payload.Scale
+	object.Angles = payload.Angles
+	return nil
+}
+
 type EffectCommand struct {
 	Command  string
 	Target   string
@@ -712,6 +746,7 @@ type ImageConfig struct {
 
 type ImageObject struct {
 	ID             int
+	Parent         int
 	Name           string
 	Origin         Vector3
 	Scale          Vector3
@@ -756,6 +791,7 @@ func (imageObject *ImageObject) parseFromSceneJSON(raw json.RawMessage, pkgMap *
 
 	type imageSceneJSON struct {
 		ID              IntValue          `json:"id"`
+		Parent          IntValue          `json:"parent"`
 		Name            StringValue       `json:"name"`
 		Image           StringValue       `json:"image"`
 		Origin          Vector3           `json:"origin"`
@@ -785,6 +821,7 @@ func (imageObject *ImageObject) parseFromSceneJSON(raw json.RawMessage, pkgMap *
 	}
 
 	payload := imageSceneJSON{
+		Parent:     -1,
 		Visible:    true,
 		Alignment:  "center",
 		Scale:      Vector3{1, 1, 1},
@@ -806,6 +843,7 @@ func (imageObject *ImageObject) parseFromSceneJSON(raw json.RawMessage, pkgMap *
 	imageObject.Alignment = string(payload.Alignment)
 	imageObject.Name = string(payload.Name)
 	imageObject.ID = int(payload.ID)
+	imageObject.Parent = int(payload.Parent)
 	imageObject.ColorBlendMode = int(payload.ColorBlendMode)
 	imageObject.Origin = payload.Origin
 	imageObject.Angles = payload.Angles
@@ -1059,6 +1097,7 @@ type ParticleInstanceOverride struct {
 
 type ParticleObject struct {
 	ID               int
+	Parent           int
 	Name             string
 	Origin           Vector3
 	Scale            Vector3
@@ -1821,6 +1860,7 @@ func (particle *Particle) parseFromJSON(raw json.RawMessage, pkgMap *map[string]
 func (particleObject *ParticleObject) parseFromSceneJSON(raw json.RawMessage, pkgMap *map[string][]byte) error {
 	payload := struct {
 		ID               IntValue        `json:"id"`
+		Parent           IntValue        `json:"parent"`
 		Name             StringValue     `json:"name"`
 		Origin           Vector3         `json:"origin"`
 		Scale            Vector3         `json:"scale"`
@@ -1830,6 +1870,7 @@ func (particleObject *ParticleObject) parseFromSceneJSON(raw json.RawMessage, pk
 		Particle         StringValue     `json:"particle"`
 		InstanceOverride json.RawMessage `json:"instanceoverride"`
 	}{
+		Parent:  -1,
 		Visible: true,
 	}
 
@@ -1846,6 +1887,7 @@ func (particleObject *ParticleObject) parseFromSceneJSON(raw json.RawMessage, pk
 	particleObject.Visible = bool(payload.Visible)
 	particleObject.Name = string(payload.Name)
 	particleObject.ID = int(payload.ID)
+	particleObject.Parent = int(payload.Parent)
 	particleObject.Origin = payload.Origin
 	particleObject.Scale = payload.Scale
 	particleObject.Angles = payload.Angles
@@ -2236,31 +2278,18 @@ func ParseScene(pkgMap *map[string][]byte) (Scene, error) {
 				return Scene{}, err
 			}
 			scene.Objects = append(scene.Objects, &particleObject)
-			continue
-		}
-		if len(objectProbe.Image) > 0 {
+		} else if len(objectProbe.Image) > 0 {
 			var imageObject ImageObject
 			if err := imageObject.parseFromSceneJSON(objectRaw, pkgMap); err != nil {
 				return Scene{}, err
 			}
 			scene.Objects = append(scene.Objects, &imageObject)
-			continue
-		}
-		if len(objectProbe.Sound) > 0 {
-			var soundObject SoundObject
-			if err := soundObject.parseFromSceneJSON(objectRaw); err != nil {
+		} else {
+			var emptyObject EmptyObject
+			if err := emptyObject.parseFromSceneJSON(objectRaw); err != nil {
 				return Scene{}, err
 			}
-			scene.Objects = append(scene.Objects, &soundObject)
-			continue
-		}
-		if len(objectProbe.Light) > 0 {
-			var lightObject LightObject
-			if err := lightObject.parseFromSceneJSON(objectRaw); err != nil {
-				return Scene{}, err
-			}
-			scene.Objects = append(scene.Objects, &lightObject)
-			continue
+			scene.Objects = append(scene.Objects, &emptyObject)
 		}
 	}
 

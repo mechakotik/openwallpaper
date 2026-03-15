@@ -157,6 +157,12 @@ type ShaderCacheElement struct {
 	Error         error
 }
 
+type ObjectTransform struct {
+	Origin [3]float32
+	Scale  [3]float32
+	Angles [3]float32
+}
+
 var (
 	env struct {
 		Assets string
@@ -173,6 +179,7 @@ var (
 
 	pkgMap              map[string][]byte
 	scene               Scene
+	objectByID          = map[int]SceneObject{}
 	outputMap           = map[string][]byte{}
 	textureMap          = map[string]ImportedTexture{}
 	shaderCache         = []ShaderCacheElement{}
@@ -230,6 +237,16 @@ func main() {
 		Amount:         scene.General.ParallaxAmount,
 		Delay:          scene.General.ParallaxDelay,
 		MouseInfluence: scene.General.ParallaxMouseInfluence,
+	}
+
+	for _, object := range scene.Objects {
+		if imageObject, ok := object.(*ImageObject); ok {
+			objectByID[imageObject.ID] = object
+		} else if particleObject, ok := object.(*ParticleObject); ok {
+			objectByID[particleObject.ID] = object
+		} else if emptyObject, ok := object.(*EmptyObject); ok {
+			objectByID[emptyObject.ID] = object
+		}
 	}
 
 	for _, object := range scene.Objects {
@@ -505,21 +522,24 @@ func processImageObjectInit(object ImageObject, tempBuffers *[2]int) (CodegenPas
 		})
 	}
 
+	var sceneObj SceneObject = &object
+	transform := getGlobalObjectTransform(sceneObj)
+
 	passData.Transform = CodegenTransformData{
 		Enabled:                false,
 		SceneWidth:             float32(scene.General.Ortho.Width),
 		SceneHeight:            float32(scene.General.Ortho.Height),
-		OriginX:                float32(object.Origin[0]),
-		OriginY:                float32(object.Origin[1]),
-		OriginZ:                float32(object.Origin[2]),
+		OriginX:                float32(transform.Origin[0]),
+		OriginY:                float32(transform.Origin[1]),
+		OriginZ:                float32(transform.Origin[2]),
 		SizeX:                  float32(object.Size[0]),
 		SizeY:                  float32(object.Size[1]),
-		ScaleX:                 float32(object.Scale[0]),
-		ScaleY:                 float32(object.Scale[1]),
-		ScaleZ:                 float32(object.Scale[2]),
-		AngleX:                 float32(object.Angles[0]),
-		AngleY:                 float32(object.Angles[1]),
-		AngleZ:                 float32(object.Angles[2]),
+		ScaleX:                 float32(transform.Scale[0]),
+		ScaleY:                 float32(transform.Scale[1]),
+		ScaleZ:                 float32(transform.Scale[2]),
+		AngleX:                 float32(transform.Angles[0]),
+		AngleY:                 float32(transform.Angles[1]),
+		AngleZ:                 float32(transform.Angles[2]),
 		ParallaxDepthX:         float32(object.ParallaxDepth[0]),
 		ParallaxDepthY:         float32(object.ParallaxDepth[1]),
 		ParallaxEnabled:        scene.General.Parallax,
@@ -726,21 +746,24 @@ func processImageEffect(object ImageObject, effect ImageEffect, tempBuffers *[2]
 		}
 		passData.ColorTarget = colorTarget
 
+		var sceneObj SceneObject = &object
+		transform := getGlobalObjectTransform(sceneObj)
+
 		passData.Transform = CodegenTransformData{
 			Enabled:                false,
 			SceneWidth:             float32(scene.General.Ortho.Width),
 			SceneHeight:            float32(scene.General.Ortho.Height),
-			OriginX:                float32(object.Origin[0]),
-			OriginY:                float32(object.Origin[1]),
-			OriginZ:                float32(object.Origin[2]),
+			OriginX:                float32(transform.Origin[0]),
+			OriginY:                float32(transform.Origin[1]),
+			OriginZ:                float32(transform.Origin[2]),
 			SizeX:                  float32(object.Size[0]),
 			SizeY:                  float32(object.Size[1]),
-			ScaleX:                 float32(object.Scale[0]),
-			ScaleY:                 float32(object.Scale[1]),
-			ScaleZ:                 float32(object.Scale[2]),
-			AngleX:                 float32(object.Angles[0]),
-			AngleY:                 float32(object.Angles[1]),
-			AngleZ:                 float32(object.Angles[2]),
+			ScaleX:                 float32(transform.Scale[0]),
+			ScaleY:                 float32(transform.Scale[1]),
+			ScaleZ:                 float32(transform.Scale[2]),
+			AngleX:                 float32(transform.Angles[0]),
+			AngleY:                 float32(transform.Angles[1]),
+			AngleZ:                 float32(transform.Angles[2]),
 			ParallaxDepthX:         float32(object.ParallaxDepth[0]),
 			ParallaxDepthY:         float32(object.ParallaxDepth[1]),
 			ParallaxEnabled:        scene.General.Parallax,
@@ -823,6 +846,9 @@ func processImageObjectFinalPassthrough(object ImageObject) {
 		panic("compile passthrough shader failed: " + err.Error())
 	}
 
+	var sceneObj SceneObject = &object
+	transform := getGlobalObjectTransform(sceneObj)
+
 	passData := CodegenPassData{
 		ObjectID:    lastObjectID,
 		PassID:      lastPassID,
@@ -842,17 +868,17 @@ func processImageObjectFinalPassthrough(object ImageObject) {
 			Enabled:                false,
 			SceneWidth:             float32(scene.General.Ortho.Width),
 			SceneHeight:            float32(scene.General.Ortho.Height),
-			OriginX:                float32(object.Origin[0]),
-			OriginY:                float32(object.Origin[1]),
-			OriginZ:                float32(object.Origin[2]),
+			OriginX:                float32(transform.Origin[0]),
+			OriginY:                float32(transform.Origin[1]),
+			OriginZ:                float32(transform.Origin[2]),
 			SizeX:                  float32(object.Size[0]),
 			SizeY:                  float32(object.Size[1]),
-			ScaleX:                 float32(object.Scale[0]),
-			ScaleY:                 float32(object.Scale[1]),
-			ScaleZ:                 float32(object.Scale[2]),
-			AngleX:                 float32(object.Angles[0]),
-			AngleY:                 float32(object.Angles[1]),
-			AngleZ:                 float32(object.Angles[2]),
+			ScaleX:                 float32(transform.Scale[0]),
+			ScaleY:                 float32(transform.Scale[1]),
+			ScaleZ:                 float32(transform.Scale[2]),
+			AngleX:                 float32(transform.Angles[0]),
+			AngleY:                 float32(transform.Angles[1]),
+			AngleZ:                 float32(transform.Angles[2]),
 			ParallaxDepthX:         float32(object.ParallaxDepth[0]),
 			ParallaxDepthY:         float32(object.ParallaxDepth[1]),
 			ParallaxEnabled:        scene.General.Parallax,
@@ -1033,21 +1059,24 @@ func processParticleObject(object ParticleObject) {
 		SpritesheetRows:  float32(texture.SpritesheetRows),
 	}
 
+	var sceneObj SceneObject = &object
+	transform := getGlobalObjectTransform(sceneObj)
+
 	passData.Transform = CodegenTransformData{
 		Enabled:                true,
 		SceneWidth:             float32(scene.General.Ortho.Width),
 		SceneHeight:            float32(scene.General.Ortho.Height),
-		OriginX:                float32(object.Origin[0]),
-		OriginY:                float32(object.Origin[1]),
-		OriginZ:                float32(object.Origin[2]),
+		OriginX:                float32(transform.Origin[0]),
+		OriginY:                float32(transform.Origin[1]),
+		OriginZ:                float32(transform.Origin[2]),
 		SizeX:                  2,
 		SizeY:                  2,
-		ScaleX:                 float32(object.Scale[0]),
-		ScaleY:                 float32(object.Scale[1]),
-		ScaleZ:                 float32(object.Scale[2]),
-		AngleX:                 float32(object.Angles[0]),
-		AngleY:                 float32(object.Angles[1]),
-		AngleZ:                 float32(object.Angles[2]),
+		ScaleX:                 float32(transform.Scale[0]),
+		ScaleY:                 float32(transform.Scale[1]),
+		ScaleZ:                 float32(transform.Scale[2]),
+		AngleX:                 float32(transform.Angles[0]),
+		AngleY:                 float32(transform.Angles[1]),
+		AngleZ:                 float32(transform.Angles[2]),
 		ParallaxDepthX:         float32(object.ParallaxDepth[0]),
 		ParallaxDepthY:         float32(object.ParallaxDepth[1]),
 		ParallaxEnabled:        scene.General.Parallax,
@@ -1097,6 +1126,66 @@ func processFinalPassthrough() {
 	}
 
 	codegenData.Passes = append(codegenData.Passes, passData)
+}
+
+func getGlobalObjectTransform(object SceneObject) ObjectTransform {
+	var transform ObjectTransform
+	var parent int
+
+	if imageObject, ok := object.(*ImageObject); ok {
+		transform = ObjectTransform{
+			Origin: imageObject.Origin,
+			Scale:  imageObject.Scale,
+			Angles: imageObject.Angles,
+		}
+		parent = imageObject.Parent
+	} else if particleObject, ok := object.(*ParticleObject); ok {
+		transform = ObjectTransform{
+			Origin: particleObject.Origin,
+			Scale:  particleObject.Scale,
+			Angles: particleObject.Angles,
+		}
+		parent = particleObject.Parent
+	} else if emptyObject, ok := object.(*EmptyObject); ok {
+		transform = ObjectTransform{
+			Origin: emptyObject.Origin,
+			Scale:  emptyObject.Scale,
+			Angles: emptyObject.Angles,
+		}
+		parent = emptyObject.Parent
+	}
+
+	for parent != -1 {
+		object, ok := objectByID[parent]
+		if !ok {
+			fmt.Printf("warning: parent points to non-existent object ID %d\n", parent)
+			break
+		}
+		if imageObject, ok := object.(*ImageObject); ok {
+			for i := range 3 {
+				transform.Origin[i] += imageObject.Origin[i]
+				transform.Scale[i] *= imageObject.Scale[i]
+				transform.Angles[i] += imageObject.Angles[i]
+			}
+			parent = imageObject.Parent
+		} else if particleObject, ok := object.(*ParticleObject); ok {
+			for i := range 3 {
+				transform.Origin[i] += particleObject.Origin[i]
+				transform.Scale[i] *= particleObject.Scale[i]
+				transform.Angles[i] += particleObject.Angles[i]
+			}
+			parent = particleObject.Parent
+		} else if emptyObject, ok := object.(*EmptyObject); ok {
+			for i := range 3 {
+				transform.Origin[i] += emptyObject.Origin[i]
+				transform.Scale[i] *= emptyObject.Scale[i]
+				transform.Angles[i] += emptyObject.Angles[i]
+			}
+			parent = emptyObject.Parent
+		}
+	}
+
+	return transform
 }
 
 func generateUniformSetupCode(ctx UniformCodegenContext) string {
