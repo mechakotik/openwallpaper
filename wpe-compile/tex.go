@@ -22,6 +22,7 @@ type WebpResult struct {
 	Data                []byte
 	Width               int
 	Height              int
+	Format              texFormat
 	ClampUV             bool
 	Interpolation       bool
 	SpritesheetCols     int
@@ -128,6 +129,7 @@ func texToWebp(texBytes []byte, metadataBytes []byte) (WebpResult, error) {
 		Data:                webpBytes,
 		Width:               firstMipmap.Width,
 		Height:              firstMipmap.Height,
+		Format:              header.Format,
 		ClampUV:             header.Flags&texFlagClampUVs != 0,
 		Interpolation:       header.Flags&texFlagNoInterpolation == 0,
 		SpritesheetCols:     sheetCols,
@@ -681,9 +683,9 @@ func expandR8ToRGBA(src []byte, width, height int) []byte {
 		value := src[i]
 		base := i * 4
 		dst[base+0] = value
-		dst[base+1] = value
-		dst[base+2] = value
-		dst[base+3] = value
+		dst[base+1] = 0
+		dst[base+2] = 0
+		dst[base+3] = 0xFF
 	}
 	return dst
 }
@@ -701,8 +703,8 @@ func expandRG88ToRGBA(src []byte, width, height int) []byte {
 		base := i * 4
 		dst[base+0] = r
 		dst[base+1] = g
-		dst[base+2] = g
-		dst[base+3] = g
+		dst[base+2] = 0
+		dst[base+3] = 0xFF
 	}
 	return dst
 }

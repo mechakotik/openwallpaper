@@ -13,6 +13,16 @@ layout(std140, set = 3, binding = 0) uniform uniforms_t {
     vec2 screen_size;
 };
 
+vec4 convert_tex0_format(vec4 color) {
+#if TEX0_FORMAT == 1
+    return vec4(1.0, 1.0, 1.0, color.r);
+#elif TEX0_FORMAT == 2
+    return color.rrrg;
+#else
+    return color;
+#endif
+}
+
 void main() {
     vec2 uv = v_uv;
 
@@ -33,7 +43,7 @@ void main() {
         );
     }
 
-    vec4 tex_color = texture(u_texture, uv);
+    vec4 tex_color = convert_tex0_format(texture(u_texture, uv));
     f_color = tex_color * v_color;
 }
 

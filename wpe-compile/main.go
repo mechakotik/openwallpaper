@@ -30,6 +30,7 @@ type ImportedTexture struct {
 	Name                string
 	Width               int
 	Height              int
+	Format              texFormat
 	ClampUV             bool
 	Interpolation       bool
 	SpritesheetCols     int
@@ -157,6 +158,12 @@ type ShaderCacheElement struct {
 	Error         error
 }
 
+type ParticleShaderCacheElement struct {
+	Defines map[string]int
+	ID      int
+	Error   error
+}
+
 type ObjectTransform struct {
 	Origin [3]float32
 	Scale  [3]float32
@@ -183,12 +190,12 @@ var (
 	outputMap           = map[string][]byte{}
 	textureMap          = map[string]ImportedTexture{}
 	shaderCache         = []ShaderCacheElement{}
+	particleShaderCache = []ParticleShaderCacheElement{}
 	lastObjectID        = -1
 	lastPassID          = 0
 	lastShaderID        = -1
 	screenCleared       = false
 	codegenData         CodegenData
-	particleShaderState = 0
 )
 
 //go:embed scene.tmpl
@@ -479,7 +486,7 @@ func processImageObjectInit(object ImageObject, tempBuffers *[2]int) (CodegenPas
 		textures = append(textures, texture)
 	}
 
-	shader, err := compileShader(object.Material.Shader, []bool{}, object.Material.Combos)
+	shader, err := compileWPEShader(object.Material.Shader, []bool{}, object.Material.Combos)
 	if err != nil {
 		return CodegenPassData{}, fmt.Errorf("compiling shader %s failed: %s", object.Material.Shader, err)
 	}
@@ -618,7 +625,7 @@ func processImageEffect(object ImageObject, effect ImageEffect, tempBuffers *[2]
 			InstanceCount: 1,
 		}
 
-		compiledShader, err := compileShader(effect.Materials[idx].Shader, allBoundTextures[idx], pass.Combos)
+		compiledShader, err := compileWPEShader(effect.Materials[idx].Shader, allBoundTextures[idx], pass.Combos)
 		if err != nil {
 			return []CodegenPassData{}, fmt.Errorf("compiling effect shader %s failed: %s", effect.Materials[idx].Shader, err)
 		}
@@ -841,7 +848,7 @@ func processImageObjectFinalPassthrough(object ImageObject) {
 	defines := map[string]int{}
 	defines["TRANSFORM"] = 1
 
-	shader, err := compileShader("passthrough", []bool{true}, defines)
+	shader, err := compileWPEShader("passthrough", []bool{true}, defines)
 	if err != nil {
 		panic("compile passthrough shader failed: " + err.Error())
 	}
@@ -896,19 +903,6 @@ func processImageObjectFinalPassthrough(object ImageObject) {
 }
 
 func processParticleObject(object ParticleObject) {
-	if particleShaderState == 0 {
-		err := compileParticleShader()
-		if err != nil {
-			fmt.Printf("warning: skipping particles because compile particle shader failed: %s\n", err)
-			particleShaderState = 2
-		} else {
-			particleShaderState = 1
-		}
-	}
-	if particleShaderState != 1 {
-		return
-	}
-
 	if len(object.ParticleData.Material.Textures) == 0 {
 		fmt.Printf("warning: skipping particle object %s because it has no texture\n", object.Name)
 		return
@@ -922,6 +916,12 @@ func processParticleObject(object ParticleObject) {
 	texture, err := importTexture(textureName)
 	if err != nil {
 		fmt.Printf("warning: skipping particle object %s because importing texture %s failed: %s\n", object.Name, textureName, err)
+		return
+	}
+
+	shaderID, err := compileParticleShader(texture.Format)
+	if err != nil {
+		fmt.Printf("warning: skipping particle object %s because compile particle shader failed: %s\n", object.Name, err)
 		return
 	}
 
@@ -1045,6 +1045,7 @@ func processParticleObject(object ParticleObject) {
 	passData := CodegenPassData{
 		ObjectID:    lastObjectID,
 		PassID:      0,
+		ShaderID:    shaderID,
 		ColorTarget: "screen_buffer",
 		BlendMode:   blendMode,
 		TextureBindings: []CodegenTextureBindingData{{
@@ -1099,7 +1100,7 @@ func processParticleObject(object ParticleObject) {
 }
 
 func processFinalPassthrough() {
-	shader, err := compileShader("passthrough", []bool{true}, map[string]int{})
+	shader, err := compileWPEShader("passthrough", []bool{true}, map[string]int{})
 	if err != nil {
 		panic("compile passthrough shader failed: " + err.Error())
 	}
@@ -1293,6 +1294,7 @@ func importTexture(textureName string) (ImportedTexture, error) {
 		Name:                textureName,
 		Width:               converted.Width,
 		Height:              converted.Height,
+		Format:              converted.Format,
 		ClampUV:             converted.ClampUV,
 		Interpolation:       converted.Interpolation,
 		SpritesheetCols:     converted.SpritesheetCols,
@@ -1353,7 +1355,7 @@ func scalesEqual(scale1, scale2 float32) bool {
 	return diff < 0.01
 }
 
-func compileShader(shaderName string, boundTextures []bool, defines map[string]int) (CompiledShader, error) {
+func compileWPEShader(shaderName string, boundTextures []bool, defines map[string]int) (CompiledShader, error) {
 	for _, elem := range shaderCache {
 		if elem.Name == shaderName && reflect.DeepEqual(elem.BoundTextures, boundTextures) && reflect.DeepEqual(elem.Defines, defines) {
 			return elem.Compiled, elem.Error
@@ -1448,22 +1450,80 @@ func compileShader(shaderName string, boundTextures []bool, defines map[string]i
 	return compiledShader, nil
 }
 
-func compileParticleShader() error {
-	fmt.Printf("compiling particle shader\n")
-
-	vertexSPIRVBytes, err := compileRawShader(particleVertexGLSL, []string{"-fshader-stage=vertex"})
-	if err != nil {
-		return fmt.Errorf("compile particle vertex shader failed: %s", err)
+func compileParticleShader(tex0Format texFormat) (int, error) {
+	defines := map[string]int{}
+	switch tex0Format {
+	case texFormatR8:
+		defines["TEX0_FORMAT"] = 1
+	case texFormatRG88:
+		defines["TEX0_FORMAT"] = 2
+	default:
+		defines["TEX0_FORMAT"] = 0
 	}
 
-	fragmentSPIRVBytes, err := compileRawShader(particleFragmentGLSL, []string{"-fshader-stage=fragment"})
-	if err != nil {
-		return fmt.Errorf("compile particle fragment shader failed: %s", err)
+	for _, elem := range particleShaderCache {
+		if reflect.DeepEqual(elem.Defines, defines) {
+			return elem.ID, elem.Error
+		}
 	}
 
-	outputMap["assets/particle_vertex.spv"] = vertexSPIRVBytes
-	outputMap["assets/particle_fragment.spv"] = fragmentSPIRVBytes
-	return nil
+	definesInfo := ""
+	for name, value := range defines {
+		if definesInfo != "" {
+			definesInfo += ", "
+		}
+		definesInfo += fmt.Sprintf("%s=%d", name, value)
+	}
+	if definesInfo != "" {
+		definesInfo = " (" + definesInfo + ")"
+	}
+
+	fmt.Printf("compiling particle shader%s\n", definesInfo)
+
+	elem := ParticleShaderCacheElement{
+		Defines: defines,
+		ID:      -1,
+		Error:   nil,
+	}
+
+	commonArgs := []string{}
+	for name, value := range defines {
+		commonArgs = append(commonArgs, fmt.Sprintf("-D%s=%d", name, value))
+	}
+	vertexArgs := append([]string{"-fshader-stage=vertex"}, commonArgs...)
+	fragmentArgs := append([]string{"-fshader-stage=fragment"}, commonArgs...)
+
+	vertexSPIRVBytes, err := compileRawShader(particleVertexGLSL, vertexArgs)
+	if err != nil {
+		elem.Error = fmt.Errorf("compile vertex shader failed: %s", err)
+		particleShaderCache = append(particleShaderCache, elem)
+		return -1, elem.Error
+	}
+
+	fragmentSPIRVBytes, err := compileRawShader(particleFragmentGLSL, fragmentArgs)
+	if err != nil {
+		elem.Error = fmt.Errorf("compile fragment shader failed: %s", err)
+		particleShaderCache = append(particleShaderCache, elem)
+		return -1, elem.Error
+	}
+
+	lastShaderID++
+	outputMap[fmt.Sprintf("assets/shader%d_vertex.spv", lastShaderID)] = vertexSPIRVBytes
+	outputMap[fmt.Sprintf("assets/shader%d_fragment.spv", lastShaderID)] = fragmentSPIRVBytes
+
+	codegenData.Shaders = append(codegenData.Shaders, CompiledShader{
+		ID:                     lastShaderID,
+		NameInfo:               "particle",
+		VertexUniforms:         []UniformInfo{},
+		FragmentUniforms:       []UniformInfo{},
+		VertexUniformsStruct:   "",
+		FragmentUniformsStruct: "",
+		Samplers:               []SamplerInfo{},
+	})
+
+	elem.ID = lastShaderID
+	particleShaderCache = append(particleShaderCache, elem)
+	return lastShaderID, nil
 }
 
 func compileRawShader(source []byte, glslcArgs []string) ([]byte, error) {
