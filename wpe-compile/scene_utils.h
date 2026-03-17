@@ -743,12 +743,6 @@ typedef struct {
     float alpha_fade_out_time;
 } particle_operator_t;
 
-typedef enum {
-    PARTICLE_ANIMATION_SEQUENCE = 0,
-    PARTICLE_ANIMATION_RANDOM_FRAME = 1,
-    PARTICLE_ANIMATION_ONCE = 2,
-} particle_animation_mode_t;
-
 typedef struct {
     particle_instance_t* instances;
     particle_instance_data_t* instance_data;
@@ -761,7 +755,7 @@ typedef struct {
     int spritesheet_frames;
     float spritesheet_duration;
     float sequence_multiplier;
-    int animation_mode;
+    bool random_frame;
     int max_count;
     int emitter_count;
     float origin[3];
@@ -791,6 +785,34 @@ float fade_value(float life, float start, float end, float start_value, float en
     }
     float pass = (life - start) / span;
     return start_value + (end_value - start_value) * pass;
+}
+
+static int particle_spritesheet_frame(particle_t* particle, particle_instance_t* instance) {
+    if(particle->spritesheet_frames <= 0) {
+        return 0;
+    }
+
+    if(particle->random_frame) {
+        if(instance->frame < 0) {
+            instance->frame = rand() % particle->spritesheet_frames;
+        }
+        return instance->frame;
+    }
+
+    float lifetime_fraction = 0.0f;
+    if(instance->lifetime > 0.0f) {
+        lifetime_fraction = instance->age / instance->lifetime;
+    }
+
+    float frame_position = lifetime_fraction * particle->sequence_multiplier * (float)particle->spritesheet_frames;
+    int frame = (int)floorf(frame_position);
+    if(particle->spritesheet_frames > 0) {
+        frame %= particle->spritesheet_frames;
+        if(frame < 0) {
+            frame += particle->spritesheet_frames;
+        }
+    }
+    return frame;
 }
 
 static float clampf(float value, float min, float max) {
@@ -1254,45 +1276,7 @@ void update_particle_instance(particle_t* particle, particle_instance_t* instanc
         instance->alpha = instance->initial_alpha * fade;
     }
 
-    if(particle->spritesheet_frames > 0) {
-        float anim_speed = particle->sequence_multiplier;
-        if(fabsf(anim_speed) < 0.0001f) {
-            anim_speed = 1.0f;
-        }
-        float frame_count = (float)particle->spritesheet_frames;
-        float lifetime_pos = 0.0f;
-        if(instance->lifetime > 0.0f) {
-            lifetime_pos = instance->age / instance->lifetime;
-        }
-
-        switch(particle->animation_mode) {
-            case PARTICLE_ANIMATION_RANDOM_FRAME: {
-                if(instance->frame < 0) {
-                    instance->frame = rand() % particle->spritesheet_frames;
-                }
-                break;
-            }
-            case PARTICLE_ANIMATION_ONCE: {
-                instance->frame = (int)(lifetime_pos * frame_count * anim_speed);
-                if(instance->frame >= frame_count) {
-                    instance->frame = frame_count - 1;
-                }
-                break;
-            }
-            default: {
-                if(particle->spritesheet_duration > 0.0f) {
-                    float time_in_cycle = fmodf(instance->age / anim_speed, particle->spritesheet_duration);
-                    float cycle_pos = time_in_cycle / particle->spritesheet_duration;
-                    instance->frame = (int)fmodf(cycle_pos * frame_count, frame_count);
-                } else {
-                    instance->frame = (int)fmodf(lifetime_pos * frame_count / anim_speed, frame_count);
-                }
-                break;
-            }
-        }
-    } else {
-        instance->frame = 0;
-    }
+    instance->frame = particle_spritesheet_frame(particle, instance);
 }
 
 void update_particle(particle_t* particle, float delta) {

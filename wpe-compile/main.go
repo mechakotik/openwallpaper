@@ -137,7 +137,7 @@ type CodegenParticleData struct {
 	Origin              [3]float32
 	StartTime           float32
 	SequenceMultiplier  float32
-	AnimationMode       ParticleAnimationMode
+	RandomFrame         bool
 	SpritesheetCols     int
 	SpritesheetRows     int
 	SpritesheetFrames   int
@@ -1021,7 +1021,7 @@ func processParticleObject(object ParticleObject) {
 		Origin:              object.Origin,
 		StartTime:           object.ParticleData.StartTime,
 		SequenceMultiplier:  object.ParticleData.SequenceMultiplier,
-		AnimationMode:       object.ParticleData.AnimationMode,
+		RandomFrame:         object.ParticleData.RandomFrame,
 		SpritesheetCols:     texture.SpritesheetCols,
 		SpritesheetRows:     texture.SpritesheetRows,
 		SpritesheetFrames:   texture.SpritesheetFrames,
