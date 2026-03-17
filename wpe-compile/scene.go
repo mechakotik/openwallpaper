@@ -2087,6 +2087,10 @@ type SceneGeneral struct {
 	ParallaxAmount         float32
 	ParallaxDelay          float32
 	ParallaxMouseInfluence float32
+	Shake                  bool
+	ShakeAmplitude         float32
+	ShakeRoughness         float32
+	ShakeSpeed             float32
 	Orthographic           bool
 	Ortho                  OrthogonalProjection
 	Zoom                   float32
@@ -2158,6 +2162,10 @@ func parseSceneGeneral(raw json.RawMessage) (SceneGeneral, error) {
 		CameraParallaxAmount    FloatValue      `json:"cameraparallaxamount"`
 		CameraParallaxDelay     FloatValue      `json:"cameraparallaxdelay"`
 		CameraParallaxMouse     FloatValue      `json:"cameraparallaxmouseinfluence"`
+		CameraShake             BoolValue       `json:"camerashake"`
+		CameraShakeAmplitude    FloatValue      `json:"camerashakeamplitude"`
+		CameraShakeRoughness    FloatValue      `json:"camerashakeroughness"`
+		CameraShakeSpeed        FloatValue      `json:"camerashakespeed"`
 		Zoom                    FloatValue      `json:"zoom"`
 		FOV                     FloatValue      `json:"perspectiveoverridefov"`
 		NearZ                   FloatValue      `json:"nearz"`
@@ -2166,14 +2174,18 @@ func parseSceneGeneral(raw json.RawMessage) (SceneGeneral, error) {
 	}
 
 	general := SceneGeneral{
-		Ortho:         OrthogonalProjection{Width: 1920, Height: 1080},
-		Zoom:          1,
-		FOV:           90,
-		NearZ:         0.01,
-		FarZ:          10000,
-		AmbientColor:  Vector3{0.2, 0.2, 0.2},
-		SkyLightColor: Vector3{0.3, 0.3, 0.3},
-		Orthographic:  true,
+		Ortho:          OrthogonalProjection{Width: 1920, Height: 1080},
+		Zoom:           1,
+		FOV:            90,
+		NearZ:          0.01,
+		FarZ:           10000,
+		Shake:          false,
+		ShakeAmplitude: 0.5,
+		ShakeRoughness: 1,
+		ShakeSpeed:     3,
+		AmbientColor:   Vector3{0.2, 0.2, 0.2},
+		SkyLightColor:  Vector3{0.3, 0.3, 0.3},
+		Orthographic:   true,
 	}
 
 	var payload generalJSON
@@ -2188,6 +2200,16 @@ func parseSceneGeneral(raw json.RawMessage) (SceneGeneral, error) {
 	general.ParallaxAmount = float32(payload.CameraParallaxAmount)
 	general.ParallaxDelay = float32(payload.CameraParallaxDelay)
 	general.ParallaxMouseInfluence = float32(payload.CameraParallaxMouse)
+	general.Shake = bool(payload.CameraShake)
+	if payload.CameraShakeAmplitude != 0 {
+		general.ShakeAmplitude = float32(payload.CameraShakeAmplitude)
+	}
+	if payload.CameraShakeRoughness != 0 {
+		general.ShakeRoughness = float32(payload.CameraShakeRoughness)
+	}
+	if payload.CameraShakeSpeed != 0 {
+		general.ShakeSpeed = float32(payload.CameraShakeSpeed)
+	}
 
 	if payload.Zoom != 0 {
 		general.Zoom = float32(payload.Zoom)

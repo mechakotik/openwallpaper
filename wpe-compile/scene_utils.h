@@ -81,6 +81,7 @@ typedef enum {
 typedef struct {
     float scene_width;
     float scene_height;
+    float zoom;
     float origin_x;
     float origin_y;
     float origin_z;
@@ -101,9 +102,14 @@ typedef struct {
     float near_z;
     float far_z;
     float fov;
+    int shake_enabled;
+    float shake_amplitude;
+    float shake_roughness;
+    float shake_speed;
     scale_mode_t scale_mode;
     float mouse_x;
     float mouse_y;
+    float time;
 } transform_parameters_t;
 
 typedef struct {
@@ -210,7 +216,7 @@ static glsl_mat3 mat3_inverse(glsl_mat3 m) {
     float c22 = m00 * m11 - m01 * m10;
 
     float det = m00 * c00 + m01 * c01 + m02 * c02;
-    if(fabsf(det) < 0.0000001f) {
+    if(fabsf(det) < 1e-7f) {
         return mat3_identity();
     }
 
@@ -254,7 +260,7 @@ static float vec3_dot(glsl_vec3 a, glsl_vec3 b) {
 
 static glsl_vec3 vec3_normalize(glsl_vec3 v) {
     float len = sqrtf(vec3_dot(v, v));
-    if(len > 0.00001f) {
+    if(len > 1e-5f) {
         float inv_len = 1.0f / len;
         v.at[0] *= inv_len;
         v.at[1] *= inv_len;
@@ -344,6 +350,58 @@ static transform_matrices_t default_transform_matrices() {
     return res;
 }
 
+static glsl_vec3 compute_camera_shake_offset(transform_parameters_t params) {
+    glsl_vec3 shake = {{0.0f, 0.0f, 0.0f}};
+    if(!params.shake_enabled) {
+        return shake;
+    }
+
+    float roughness = powf(params.shake_roughness, 3.0f);
+    float phase = params.shake_speed * params.shake_speed * params.time;
+    float amplitude = params.shake_amplitude * 0.1f;
+
+    shake.at[0] = cosf(phase);
+    shake.at[1] = sinf(phase * 1.333f);
+    shake.at[2] = sinf(phase);
+
+    if(!params.perspective) {
+        shake.at[2] = 0.0f;
+        amplitude *= params.scene_height * 0.1f;
+    }
+
+    if(roughness > 0.001f && roughness != 1.0f) {
+        float len_sq = shake.at[0] * shake.at[0] + shake.at[1] * shake.at[1] + shake.at[2] * shake.at[2];
+        if(len_sq > 0.0f) {
+            float len = sqrtf(len_sq);
+            float scale = powf(len, roughness) / len;
+            shake.at[0] *= scale;
+            shake.at[1] *= scale;
+            shake.at[2] *= scale;
+        }
+    }
+
+    shake.at[0] *= amplitude;
+    shake.at[1] *= amplitude;
+    shake.at[2] *= amplitude;
+    return shake;
+}
+
+static glsl_mat4 apply_camera_zoom(glsl_mat4 vp, transform_parameters_t params) {
+    float camera_zoom = (params.zoom > 0.0f ? params.zoom : 1.0f);
+    if(fabsf(camera_zoom - 1.0f) < 1e-6f) {
+        return vp;
+    }
+
+    glsl_mat4 to_center = mat4_translate_xyz(params.scene_width * 0.5f, params.scene_height * 0.5f, 0.0f);
+    glsl_mat4 scale = mat4_scale_xyz(camera_zoom, camera_zoom, 1.0f);
+    glsl_mat4 from_center = mat4_translate_xyz(-params.scene_width * 0.5f, -params.scene_height * 0.5f, 0.0f);
+
+    vp = mat4_multiply(vp, to_center);
+    vp = mat4_multiply(vp, scale);
+    vp = mat4_multiply(vp, from_center);
+    return vp;
+}
+
 static transform_matrices_t compute_transform_matrices(transform_parameters_t params) {
     transform_matrices_t res = default_transform_matrices();
 
@@ -380,12 +438,21 @@ static transform_matrices_t compute_transform_matrices(transform_parameters_t pa
     float vp_scale_x = 2.0f / cam_width;
     float vp_scale_y = 2.0f / cam_height;
     glsl_mat4 vp = mat4_identity();
+    glsl_vec3 camera_shake = compute_camera_shake_offset(params);
 
     if(params.perspective) {
         float fov_radians = params.fov * (float)M_PI / 180.0f;
         float camera_distance = (params.scene_height * 0.5f) / tanf(fov_radians * 0.5f);
-        glsl_vec3 eye = {{params.scene_width * 0.5f, params.scene_height * 0.5f, camera_distance}};
-        glsl_vec3 center = {{params.scene_width * 0.5f, params.scene_height * 0.5f, 0.0f}};
+        glsl_vec3 eye = {{
+            params.scene_width * 0.5f + camera_shake.at[0],
+            params.scene_height * 0.5f + camera_shake.at[1],
+            camera_distance + camera_shake.at[2],
+        }};
+        glsl_vec3 center = {{
+            params.scene_width * 0.5f + camera_shake.at[0],
+            params.scene_height * 0.5f + camera_shake.at[1],
+            camera_shake.at[2],
+        }};
         glsl_vec3 up = {{0.0f, 1.0f, 0.0f}};
         glsl_mat4 view = mat4_look_at(eye, center, up);
         glsl_mat4 proj = mat4_perspective(fov_radians, scene_aspect, params.near_z, params.far_z);
@@ -428,11 +495,13 @@ static transform_matrices_t compute_transform_matrices(transform_parameters_t pa
         vp.at[2][2] = 1.0f;
         vp.at[2][3] = 0.0f;
 
-        vp.at[3][0] = -params.scene_width * vp_scale_x * 0.5f;
-        vp.at[3][1] = -params.scene_height * vp_scale_y * 0.5f;
+        vp.at[3][0] = -(params.scene_width * 0.5f + camera_shake.at[0]) * vp_scale_x;
+        vp.at[3][1] = -(params.scene_height * 0.5f + camera_shake.at[1]) * vp_scale_y;
         vp.at[3][2] = 0.0f;
         vp.at[3][3] = 1.0f;
     }
+
+    vp = apply_camera_zoom(vp, params);
 
     float clamped_parallax_x = params.mouse_x;
     float clamped_parallax_y = params.mouse_y;
@@ -533,13 +602,13 @@ static transform_matrices_t compute_transform_matrices(transform_parameters_t pa
     glsl_vec3 projected_world_y = vec3_sub(world_y, vec3_scale(screen_forward, vec3_dot(world_y, screen_forward)));
 
     glsl_vec3 desired_world_up = projected_world_y;
-    if(vec3_dot(desired_world_up, desired_world_up) < 0.000000000001f) {
+    if(vec3_dot(desired_world_up, desired_world_up) < 1e-12f) {
         desired_world_up = projected_world_x;
     }
     desired_world_up = vec3_normalize(desired_world_up);
 
     glsl_vec3 desired_world_right = vec3_cross(desired_world_up, screen_forward);
-    if(vec3_dot(desired_world_right, desired_world_right) < 0.000000000001f) {
+    if(vec3_dot(desired_world_right, desired_world_right) < 1e-12f) {
         desired_world_right = (glsl_vec3){{1.0f, 0.0f, 0.0f}};
     }
     desired_world_right = vec3_normalize(desired_world_right);
@@ -717,7 +786,7 @@ float fade_value(float life, float start, float end, float start_value, float en
         return end_value;
     }
     float span = end - start;
-    if(fabsf(span) < 0.00001f) {
+    if(fabsf(span) < 1e-6f) {
         return end_value;
     }
     float pass = (life - start) / span;

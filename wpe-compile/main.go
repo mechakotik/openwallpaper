@@ -73,6 +73,7 @@ type CodegenTransformData struct {
 	Enabled                bool
 	SceneWidth             float32
 	SceneHeight            float32
+	Zoom                   float32
 	OriginX                float32
 	OriginY                float32
 	OriginZ                float32
@@ -93,6 +94,10 @@ type CodegenTransformData struct {
 	NearZ                  float32
 	FarZ                   float32
 	FOV                    float32
+	ShakeEnabled           bool
+	ShakeAmplitude         float32
+	ShakeRoughness         float32
+	ShakeSpeed             float32
 }
 
 type CodegenPassData struct {
@@ -536,6 +541,7 @@ func processImageObjectInit(object ImageObject, tempBuffers *[2]int) (CodegenPas
 		Enabled:                false,
 		SceneWidth:             float32(scene.General.Ortho.Width),
 		SceneHeight:            float32(scene.General.Ortho.Height),
+		Zoom:                   float32(scene.General.Zoom),
 		OriginX:                float32(transform.Origin[0]),
 		OriginY:                float32(transform.Origin[1]),
 		OriginZ:                float32(transform.Origin[2]),
@@ -556,6 +562,10 @@ func processImageObjectInit(object ImageObject, tempBuffers *[2]int) (CodegenPas
 		NearZ:                  float32(scene.General.NearZ),
 		FarZ:                   float32(scene.General.FarZ),
 		FOV:                    float32(scene.General.FOV),
+		ShakeEnabled:           scene.General.Shake,
+		ShakeAmplitude:         scene.General.ShakeAmplitude,
+		ShakeRoughness:         scene.General.ShakeRoughness,
+		ShakeSpeed:             scene.General.ShakeSpeed,
 	}
 
 	passData.UniformSetupCode += generateUniformSetupCode(UniformCodegenContext{
@@ -760,6 +770,7 @@ func processImageEffect(object ImageObject, effect ImageEffect, tempBuffers *[2]
 			Enabled:                false,
 			SceneWidth:             float32(scene.General.Ortho.Width),
 			SceneHeight:            float32(scene.General.Ortho.Height),
+			Zoom:                   float32(scene.General.Zoom),
 			OriginX:                float32(transform.Origin[0]),
 			OriginY:                float32(transform.Origin[1]),
 			OriginZ:                float32(transform.Origin[2]),
@@ -780,6 +791,10 @@ func processImageEffect(object ImageObject, effect ImageEffect, tempBuffers *[2]
 			NearZ:                  float32(scene.General.NearZ),
 			FarZ:                   float32(scene.General.FarZ),
 			FOV:                    float32(scene.General.FOV),
+			ShakeEnabled:           scene.General.Shake,
+			ShakeAmplitude:         scene.General.ShakeAmplitude,
+			ShakeRoughness:         scene.General.ShakeRoughness,
+			ShakeSpeed:             scene.General.ShakeSpeed,
 		}
 
 		passData.UniformSetupCode += generateUniformSetupCode(UniformCodegenContext{
@@ -875,6 +890,7 @@ func processImageObjectFinalPassthrough(object ImageObject) {
 			Enabled:                false,
 			SceneWidth:             float32(scene.General.Ortho.Width),
 			SceneHeight:            float32(scene.General.Ortho.Height),
+			Zoom:                   float32(scene.General.Zoom),
 			OriginX:                float32(transform.Origin[0]),
 			OriginY:                float32(transform.Origin[1]),
 			OriginZ:                float32(transform.Origin[2]),
@@ -895,6 +911,10 @@ func processImageObjectFinalPassthrough(object ImageObject) {
 			NearZ:                  float32(scene.General.NearZ),
 			FarZ:                   float32(scene.General.FarZ),
 			FOV:                    float32(scene.General.FOV),
+			ShakeEnabled:           scene.General.Shake,
+			ShakeAmplitude:         scene.General.ShakeAmplitude,
+			ShakeRoughness:         scene.General.ShakeRoughness,
+			ShakeSpeed:             scene.General.ShakeSpeed,
 		},
 		InstanceCount: 1,
 	}
@@ -1067,6 +1087,7 @@ func processParticleObject(object ParticleObject) {
 		Enabled:                true,
 		SceneWidth:             float32(scene.General.Ortho.Width),
 		SceneHeight:            float32(scene.General.Ortho.Height),
+		Zoom:                   float32(scene.General.Zoom),
 		OriginX:                float32(transform.Origin[0]),
 		OriginY:                float32(transform.Origin[1]),
 		OriginZ:                float32(transform.Origin[2]),
@@ -1087,6 +1108,10 @@ func processParticleObject(object ParticleObject) {
 		NearZ:                  float32(scene.General.NearZ),
 		FarZ:                   float32(scene.General.FarZ),
 		FOV:                    float32(scene.General.FOV),
+		ShakeEnabled:           scene.General.Shake,
+		ShakeAmplitude:         scene.General.ShakeAmplitude,
+		ShakeRoughness:         scene.General.ShakeRoughness,
+		ShakeSpeed:             scene.General.ShakeSpeed,
 	}
 
 	if !screenCleared {
