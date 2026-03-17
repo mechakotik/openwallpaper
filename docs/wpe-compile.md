@@ -64,9 +64,9 @@ You can check out this list to see what is not yet implemented or can be improve
     - [x] Translate
     - [x] Scale
     - [x] Rotate
-      - [x] Rotate Y (*) *(logic is different from X/Z for some reason)*
   - [x] Parallax (*)
-  - [ ] Shake
+  - [x] Shake
+  - [x] Zoom
   - [ ] Fade
 
 - [x] Particles
@@ -78,6 +78,7 @@ You can check out this list to see what is not yet implemented or can be improve
   - [x] Emitters
     - [x] Sphere random
     - [ ] Box random
+    - [ ] Audio response
     - [ ] Layer image
   - [x] Initializers
     - [x] Lifetime random
