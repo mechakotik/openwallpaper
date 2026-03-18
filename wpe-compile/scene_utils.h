@@ -713,34 +713,58 @@ typedef struct {
 } particle_initializer_t;
 
 typedef struct {
-    bool movement;
+    bool enabled;
     float gravity[3];
     float drag;
     float speed;
-    bool angular_movement;
-    float angular_drag;
-    float angular_force[3];
-    bool oscillate_position;
-    float oscillate_mask[3];
-    float oscillate_frequency_min;
-    float oscillate_frequency_max;
-    float oscillate_scale_min;
-    float oscillate_scale_max;
-    float oscillate_phase_min;
-    float oscillate_phase_max;
-    bool size_change;
-    float size_change_start_time;
-    float size_change_end_time;
-    float size_change_start_value;
-    float size_change_end_value;
-    bool color_change;
-    float color_change_start_time;
-    float color_change_end_time;
-    float color_change_start_value[3];
-    float color_change_end_value[3];
-    bool alpha_fade;
-    float alpha_fade_in_time;
-    float alpha_fade_out_time;
+} particle_movement_operator_t;
+
+typedef struct {
+    bool enabled;
+    float drag;
+    float force[3];
+} particle_angular_movement_operator_t;
+
+typedef struct {
+    bool enabled;
+    float mask[3];
+    float frequency_min;
+    float frequency_max;
+    float scale_min;
+    float scale_max;
+    float phase_min;
+    float phase_max;
+} particle_oscillate_position_operator_t;
+
+typedef struct {
+    bool enabled;
+    float start_time;
+    float end_time;
+    float start_value;
+    float end_value;
+} particle_size_change_operator_t;
+
+typedef struct {
+    bool enabled;
+    float start_time;
+    float end_time;
+    float start_value[3];
+    float end_value[3];
+} particle_color_change_operator_t;
+
+typedef struct {
+    bool enabled;
+    float fade_in_time;
+    float fade_out_time;
+} particle_alpha_fade_operator_t;
+
+typedef struct {
+    particle_movement_operator_t movement;
+    particle_angular_movement_operator_t angular_movement;
+    particle_oscillate_position_operator_t oscillate_position;
+    particle_size_change_operator_t size_change;
+    particle_color_change_operator_t color_change;
+    particle_alpha_fade_operator_t alpha_fade;
 } particle_operator_t;
 
 typedef struct {
@@ -1152,20 +1176,21 @@ void spawn_particle_instance(particle_t* particle, particle_emitter_t* emitter, 
             rand_float(particle->init.min_angular_velocity[i], particle->init.max_angular_velocity[i]);
     }
 
-    if(particle->operator.oscillate_position) {
-        float frequency_max = particle->operator.oscillate_frequency_max;
+    if(particle->operator.oscillate_position.enabled) {
+        float frequency_max = particle->operator.oscillate_position.frequency_max;
         if(frequency_max == 0.0f) {
-            frequency_max = particle->operator.oscillate_frequency_min;
+            frequency_max = particle->operator.oscillate_position.frequency_min;
         }
-        float phase_max = particle->operator.oscillate_phase_max + 2.0f *(float) M_PI;
+        float phase_max = particle->operator.oscillate_position.phase_max + 2.0f *(float) M_PI;
         for(int i = 0; i < 3; i++) {
-            if(fabsf(particle->operator.oscillate_mask[i]) < 0.01f) {
+            if(fabsf(particle->operator.oscillate_position.mask[i]) < 0.01f) {
                 continue;
             }
-            instance->oscillate_frequency[i] = rand_float(particle->operator.oscillate_frequency_min, frequency_max);
-            instance->oscillate_scale[i] =
-                rand_float(particle->operator.oscillate_scale_min, particle->operator.oscillate_scale_max);
-            instance->oscillate_phase[i] = rand_float(particle->operator.oscillate_phase_min, phase_max);
+            instance->oscillate_frequency[i] =
+                rand_float(particle->operator.oscillate_position.frequency_min, frequency_max);
+            instance->oscillate_scale[i] = rand_float(
+                particle->operator.oscillate_position.scale_min, particle->operator.oscillate_position.scale_max);
+            instance->oscillate_phase[i] = rand_float(particle->operator.oscillate_position.phase_min, phase_max);
         }
     }
 
@@ -1195,25 +1220,25 @@ void update_particle_instance(particle_t* particle, particle_instance_t* instanc
         return;
     }
 
-    if(particle->operator.movement) {
-        float movement_speed = particle->operator.speed;
+    if(particle->operator.movement.enabled) {
+        float movement_speed = particle->operator.movement.speed;
         if(fabsf(movement_speed) < 0.0001f) {
             movement_speed = 1.0f;
         }
-        float drag_coeff = -2.0f * particle->operator.drag;
+        float drag_coeff = -2.0f * particle->operator.movement.drag;
         for(int i = 0; i < 3; i++) {
-            float acceleration = particle->operator.gravity[i] + drag_coeff * instance->velocity[i];
+            float acceleration = particle->operator.movement.gravity[i] + drag_coeff * instance->velocity[i];
             instance->velocity[i] += acceleration * movement_speed * delta;
             instance->position[i] += instance->velocity[i] * delta;
         }
     }
-    if(particle->operator.oscillate_position) {
+    if(particle->operator.oscillate_position.enabled) {
         float time = instance->age - delta;
         if(time < 0.0f) {
             time = 0.0f;
         }
         for(int i = 0; i < 3; i++) {
-            if(fabsf(particle->operator.oscillate_mask[i]) < 0.01f) {
+            if(fabsf(particle->operator.oscillate_position.mask[i]) < 0.01f) {
                 continue;
             }
             float frequency = instance->oscillate_frequency[i];
@@ -1223,10 +1248,10 @@ void update_particle_instance(particle_t* particle, particle_instance_t* instanc
             instance->position[i] += delta_pos;
         }
     }
-    if(particle->operator.angular_movement) {
+    if(particle->operator.angular_movement.enabled) {
         for(int i = 0; i < 3; i++) {
-            float acceleration =
-                -particle->operator.angular_drag * instance->angular_velocity[i] + particle->operator.angular_force[i];
+            float acceleration = -particle->operator.angular_movement.drag * instance->angular_velocity[i] +
+                                  particle->operator.angular_movement.force[i];
             instance->angular_velocity[i] += acceleration * delta;
         }
         const float pi = (float)M_PI;
@@ -1242,31 +1267,31 @@ void update_particle_instance(particle_t* particle, particle_instance_t* instanc
         }
     }
 
-    if(particle->operator.size_change && instance->lifetime> 0.0f) {
+    if(particle->operator.size_change.enabled && instance->lifetime> 0.0f) {
         float life = instance->age / instance->lifetime;
         float multiplier =
-            fade_value(life, particle->operator.size_change_start_time, particle->operator.size_change_end_time,
-                particle->operator.size_change_start_value, particle->operator.size_change_end_value);
+            fade_value(life, particle->operator.size_change.start_time, particle->operator.size_change.end_time,
+                particle->operator.size_change.start_value, particle->operator.size_change.end_value);
         instance->size = instance->initial_size * multiplier;
     }
 
-    if(particle->operator.color_change && instance->lifetime> 0.0f) {
+    if(particle->operator.color_change.enabled && instance->lifetime> 0.0f) {
         float life = instance->age / instance->lifetime;
         for(int i = 0; i < 3; i++) {
             float multiplier =
-                fade_value(life, particle->operator.color_change_start_time, particle->operator.color_change_end_time,
-                    particle->operator.color_change_start_value[i], particle->operator.color_change_end_value[i]);
+                fade_value(life, particle->operator.color_change.start_time, particle->operator.color_change.end_time,
+                    particle->operator.color_change.start_value[i], particle->operator.color_change.end_value[i]);
             instance->color[i] = instance->initial_color[i] * multiplier;
         }
     }
 
-    if(particle->operator.alpha_fade && instance->lifetime> 0.0f) {
+    if(particle->operator.alpha_fade.enabled && instance->lifetime> 0.0f) {
         float life = instance->age / instance->lifetime;
         float fade = 1.0f;
-        if(life <= particle->operator.alpha_fade_in_time) {
-            fade = fade_value(life, 0.0f, particle->operator.alpha_fade_in_time, 0.0f, 1.0f);
-        } else if(life > particle->operator.alpha_fade_out_time) {
-            fade = 1.0f - fade_value(life, particle->operator.alpha_fade_out_time, 1.0f, 0.0f, 1.0f);
+        if(life <= particle->operator.alpha_fade.fade_in_time) {
+            fade = fade_value(life, 0.0f, particle->operator.alpha_fade.fade_in_time, 0.0f, 1.0f);
+        } else if(life > particle->operator.alpha_fade.fade_out_time) {
+            fade = 1.0f - fade_value(life, particle->operator.alpha_fade.fade_out_time, 1.0f, 0.0f, 1.0f);
         }
         if(fade < 0.0f) {
             fade = 0.0f;
