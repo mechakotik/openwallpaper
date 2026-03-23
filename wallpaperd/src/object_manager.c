@@ -1,6 +1,6 @@
 #include "object_manager.h"
+#include <SDL3/SDL.h>
 #include <stdlib.h>
-#include "SDL3/SDL_gpu.h"
 #include "error.h"
 #include "malloc.h"
 #include "state.h"
@@ -49,24 +49,26 @@ void wd_free_object(wd_state* state, uint32_t object) {
         return;
     }
 
+    wd_scene_state* scene = &state->scene;
+
     switch(state->object_manager.type_buckets[bucket][index]) {
         case WD_OBJECT_VERTEX_BUFFER:
         case WD_OBJECT_INDEX16_BUFFER:
         case WD_OBJECT_INDEX32_BUFFER:
-            SDL_ReleaseGPUBuffer(state->output.gpu, (SDL_GPUBuffer*)data);
+            SDL_ReleaseGPUBuffer(scene->gpu, (SDL_GPUBuffer*)data);
             break;
         case WD_OBJECT_TEXTURE:
-            SDL_ReleaseGPUTexture(state->output.gpu, (SDL_GPUTexture*)data);
+            SDL_ReleaseGPUTexture(scene->gpu, (SDL_GPUTexture*)data);
             break;
         case WD_OBJECT_SAMPLER:
-            SDL_ReleaseGPUSampler(state->output.gpu, (SDL_GPUSampler*)data);
+            SDL_ReleaseGPUSampler(scene->gpu, (SDL_GPUSampler*)data);
             break;
         case WD_OBJECT_VERTEX_SHADER:
         case WD_OBJECT_FRAGMENT_SHADER:
-            SDL_ReleaseGPUShader(state->output.gpu, (SDL_GPUShader*)data);
+            SDL_ReleaseGPUShader(scene->gpu, (SDL_GPUShader*)data);
             break;
         case WD_OBJECT_PIPELINE:
-            SDL_ReleaseGPUGraphicsPipeline(state->output.gpu, (SDL_GPUGraphicsPipeline*)data);
+            SDL_ReleaseGPUGraphicsPipeline(scene->gpu, (SDL_GPUGraphicsPipeline*)data);
             break;
         default:
             break;

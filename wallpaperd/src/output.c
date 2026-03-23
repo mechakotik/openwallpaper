@@ -1,10 +1,7 @@
 #include "output.h"
 #include <SDL3/SDL.h>
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "SDL3/SDL_gpu.h"
-#include "SDL3/SDL_properties.h"
 #include "argparse.h"
 #include "dynamic_api.h"
 #include "error.h"
@@ -47,33 +44,6 @@ bool wd_init_output(wd_output_state* output, wd_args_state* args) {
         return false;
     }
 
-    SDL_PropertiesID gpu_properties = SDL_CreateProperties();
-    if(!SDL_SetBooleanProperty(gpu_properties, SDL_PROP_GPU_DEVICE_CREATE_PREFERLOWPOWER_BOOLEAN, !args->prefer_dgpu)) {
-        printf("warning: failed to set preffered GPU: %s\n", SDL_GetError());
-    }
-    if(!SDL_SetBooleanProperty(gpu_properties, SDL_PROP_GPU_DEVICE_CREATE_SHADERS_SPIRV_BOOLEAN, true)) {
-        wd_set_error("failed to enable SPIRV shaders: %s", SDL_GetError());
-        return false;
-    }
-
-    output->gpu = SDL_CreateGPUDeviceWithProperties(gpu_properties);
-    if(output->gpu == NULL) {
-        wd_set_error("failed to create GPU device: %s", SDL_GetError());
-        return false;
-    }
-    if(!SDL_ClaimWindowForGPUDevice(output->gpu, output->window)) {
-        wd_set_error("failed to claim window for GPU device: %s", SDL_GetError());
-        return false;
-    }
-
-    if(args->fps == 0) {
-        bool ok = SDL_SetGPUSwapchainParameters(
-            output->gpu, output->window, SDL_GPU_SWAPCHAINCOMPOSITION_SDR, SDL_GPU_PRESENTMODE_VSYNC);
-        if(!ok) {
-            printf("warning: failed to enable vsync: %s\n", SDL_GetError());
-        }
-    }
-
     return true;
 }
 
@@ -85,10 +55,6 @@ bool wd_output_hidden(wd_output_state* output) {
 }
 
 void wd_free_output(wd_output_state* output) {
-    if(output->gpu != NULL) {
-        SDL_DestroyGPUDevice(output->gpu);
-        output->gpu = NULL;
-    }
     if(output->free_output != NULL) {
         output->free_output(output->data);
         output->data = NULL;

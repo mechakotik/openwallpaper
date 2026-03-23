@@ -74,30 +74,33 @@ void ow_read_file(wasm_exec_env_t exec_env, uint32_t path_ptr, uint32_t data_ptr
 void ow_begin_copy_pass(wasm_exec_env_t exec_env) {
     wasm_module_inst_t instance = wasm_runtime_get_module_inst(exec_env);
     wd_state* state = wasm_runtime_get_custom_data(instance);
+    wd_scene_state* scene = &state->scene;
 
-    DEBUG_CHECK(state->output.copy_pass == NULL, "called ow_begin_copy_pass when copy pass is active");
-    DEBUG_CHECK(state->output.render_pass == NULL, "called ow_begin_copy_pass when render pass is active");
+    DEBUG_CHECK(scene->copy_pass == NULL, "called ow_begin_copy_pass when copy pass is active");
+    DEBUG_CHECK(scene->render_pass == NULL, "called ow_begin_copy_pass when render pass is active");
 
-    state->output.copy_pass = SDL_BeginGPUCopyPass(state->output.command_buffer);
+    scene->copy_pass = SDL_BeginGPUCopyPass(scene->command_buffer);
 }
 
 void ow_end_copy_pass(wasm_exec_env_t exec_env) {
     wasm_module_inst_t instance = wasm_runtime_get_module_inst(exec_env);
     wd_state* state = wasm_runtime_get_custom_data(instance);
+    wd_scene_state* scene = &state->scene;
 
-    DEBUG_CHECK(state->output.render_pass == NULL, "called ow_end_copy_pass when render pass is active");
-    DEBUG_CHECK(state->output.copy_pass != NULL, "called ow_end_copy_pass when no pass is active");
+    DEBUG_CHECK(scene->render_pass == NULL, "called ow_end_copy_pass when render pass is active");
+    DEBUG_CHECK(scene->copy_pass != NULL, "called ow_end_copy_pass when no pass is active");
 
-    SDL_EndGPUCopyPass(state->output.copy_pass);
-    state->output.copy_pass = NULL;
+    SDL_EndGPUCopyPass(scene->copy_pass);
+    scene->copy_pass = NULL;
 }
 
 void ow_begin_render_pass(wasm_exec_env_t exec_env, uint32_t info_ptr) {
     wasm_module_inst_t instance = wasm_runtime_get_module_inst(exec_env);
     wd_state* state = wasm_runtime_get_custom_data(instance);
+    wd_scene_state* scene = &state->scene;
 
-    DEBUG_CHECK(state->output.copy_pass == NULL, "called ow_begin_render_pass when copy pass is active");
-    DEBUG_CHECK(state->output.render_pass == NULL, "called ow_begin_render_pass when render pass is active");
+    DEBUG_CHECK(scene->copy_pass == NULL, "called ow_begin_render_pass when copy pass is active");
+    DEBUG_CHECK(scene->render_pass == NULL, "called ow_begin_render_pass when render pass is active");
 
     ow_render_pass_info* info = (ow_render_pass_info*)wasm_runtime_addr_app_to_native(instance, info_ptr);
     DEBUG_CHECK(info != NULL, "ow_begin_render_pass info address is out of bounds");
@@ -111,7 +114,7 @@ void ow_begin_render_pass(wasm_exec_env_t exec_env, uint32_t info_ptr) {
     color_target_info.store_op = SDL_GPU_STOREOP_STORE;
 
     if(info->color_target == 0) {
-        color_target_info.texture = state->output.swapchain_texture;
+        color_target_info.texture = scene->swapchain_texture;
     } else {
         SDL_GPUTexture* texture = NULL;
         wd_object_type object_type;
@@ -139,25 +142,26 @@ void ow_begin_render_pass(wasm_exec_env_t exec_env, uint32_t info_ptr) {
         depth_target_info_ptr = &depth_target_info;
     }
 
-    state->output.render_pass =
-        SDL_BeginGPURenderPass(state->output.command_buffer, &color_target_info, 1, depth_target_info_ptr);
+    scene->render_pass = SDL_BeginGPURenderPass(scene->command_buffer, &color_target_info, 1, depth_target_info_ptr);
 }
 
 void ow_end_render_pass(wasm_exec_env_t exec_env) {
     wasm_module_inst_t instance = wasm_runtime_get_module_inst(exec_env);
     wd_state* state = wasm_runtime_get_custom_data(instance);
+    wd_scene_state* scene = &state->scene;
 
-    DEBUG_CHECK(state->output.copy_pass == NULL, "called ow_end_render_pass when copy pass is active");
-    DEBUG_CHECK(state->output.render_pass != NULL, "called ow_end_render_pass when no pass is active");
+    DEBUG_CHECK(scene->copy_pass == NULL, "called ow_end_render_pass when copy pass is active");
+    DEBUG_CHECK(scene->render_pass != NULL, "called ow_end_render_pass when no pass is active");
 
-    SDL_EndGPURenderPass(state->output.render_pass);
-    state->output.render_pass = NULL;
+    SDL_EndGPURenderPass(scene->render_pass);
+    scene->render_pass = NULL;
 }
 
 static uint32_t create_shader_from_bytecode(
     wasm_exec_env_t exec_env, const uint8_t* bytecode, size_t size, bool fragment) {
     wasm_module_inst_t instance = wasm_runtime_get_module_inst(exec_env);
     wd_state* state = wasm_runtime_get_custom_data(instance);
+    wd_scene_state* scene = &state->scene;
 
     SDL_ShaderCross_SPIRV_Info info = {0};
     info.bytecode = bytecode;
@@ -169,7 +173,7 @@ static uint32_t create_shader_from_bytecode(
     DEBUG_CHECK_RET0(metadata != NULL, "SDL_ShaderCross_ReflectGraphicsSPIRV failed: %s", SDL_GetError());
 
     SDL_GPUShader* shader =
-        SDL_ShaderCross_CompileGraphicsShaderFromSPIRV(state->output.gpu, &info, &metadata->resource_info, 0);
+        SDL_ShaderCross_CompileGraphicsShaderFromSPIRV(scene->gpu, &info, &metadata->resource_info, 0);
     free(metadata);
     DEBUG_CHECK_RET0(shader != NULL, "SDL_ShaderCross_CompileGraphicsShaderFromSPIRV failed: %s", SDL_GetError());
 
@@ -234,12 +238,13 @@ uint32_t ow_create_fragment_shader_from_file(wasm_exec_env_t exec_env, uint32_t 
 uint32_t ow_create_vertex_buffer(wasm_exec_env_t exec_env, uint32_t size) {
     wasm_module_inst_t instance = wasm_runtime_get_module_inst(exec_env);
     wd_state* state = wasm_runtime_get_custom_data(instance);
+    wd_scene_state* scene = &state->scene;
 
     SDL_GPUBufferCreateInfo info = {0};
     info.usage = SDL_GPU_BUFFERUSAGE_VERTEX;
     info.size = size;
 
-    SDL_GPUBuffer* buffer = SDL_CreateGPUBuffer(state->output.gpu, &info);
+    SDL_GPUBuffer* buffer = SDL_CreateGPUBuffer(scene->gpu, &info);
     DEBUG_CHECK_RET0(buffer != NULL, "SDL_CreateGPUBuffer failed: %s", SDL_GetError());
 
     uint32_t result;
@@ -254,12 +259,13 @@ uint32_t ow_create_vertex_buffer(wasm_exec_env_t exec_env, uint32_t size) {
 uint32_t ow_create_index_buffer(wasm_exec_env_t exec_env, uint32_t size, uint32_t wide) {
     wasm_module_inst_t instance = wasm_runtime_get_module_inst(exec_env);
     wd_state* state = wasm_runtime_get_custom_data(instance);
+    wd_scene_state* scene = &state->scene;
 
     SDL_GPUBufferCreateInfo info = {0};
     info.usage = SDL_GPU_BUFFERUSAGE_INDEX;
     info.size = size;
 
-    SDL_GPUBuffer* buffer = SDL_CreateGPUBuffer(state->output.gpu, &info);
+    SDL_GPUBuffer* buffer = SDL_CreateGPUBuffer(scene->gpu, &info);
     DEBUG_CHECK_RET0(buffer != NULL, "SDL_CreateGPUBuffer failed: %s", SDL_GetError());
 
     wd_object_type object_type = (wide ? WD_OBJECT_INDEX32_BUFFER : WD_OBJECT_INDEX16_BUFFER);
@@ -275,9 +281,11 @@ uint32_t ow_create_index_buffer(wasm_exec_env_t exec_env, uint32_t size, uint32_
 void ow_update_buffer(wasm_exec_env_t exec_env, uint32_t buffer, uint32_t offset, uint32_t data_ptr, uint32_t size) {
     wasm_module_inst_t instance = wasm_runtime_get_module_inst(exec_env);
     wd_state* state = wasm_runtime_get_custom_data(instance);
+    wd_scene_state* scene = &state->scene;
+
     void* data_ptr_real = wasm_runtime_addr_app_to_native(instance, data_ptr);
     DEBUG_CHECK(data_ptr_real != NULL, "ow_update_buffer data address is out of bounds");
-    DEBUG_CHECK(state->output.copy_pass != NULL, "called ow_update_buffer when no copy pass is active");
+    DEBUG_CHECK(scene->copy_pass != NULL, "called ow_update_buffer when no copy pass is active");
 
     SDL_GPUBuffer* buffer_data = NULL;
     wd_object_type object_type;
@@ -290,14 +298,14 @@ void ow_update_buffer(wasm_exec_env_t exec_env, uint32_t buffer, uint32_t offset
     SDL_GPUTransferBufferCreateInfo transfer_info = {0};
     transfer_info.size = size;
     transfer_info.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
-    SDL_GPUTransferBuffer* transfer_buffer = SDL_CreateGPUTransferBuffer(state->output.gpu, &transfer_info);
+    SDL_GPUTransferBuffer* transfer_buffer = SDL_CreateGPUTransferBuffer(scene->gpu, &transfer_info);
     DEBUG_CHECK(transfer_buffer != NULL, "SDL_CreateGPUTransferBuffer failed: %s", SDL_GetError());
 
-    void* transfer_data = SDL_MapGPUTransferBuffer(state->output.gpu, transfer_buffer, false);
+    void* transfer_data = SDL_MapGPUTransferBuffer(scene->gpu, transfer_buffer, false);
     DEBUG_CHECK(transfer_data != NULL, "SDL_MapGPUTransferBuffer failed: %s", SDL_GetError());
 
     memcpy(transfer_data, data_ptr_real, size);
-    SDL_UnmapGPUTransferBuffer(state->output.gpu, transfer_buffer);
+    SDL_UnmapGPUTransferBuffer(scene->gpu, transfer_buffer);
 
     SDL_GPUTransferBufferLocation source = {0};
     source.transfer_buffer = transfer_buffer;
@@ -308,13 +316,15 @@ void ow_update_buffer(wasm_exec_env_t exec_env, uint32_t buffer, uint32_t offset
     dest.offset = offset;
     dest.size = size;
 
-    SDL_UploadToGPUBuffer(state->output.copy_pass, &source, &dest, true);
-    SDL_ReleaseGPUTransferBuffer(state->output.gpu, transfer_buffer);
+    SDL_UploadToGPUBuffer(scene->copy_pass, &source, &dest, true);
+    SDL_ReleaseGPUTransferBuffer(scene->gpu, transfer_buffer);
 }
 
 uint32_t ow_create_texture(wasm_exec_env_t exec_env, uint32_t info_ptr) {
     wasm_module_inst_t instance = wasm_runtime_get_module_inst(exec_env);
     wd_state* state = wasm_runtime_get_custom_data(instance);
+    wd_scene_state* scene = &state->scene;
+
     ow_texture_info* info = (ow_texture_info*)wasm_runtime_addr_app_to_native(instance, info_ptr);
     DEBUG_CHECK_RET0(info != NULL, "ow_create_texture info address is out of bounds");
 
@@ -329,7 +339,7 @@ uint32_t ow_create_texture(wasm_exec_env_t exec_env, uint32_t info_ptr) {
 
     switch(info->format) {
         case OW_TEXTURE_SWAPCHAIN:
-            texture_info.format = SDL_GetGPUSwapchainTextureFormat(state->output.gpu, state->output.window);
+            texture_info.format = SDL_GetGPUSwapchainTextureFormat(scene->gpu, state->output.window);
             break;
         case OW_TEXTURE_RGBA8_UNORM:
             texture_info.format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM;
@@ -380,7 +390,7 @@ uint32_t ow_create_texture(wasm_exec_env_t exec_env, uint32_t info_ptr) {
         }
     }
 
-    SDL_GPUTexture* texture = SDL_CreateGPUTexture(state->output.gpu, &texture_info);
+    SDL_GPUTexture* texture = SDL_CreateGPUTexture(scene->gpu, &texture_info);
     DEBUG_CHECK_RET0(texture != NULL, "SDL_CreateGPUTexture failed: %s", SDL_GetError());
 
     uint32_t result;
@@ -395,12 +405,13 @@ uint32_t ow_create_texture(wasm_exec_env_t exec_env, uint32_t info_ptr) {
 uint32_t ow_create_texture_from_image(wasm_exec_env_t exec_env, uint32_t path_ptr, uint32_t info_ptr) {
     wasm_module_inst_t instance = wasm_runtime_get_module_inst(exec_env);
     wd_state* state = wasm_runtime_get_custom_data(instance);
+    wd_scene_state* scene = &state->scene;
+
     const char* path = wasm_runtime_addr_app_to_native(instance, path_ptr);
     ow_texture_info* info = (ow_texture_info*)wasm_runtime_addr_app_to_native(instance, info_ptr);
     DEBUG_CHECK_RET0(path != NULL, "ow_create_texture_from_image path address is out of bounds");
     DEBUG_CHECK_RET0(info != NULL, "ow_create_texture_from_image info address is out of bounds");
-    DEBUG_CHECK_RET0(
-        state->output.copy_pass != NULL, "called ow_create_texture_from_image when no copy pass is active");
+    DEBUG_CHECK_RET0(scene->copy_pass != NULL, "called ow_create_texture_from_image when no copy pass is active");
 
     if(info->format != OW_TEXTURE_RGBA8_UNORM && info->format != OW_TEXTURE_RGBA8_UNORM_SRGB) {
         wd_set_error("unsupported texture format (TODO)");
@@ -452,13 +463,13 @@ uint32_t ow_create_texture_from_image(wasm_exec_env_t exec_env, uint32_t path_pt
     transfer_info.size = surface->w * surface->h * 4;
     transfer_info.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
 
-    SDL_GPUTransferBuffer* transfer_buffer = SDL_CreateGPUTransferBuffer(state->output.gpu, &transfer_info);
+    SDL_GPUTransferBuffer* transfer_buffer = SDL_CreateGPUTransferBuffer(scene->gpu, &transfer_info);
     DEBUG_CHECK_RET0(transfer_buffer != NULL, "SDL_CreateGPUTransferBuffer failed: %s", SDL_GetError());
 
-    void* transfer_data = SDL_MapGPUTransferBuffer(state->output.gpu, transfer_buffer, false);
+    void* transfer_data = SDL_MapGPUTransferBuffer(scene->gpu, transfer_buffer, false);
     DEBUG_CHECK_RET0(transfer_data != NULL, "SDL_MapGPUTransferBuffer failed: %s", SDL_GetError());
     memcpy(transfer_data, surface->pixels, (uint32_t)(surface->w * surface->h * 4));
-    SDL_UnmapGPUTransferBuffer(state->output.gpu, transfer_buffer);
+    SDL_UnmapGPUTransferBuffer(scene->gpu, transfer_buffer);
 
     SDL_GPUTextureTransferInfo source = {0};
     source.transfer_buffer = transfer_buffer;
@@ -470,8 +481,8 @@ uint32_t ow_create_texture_from_image(wasm_exec_env_t exec_env, uint32_t path_pt
     dest.h = surface->h;
     dest.d = 1;
 
-    SDL_UploadToGPUTexture(state->output.copy_pass, &source, &dest, false);
-    SDL_ReleaseGPUTransferBuffer(state->output.gpu, transfer_buffer);
+    SDL_UploadToGPUTexture(scene->copy_pass, &source, &dest, false);
+    SDL_ReleaseGPUTransferBuffer(scene->gpu, transfer_buffer);
     SDL_DestroySurface(surface);
     free(image_data);
     return result;
@@ -480,6 +491,7 @@ uint32_t ow_create_texture_from_image(wasm_exec_env_t exec_env, uint32_t path_pt
 void ow_update_texture(wasm_exec_env_t exec_env, uint32_t data_ptr, uint32_t pixels_per_row, uint32_t dest_ptr) {
     wasm_module_inst_t instance = wasm_runtime_get_module_inst(exec_env);
     wd_state* state = wasm_runtime_get_custom_data(instance);
+    wd_scene_state* scene = &state->scene;
 
     void* data = wasm_runtime_addr_app_to_native(instance, data_ptr);
     ow_texture_update_destination* dest = wasm_runtime_addr_app_to_native(instance, dest_ptr);
@@ -496,13 +508,13 @@ void ow_update_texture(wasm_exec_env_t exec_env, uint32_t data_ptr, uint32_t pix
     transfer_info.size = dest->w * dest->h * 4;
     transfer_info.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
 
-    SDL_GPUTransferBuffer* transfer_buffer = SDL_CreateGPUTransferBuffer(state->output.gpu, &transfer_info);
+    SDL_GPUTransferBuffer* transfer_buffer = SDL_CreateGPUTransferBuffer(scene->gpu, &transfer_info);
     DEBUG_CHECK(transfer_buffer != NULL, "SDL_CreateGPUTransferBuffer failed: %s", SDL_GetError());
 
-    void* transfer_data = SDL_MapGPUTransferBuffer(state->output.gpu, transfer_buffer, false);
+    void* transfer_data = SDL_MapGPUTransferBuffer(scene->gpu, transfer_buffer, false);
     DEBUG_CHECK(transfer_data != NULL, "SDL_MapGPUTransferBuffer failed: %s", SDL_GetError());
     memcpy(transfer_data, data, transfer_info.size);
-    SDL_UnmapGPUTransferBuffer(state->output.gpu, transfer_buffer);
+    SDL_UnmapGPUTransferBuffer(scene->gpu, transfer_buffer);
 
     SDL_GPUTextureTransferInfo source = {0};
     source.transfer_buffer = transfer_buffer;
@@ -517,13 +529,14 @@ void ow_update_texture(wasm_exec_env_t exec_env, uint32_t data_ptr, uint32_t pix
     region.d = 1;
     region.mip_level = dest->mip_level;
 
-    SDL_UploadToGPUTexture(state->output.copy_pass, &source, &region, false);
-    SDL_ReleaseGPUTransferBuffer(state->output.gpu, transfer_buffer);
+    SDL_UploadToGPUTexture(scene->copy_pass, &source, &region, false);
+    SDL_ReleaseGPUTransferBuffer(scene->gpu, transfer_buffer);
 }
 
 void ow_generate_mipmaps(wasm_exec_env_t exec_env, uint32_t texture) {
     wasm_module_inst_t instance = wasm_runtime_get_module_inst(exec_env);
     wd_state* state = wasm_runtime_get_custom_data(instance);
+    wd_scene_state* scene = &state->scene;
 
     SDL_GPUTexture* sdl_texture = NULL;
     wd_object_type object_type;
@@ -531,12 +544,14 @@ void ow_generate_mipmaps(wasm_exec_env_t exec_env, uint32_t texture) {
     DEBUG_CHECK(sdl_texture != NULL, "passed non-existent object as ow_generate_mipmaps texture");
     DEBUG_CHECK(object_type == WD_OBJECT_TEXTURE, "passed non-texture object as ow_generate_mipmaps texture");
 
-    SDL_GenerateMipmapsForGPUTexture(state->output.command_buffer, sdl_texture);
+    SDL_GenerateMipmapsForGPUTexture(scene->command_buffer, sdl_texture);
 }
 
 uint32_t ow_create_sampler(wasm_exec_env_t exec_env, uint32_t info_ptr) {
     wasm_module_inst_t instance = wasm_runtime_get_module_inst(exec_env);
     wd_state* state = wasm_runtime_get_custom_data(instance);
+    wd_scene_state* scene = &state->scene;
+
     ow_sampler_info* info = (ow_sampler_info*)wasm_runtime_addr_app_to_native(instance, info_ptr);
     DEBUG_CHECK_RET0(info != NULL, "ow_create_sampler info address is out of bounds");
 
@@ -583,7 +598,7 @@ uint32_t ow_create_sampler(wasm_exec_env_t exec_env, uint32_t info_ptr) {
         sampler_info.max_anisotropy = info->anisotropy;
     }
 
-    SDL_GPUSampler* sampler = SDL_CreateGPUSampler(state->output.gpu, &sampler_info);
+    SDL_GPUSampler* sampler = SDL_CreateGPUSampler(scene->gpu, &sampler_info);
     DEBUG_CHECK_RET0(sampler != NULL, "SDL_CreateGPUSampler failed: %s", SDL_GetError());
 
     uint32_t result;
@@ -664,6 +679,8 @@ static SDL_GPUCompareOp ow_depth_test_mode_to_sdl(ow_depth_test_mode mode) {
 uint32_t ow_create_pipeline(wasm_exec_env_t exec_env, uint32_t info_ptr) {
     wasm_module_inst_t instance = wasm_runtime_get_module_inst(exec_env);
     wd_state* state = wasm_runtime_get_custom_data(instance);
+    wd_scene_state* scene = &state->scene;
+
     ow_pipeline_info* info = (ow_pipeline_info*)wasm_runtime_addr_app_to_native(instance, info_ptr);
     DEBUG_CHECK_RET0(info != NULL, "ow_create_pipeline info address is out of bounds");
     SDL_GPUGraphicsPipelineCreateInfo pipeline_info = {0};
@@ -750,7 +767,7 @@ uint32_t ow_create_pipeline(wasm_exec_env_t exec_env, uint32_t info_ptr) {
     SDL_GPUColorTargetDescription color_target_description = {0};
     switch(info->color_target_format) {
         case OW_TEXTURE_SWAPCHAIN:
-            color_target_description.format = SDL_GetGPUSwapchainTextureFormat(state->output.gpu, state->output.window);
+            color_target_description.format = SDL_GetGPUSwapchainTextureFormat(scene->gpu, state->output.window);
             break;
         case OW_TEXTURE_RGBA8_UNORM:
             color_target_description.format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM;
@@ -810,7 +827,7 @@ uint32_t ow_create_pipeline(wasm_exec_env_t exec_env, uint32_t info_ptr) {
         pipeline_info.target_info.depth_stencil_format = SDL_GPU_TEXTUREFORMAT_D16_UNORM;
     }
 
-    SDL_GPUGraphicsPipeline* pipeline = SDL_CreateGPUGraphicsPipeline(state->output.gpu, &pipeline_info);
+    SDL_GPUGraphicsPipeline* pipeline = SDL_CreateGPUGraphicsPipeline(scene->gpu, &pipeline_info);
     free(sdl_vertex_attributes);
     free(sdl_vertex_buffer_descriptions);
     DEBUG_CHECK_RET0(pipeline != NULL, "SDL_CreateGPUGraphicsPipeline failed: %s", SDL_GetError());
@@ -827,26 +844,32 @@ uint32_t ow_create_pipeline(wasm_exec_env_t exec_env, uint32_t info_ptr) {
 void ow_push_vertex_uniform_data(wasm_exec_env_t exec_env, uint32_t slot, uint32_t data, uint32_t size) {
     wasm_module_inst_t instance = wasm_runtime_get_module_inst(exec_env);
     wd_state* state = wasm_runtime_get_custom_data(instance);
+    wd_scene_state* scene = &state->scene;
+
     void* data_real = wasm_runtime_addr_app_to_native(instance, data);
     DEBUG_CHECK(data_real != NULL, "ow_push_vertex_uniform_data data address is out of bounds");
     DEBUG_CHECK(slot < 4, "only 4 uniform data slots are available for one shader type");
-    SDL_PushGPUVertexUniformData(state->output.command_buffer, slot, data_real, size);
+    SDL_PushGPUVertexUniformData(scene->command_buffer, slot, data_real, size);
 }
 
 void ow_push_fragment_uniform_data(wasm_exec_env_t exec_env, uint32_t slot, uint32_t data, uint32_t size) {
     wasm_module_inst_t instance = wasm_runtime_get_module_inst(exec_env);
     wd_state* state = wasm_runtime_get_custom_data(instance);
+    wd_scene_state* scene = &state->scene;
+
     void* data_real = wasm_runtime_addr_app_to_native(instance, data);
     DEBUG_CHECK(data_real != NULL, "ow_push_fragment_uniform_data data address is out of bounds");
     DEBUG_CHECK(slot < 4, "only 4 uniform data slots are available for one shader type");
-    SDL_PushGPUFragmentUniformData(state->output.command_buffer, slot, data_real, size);
+    SDL_PushGPUFragmentUniformData(scene->command_buffer, slot, data_real, size);
 }
 
 void ow_render_geometry(wasm_exec_env_t exec_env, uint32_t pipeline, uint32_t bindings_ptr, uint32_t vertex_offset,
     uint32_t vertex_count, uint32_t instance_count) {
     wasm_module_inst_t instance = wasm_runtime_get_module_inst(exec_env);
     wd_state* state = wasm_runtime_get_custom_data(instance);
-    DEBUG_CHECK(state->output.render_pass != NULL, "called ow_render_geometry when no render pass is active");
+    wd_scene_state* scene = &state->scene;
+
+    DEBUG_CHECK(scene->render_pass != NULL, "called ow_render_geometry when no render pass is active");
 
     SDL_GPUGraphicsPipeline* sdl_pipeline = NULL;
     wd_object_type object_type;
@@ -891,11 +914,11 @@ void ow_render_geometry(wasm_exec_env_t exec_env, uint32_t pipeline, uint32_t bi
         sdl_texture_bindings[i].sampler = sdl_sampler;
     }
 
-    SDL_BindGPUGraphicsPipeline(state->output.render_pass, sdl_pipeline);
-    SDL_BindGPUVertexBuffers(state->output.render_pass, 0, sdl_vertex_buffer_bindings, bindings->vertex_buffers_count);
-    SDL_BindGPUFragmentSamplers(state->output.render_pass, 0, sdl_texture_bindings, bindings->texture_bindings_count);
+    SDL_BindGPUGraphicsPipeline(scene->render_pass, sdl_pipeline);
+    SDL_BindGPUVertexBuffers(scene->render_pass, 0, sdl_vertex_buffer_bindings, bindings->vertex_buffers_count);
+    SDL_BindGPUFragmentSamplers(scene->render_pass, 0, sdl_texture_bindings, bindings->texture_bindings_count);
 
-    SDL_DrawGPUPrimitives(state->output.render_pass, vertex_count, instance_count, vertex_offset, 0);
+    SDL_DrawGPUPrimitives(scene->render_pass, vertex_count, instance_count, vertex_offset, 0);
 
     free(sdl_vertex_buffer_bindings);
     free(sdl_texture_bindings);
@@ -905,7 +928,9 @@ void ow_render_geometry_indexed(wasm_exec_env_t exec_env, uint32_t pipeline, uin
     uint32_t index_offset, uint32_t index_count, uint32_t vertex_offset, uint32_t instance_count) {
     wasm_module_inst_t instance = wasm_runtime_get_module_inst(exec_env);
     wd_state* state = wasm_runtime_get_custom_data(instance);
-    DEBUG_CHECK(state->output.render_pass != NULL, "called ow_render_geometry when no render pass is active");
+    wd_scene_state* scene = &state->scene;
+
+    DEBUG_CHECK(scene->render_pass != NULL, "called ow_render_geometry when no render pass is active");
 
     SDL_GPUGraphicsPipeline* sdl_pipeline = NULL;
     wd_object_type object_type;
@@ -961,13 +986,12 @@ void ow_render_geometry_indexed(wasm_exec_env_t exec_env, uint32_t pipeline, uin
     sdl_index_buffer_binding.buffer = sdl_index_buffer;
     sdl_index_buffer_binding.offset = 0;
 
-    SDL_BindGPUGraphicsPipeline(state->output.render_pass, sdl_pipeline);
-    SDL_BindGPUVertexBuffers(state->output.render_pass, 0, sdl_vertex_buffer_bindings, bindings->vertex_buffers_count);
-    SDL_BindGPUIndexBuffer(state->output.render_pass, &sdl_index_buffer_binding, sdl_index_element_size);
-    SDL_BindGPUFragmentSamplers(state->output.render_pass, 0, sdl_texture_bindings, bindings->texture_bindings_count);
+    SDL_BindGPUGraphicsPipeline(scene->render_pass, sdl_pipeline);
+    SDL_BindGPUVertexBuffers(scene->render_pass, 0, sdl_vertex_buffer_bindings, bindings->vertex_buffers_count);
+    SDL_BindGPUIndexBuffer(scene->render_pass, &sdl_index_buffer_binding, sdl_index_element_size);
+    SDL_BindGPUFragmentSamplers(scene->render_pass, 0, sdl_texture_bindings, bindings->texture_bindings_count);
 
-    SDL_DrawGPUIndexedPrimitives(
-        state->output.render_pass, index_count, instance_count, index_offset, vertex_offset, 0);
+    SDL_DrawGPUIndexedPrimitives(scene->render_pass, index_count, instance_count, index_offset, vertex_offset, 0);
 
     free(sdl_vertex_buffer_bindings);
     free(sdl_texture_bindings);

@@ -1,8 +1,5 @@
 #include "scene.h"
-#include <SDL3/SDL_filesystem.h>
-#include <SDL3/SDL_process.h>
-#include <SDL3/SDL_properties.h>
-#include <SDL3/SDL_stdinc.h>
+#include <SDL3/SDL.h>
 #include <inttypes.h>
 #include <lib_export.h>
 #include <stdlib.h>
@@ -210,16 +207,52 @@ cleanup:
     return loaded;
 }
 
-bool wd_init_scene(wd_state* state, wd_args_state* args) {
+static bool init_gpu(wd_state* state) {
     wd_scene_state* scene = &state->scene;
+    wd_args_state* args = &state->args;
+
+    SDL_PropertiesID gpu_properties = SDL_CreateProperties();
+    if(!SDL_SetBooleanProperty(gpu_properties, SDL_PROP_GPU_DEVICE_CREATE_PREFERLOWPOWER_BOOLEAN, !args->prefer_dgpu)) {
+        printf("warning: failed to set preffered GPU: %s\n", SDL_GetError());
+    }
+    if(!SDL_SetBooleanProperty(gpu_properties, SDL_PROP_GPU_DEVICE_CREATE_SHADERS_SPIRV_BOOLEAN, true)) {
+        wd_set_error("failed to enable SPIRV shaders: %s", SDL_GetError());
+        return false;
+    }
+
+    scene->gpu = SDL_CreateGPUDeviceWithProperties(gpu_properties);
+    if(scene->gpu == NULL) {
+        wd_set_error("failed to create GPU device: %s", SDL_GetError());
+        return false;
+    }
+    if(!SDL_ClaimWindowForGPUDevice(scene->gpu, state->output.window)) {
+        wd_set_error("failed to claim window for GPU device: %s", SDL_GetError());
+        return false;
+    }
+
+    if(args->fps == 0) {
+        bool ok = SDL_SetGPUSwapchainParameters(
+            scene->gpu, state->output.window, SDL_GPU_SWAPCHAINCOMPOSITION_SDR, SDL_GPU_PRESENTMODE_VSYNC);
+        if(!ok) {
+            printf("warning: failed to enable vsync: %s\n", SDL_GetError());
+        }
+    }
+
+    return true;
+}
+
+bool init_wasm(wd_state* state) {
+    wd_scene_state* scene = &state->scene;
+    wd_args_state* args = &state->args;
+
     const uint32_t stack_size = 4 * 1024 * 1024;
 
     if(!wasm_runtime_init()) {
         wd_set_error("wasm_runtime_init failed");
         return false;
     }
+    scene->wasm_initialized = true;
 
-    scene->initialized = true;
     int num_native_symbols = sizeof(native_symbols) / sizeof(NativeSymbol);
     if(!wasm_runtime_register_natives("env", native_symbols, num_native_symbols)) {
         wd_set_error("wasm_runtime_register_natives failed");
@@ -305,11 +338,63 @@ bool wd_init_scene(wd_state* state, wd_args_state* args) {
     return true;
 }
 
-bool wd_update_scene(wd_scene_state* scene, float delta) {
+bool wd_init_scene(wd_state* state) {
+    wd_scene_state* scene = &state->scene;
+
+    if(!init_gpu(state)) {
+        return false;
+    }
+
+    scene->command_buffer = SDL_AcquireGPUCommandBuffer(scene->gpu);
+    if(scene->command_buffer == NULL) {
+        wd_set_error("SDL_AcquireGPUCommandBuffer failed: %s", SDL_GetError());
+        return false;
+    }
+
+    if(!init_wasm(state)) {
+        return false;
+    }
+
+    if(!SDL_SubmitGPUCommandBuffer(scene->command_buffer)) {
+        wd_set_error("SDL_SubmitGPUCommandBuffer failed: %s", SDL_GetError());
+        return false;
+    }
+
+    return true;
+}
+
+bool wd_update_scene(wd_state* state, float delta) {
+    wd_scene_state* scene = &state->scene;
+
+    scene->command_buffer = SDL_AcquireGPUCommandBuffer(scene->gpu);
+    if(scene->command_buffer == NULL) {
+        wd_set_error("SDL_AcquireGPUCommandBuffer failed: %s", SDL_GetError());
+        return false;
+    }
+
+    if(!SDL_WaitAndAcquireGPUSwapchainTexture(
+           scene->command_buffer, state->output.window, &scene->swapchain_texture, &scene->width, &scene->height)) {
+        wd_set_error("SDL_WaitAndAcquireGPUSwapchainTexture failed: %s", SDL_GetError());
+        return false;
+    }
+
+    if(scene->swapchain_texture == NULL) {
+        if(!SDL_SubmitGPUCommandBuffer(scene->command_buffer)) {
+            wd_set_error("SDL_SubmitGPUCommandBuffer failed: %s", SDL_GetError());
+            return false;
+        }
+        return true;
+    }
+
     if(!wasm_runtime_call_wasm(scene->exec_env, scene->update_func, 1, (void*)&delta)) {
         if(!wd_is_error_set()) {
             wd_set_error("update wasm call failed: %s", wasm_runtime_get_exception(scene->instance));
         }
+        return false;
+    }
+
+    if(!SDL_SubmitGPUCommandBuffer(scene->command_buffer)) {
+        wd_set_error("SDL_SubmitGPUCommandBuffer failed: %s", SDL_GetError());
         return false;
     }
 
@@ -337,8 +422,12 @@ void wd_free_scene(wd_scene_state* scene) {
         free(scene->module_buffer);
         scene->module_buffer = NULL;
     }
-    if(scene->initialized) {
+    if(scene->wasm_initialized) {
         wasm_runtime_destroy();
-        scene->initialized = false;
+        scene->wasm_initialized = false;
+    }
+    if(scene->gpu != NULL) {
+        SDL_DestroyGPUDevice(scene->gpu);
+        scene->gpu = NULL;
     }
 }

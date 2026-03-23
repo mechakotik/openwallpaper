@@ -1,7 +1,6 @@
 #include "window.h"
 #include <SDL3/SDL.h>
 #include <stdlib.h>
-#include "SDL3/SDL_video.h"
 #include "error.h"
 #include "malloc.h"
 

@@ -1,9 +1,5 @@
 #include <SDL3/SDL.h>
-#include <signal.h>
 #include <stdio.h>
-#include <stdlib.h>
-#include "SDL3/SDL_error.h"
-#include "SDL3/SDL_gpu.h"
 #include "argparse.h"
 #include "error.h"
 #include "output.h"
@@ -11,8 +7,8 @@
 #include "state.h"
 
 static void print_help() {
-    printf("Usage: wallpaperd [OPTIONS] [WALLPAPER_PATH] [WALLPAPER_OPTIONS]\n");
-    printf("Interactive live wallpaper daemon\n\n");
+    printf("usage: wallpaperd [OPTIONS] [WALLPAPER_PATH] [WALLPAPER_OPTIONS]\n");
+    printf("funny animated wallpaper app\n\n");
 
     printf("  --display=<display>\n");
     printf("  --fps=<fps>\n");
@@ -75,19 +71,7 @@ int main(int argc, char* argv[]) {
     if(!wd_init_output(&state.output, &state.args)) {
         goto handle_error;
     }
-
-    // It's unclear which component should manage the command buffer and swapchain texture,
-    // so let's just do it in main.
-    state.output.command_buffer = SDL_AcquireGPUCommandBuffer(state.output.gpu);
-    if(state.output.command_buffer == NULL) {
-        wd_set_error("SDL_AcquireGPUCommandBuffer failed: %s", SDL_GetError());
-        goto handle_error;
-    }
-    if(!wd_init_scene(&state, &state.args)) {
-        goto handle_error;
-    }
-    if(!SDL_SubmitGPUCommandBuffer(state.output.command_buffer)) {
-        wd_set_error("SDL_SubmitGPUCommandBuffer failed: %s", SDL_GetError());
+    if(!wd_init_scene(&state)) {
         goto handle_error;
     }
 
@@ -158,32 +142,7 @@ int main(int argc, char* argv[]) {
             delta_factor = 1;
         }
 
-        state.output.command_buffer = SDL_AcquireGPUCommandBuffer(state.output.gpu);
-        if(state.output.command_buffer == NULL) {
-            wd_set_error("SDL_AcquireGPUCommandBuffer failed: %s", SDL_GetError());
-            goto handle_error;
-        }
-
-        if(!SDL_WaitAndAcquireGPUSwapchainTexture(state.output.command_buffer, state.output.window,
-               &state.output.swapchain_texture, &state.output.width, &state.output.height)) {
-            wd_set_error("SDL_WaitAndAcquireGPUSwapchainTexture failed: %s", SDL_GetError());
-            goto handle_error;
-        }
-
-        if(state.output.swapchain_texture == NULL) {
-            if(!SDL_SubmitGPUCommandBuffer(state.output.command_buffer)) {
-                wd_set_error("SDL_SubmitGPUCommandBuffer failed: %s", SDL_GetError());
-                goto handle_error;
-            }
-            continue;
-        }
-
-        if(!wd_update_scene(&state.scene, delta * delta_factor * speed)) {
-            goto handle_error;
-        }
-
-        if(!SDL_SubmitGPUCommandBuffer(state.output.command_buffer)) {
-            wd_set_error("SDL_SubmitGPUCommandBuffer failed: %s", SDL_GetError());
+        if(!wd_update_scene(&state, delta * delta_factor * speed)) {
             goto handle_error;
         }
 

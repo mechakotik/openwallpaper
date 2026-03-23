@@ -1,6 +1,6 @@
-#include "malloc.h"
 #ifdef WD_WLROOTS
 
+#include "wlroots.h"
 #include <SDL3/SDL.h>
 #include <fcntl.h>
 #include <stdio.h>
@@ -13,7 +13,7 @@
 #include <wlr-layer-shell-unstable-v1.h>
 #include "error.h"
 #include "hyprland.h"
-#include "wlroots.h"
+#include "malloc.h"
 
 typedef struct {
     struct wl_output* output;
