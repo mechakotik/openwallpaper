@@ -471,6 +471,21 @@ bool wd_update_scene(wd_state* state, float delta) {
     return true;
 }
 
+bool wd_flush_command_buffer(wd_scene_state* scene) {
+    if(!SDL_SubmitGPUCommandBuffer(scene->command_buffer)) {
+        wd_set_error("SDL_SubmitGPUCommandBuffer failed: %s", SDL_GetError());
+        return false;
+    }
+
+    scene->command_buffer = SDL_AcquireGPUCommandBuffer(scene->gpu);
+    if(scene->command_buffer == NULL) {
+        wd_set_error("SDL_AcquireGPUCommandBuffer failed: %s", SDL_GetError());
+        return false;
+    }
+
+    return true;
+}
+
 void wd_free_scene(wd_scene_state* scene) {
     if(scene->wallpaper_options_values_wasm != NULL) {
         free(scene->wallpaper_options_values_wasm);

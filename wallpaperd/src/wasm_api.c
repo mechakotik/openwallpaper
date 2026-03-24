@@ -156,6 +156,16 @@ void ow_end_render_pass(wasm_exec_env_t exec_env) {
 
     SDL_EndGPURenderPass(scene->render_pass);
     scene->render_pass = NULL;
+
+    // TODO: Technically, we can put all the frame commands in a single command buffer, but GPU drivers don't like to
+    // preempt queue when command buffer processing is active, which causes heavy scenes to make all the desktop
+    // stutter. Currently, we just always flush the command buffer at the end of the render pass, which is the best for
+    // preemption, but adds *a lot* of CPU overhead (around 2x, from my brief measurement). Probably we should not do
+    // this every render pass, only when current command buffer have accumulated enough command complexity, though it's
+    // not really obvious how to measure this.
+    if(!wd_flush_command_buffer(scene)) {
+        wasm_runtime_set_exception(instance, "");
+    }
 }
 
 static uint32_t create_shader_from_bytecode(
