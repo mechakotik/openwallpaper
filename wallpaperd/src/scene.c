@@ -241,6 +241,38 @@ static bool init_gpu(wd_state* state) {
     return true;
 }
 
+static bool ensure_framebuffer(wd_state* state, uint32_t width, uint32_t height) {
+    wd_scene_state* scene = &state->scene;
+
+    if(scene->framebuffer != NULL && scene->width == width && scene->height == height) {
+        return true;
+    }
+    if(scene->framebuffer != NULL) {
+        SDL_ReleaseGPUTexture(scene->gpu, scene->framebuffer);
+        scene->framebuffer = NULL;
+    }
+
+    SDL_GPUTextureCreateInfo texture_info = {
+        .type = SDL_GPU_TEXTURETYPE_2D,
+        .format = SDL_GetGPUSwapchainTextureFormat(scene->gpu, state->output.window),
+        .usage = SDL_GPU_TEXTUREUSAGE_SAMPLER | SDL_GPU_TEXTUREUSAGE_COLOR_TARGET,
+        .width = width,
+        .height = height,
+        .layer_count_or_depth = 1,
+        .num_levels = 1,
+    };
+
+    scene->framebuffer = SDL_CreateGPUTexture(scene->gpu, &texture_info);
+    if(scene->framebuffer == NULL) {
+        wd_set_error("SDL_CreateGPUTexture failed: %s", SDL_GetError());
+        return false;
+    }
+
+    scene->width = width;
+    scene->height = height;
+    return true;
+}
+
 bool init_wasm(wd_state* state) {
     wd_scene_state* scene = &state->scene;
     wd_args_state* args = &state->args;
@@ -328,7 +360,10 @@ bool init_wasm(wd_state* state) {
         scene->wallpaper_options_values_wasm[i] = value_wasm;
     }
 
-    if(!wasm_runtime_call_wasm(scene->exec_env, init_func, 0, NULL)) {
+    scene->calling_init = true;
+    bool init_ok = wasm_runtime_call_wasm(scene->exec_env, init_func, 0, NULL);
+    scene->calling_init = false;
+    if(!init_ok) {
         if(!wd_is_error_set()) {
             wd_set_error("init wasm call failed: %s", wasm_runtime_get_exception(scene->instance));
         }
@@ -372,18 +407,21 @@ bool wd_update_scene(wd_state* state, float delta) {
         return false;
     }
 
-    if(!SDL_WaitAndAcquireGPUSwapchainTexture(
-           scene->command_buffer, state->output.window, &scene->swapchain_texture, &scene->width, &scene->height)) {
-        wd_set_error("SDL_WaitAndAcquireGPUSwapchainTexture failed: %s", SDL_GetError());
+    int width = 0;
+    int height = 0;
+    if(!SDL_GetWindowSizeInPixels(state->output.window, &width, &height)) {
+        wd_set_error("SDL_GetWindowSizeInPixels failed: %s", SDL_GetError());
         return false;
     }
-
-    if(scene->swapchain_texture == NULL) {
+    if(width <= 0 || height <= 0) {
         if(!SDL_SubmitGPUCommandBuffer(scene->command_buffer)) {
             wd_set_error("SDL_SubmitGPUCommandBuffer failed: %s", SDL_GetError());
             return false;
         }
         return true;
+    }
+    if(!ensure_framebuffer(state, (uint32_t)width, (uint32_t)height)) {
+        return false;
     }
 
     if(!wasm_runtime_call_wasm(scene->exec_env, scene->update_func, 1, (void*)&delta)) {
@@ -391,6 +429,38 @@ bool wd_update_scene(wd_state* state, float delta) {
             wd_set_error("update wasm call failed: %s", wasm_runtime_get_exception(scene->instance));
         }
         return false;
+    }
+
+    SDL_GPUTexture* swapchain_texture = NULL;
+    uint32_t swapchain_width = 0;
+    uint32_t swapchain_height = 0;
+
+    if(!SDL_WaitAndAcquireGPUSwapchainTexture(
+           scene->command_buffer, state->output.window, &swapchain_texture, &swapchain_width, &swapchain_height)) {
+        wd_set_error("SDL_WaitAndAcquireGPUSwapchainTexture failed: %s", SDL_GetError());
+        return false;
+    }
+
+    if(swapchain_texture != NULL) {
+        SDL_GPUBlitInfo blit_info = {
+            .source =
+                {
+                    .texture = scene->framebuffer,
+                    .w = scene->width,
+                    .h = scene->height,
+                },
+            .destination =
+                {
+                    .texture = swapchain_texture,
+                    .w = swapchain_width,
+                    .h = swapchain_height,
+                },
+            .load_op = SDL_GPU_LOADOP_DONT_CARE,
+            .flip_mode = SDL_FLIP_NONE,
+            .filter = SDL_GPU_FILTER_LINEAR,
+        };
+
+        SDL_BlitGPUTexture(scene->command_buffer, &blit_info);
     }
 
     if(!SDL_SubmitGPUCommandBuffer(scene->command_buffer)) {
@@ -425,6 +495,10 @@ void wd_free_scene(wd_scene_state* scene) {
     if(scene->wasm_initialized) {
         wasm_runtime_destroy();
         scene->wasm_initialized = false;
+    }
+    if(scene->framebuffer != NULL) {
+        SDL_ReleaseGPUTexture(scene->gpu, scene->framebuffer);
+        scene->framebuffer = NULL;
     }
     if(scene->gpu != NULL) {
         SDL_DestroyGPUDevice(scene->gpu);

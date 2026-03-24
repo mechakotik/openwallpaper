@@ -11,12 +11,13 @@ typedef struct wd_scene_state {
     wasm_function_inst_t update_func;
     wasm_exec_env_t exec_env;
     uint32_t* wallpaper_options_values_wasm;
+    bool calling_init;
 
     struct SDL_GPUDevice* gpu;
     struct SDL_GPUCommandBuffer* command_buffer;
     struct SDL_GPUCopyPass* copy_pass;
     struct SDL_GPURenderPass* render_pass;
-    struct SDL_GPUTexture* swapchain_texture;
+    struct SDL_GPUTexture* framebuffer;
     uint32_t width;
     uint32_t height;
 } wd_scene_state;

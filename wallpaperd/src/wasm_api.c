@@ -99,6 +99,7 @@ void ow_begin_render_pass(wasm_exec_env_t exec_env, uint32_t info_ptr) {
     wd_state* state = wasm_runtime_get_custom_data(instance);
     wd_scene_state* scene = &state->scene;
 
+    DEBUG_CHECK(!scene->calling_init, "render passes are not allowed in init function");
     DEBUG_CHECK(scene->copy_pass == NULL, "called ow_begin_render_pass when copy pass is active");
     DEBUG_CHECK(scene->render_pass == NULL, "called ow_begin_render_pass when render pass is active");
 
@@ -114,7 +115,7 @@ void ow_begin_render_pass(wasm_exec_env_t exec_env, uint32_t info_ptr) {
     color_target_info.store_op = SDL_GPU_STOREOP_STORE;
 
     if(info->color_target == 0) {
-        color_target_info.texture = scene->swapchain_texture;
+        color_target_info.texture = scene->framebuffer;
     } else {
         SDL_GPUTexture* texture = NULL;
         wd_object_type object_type;
