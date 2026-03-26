@@ -22,8 +22,9 @@ type UniformInfo struct {
 }
 
 type AttributeInfo struct {
-	Name string
-	Type string
+	Name      string
+	Type      string
+	ArraySize int
 }
 
 type SamplerInfo struct {
@@ -411,24 +412,50 @@ func preprocessVertexAttributes(source string) (string, []AttributeInfo) {
 }
 
 func findAndRemoveVarying(source string) (string, map[string]AttributeInfo) {
-	reVarying := regexp.MustCompile(`varying\s+([a-z|A-Z|0-9|_]*)\s+([a-z|A-Z|0-9|_|\[|\]|\s]*)\s*;`)
+	reVarying := regexp.MustCompile(`varying\s+([a-z|A-Z|0-9|_]*)\s+([a-z|A-Z|0-9|_|\s]*)\s*;`)
 	varying := map[string]AttributeInfo{}
 	source = reVarying.ReplaceAllStringFunc(source, func(match string) string {
 		submatches := reVarying.FindStringSubmatch(match)
 		varying[submatches[2]] = AttributeInfo{
-			Name: string(submatches[2]),
-			Type: string(submatches[1]),
+			Name:      string(submatches[2]),
+			Type:      string(submatches[1]),
+			ArraySize: 0,
 		}
 		return ""
 	})
+
+	reVaryingArray := regexp.MustCompile(`varying\s+([a-z|A-Z|0-9|_]*)\s+([a-z|A-Z|0-9|_|\s]*)\s*\[([0-9]*)\];`)
+	source = reVaryingArray.ReplaceAllStringFunc(source, func(match string) string {
+		submatches := reVaryingArray.FindStringSubmatch(match)
+		arraySize, err := strconv.Atoi(submatches[3])
+		if err != nil {
+			fmt.Printf("warning: unable to parse varying %s array size (%s): %s\n", match, submatches[3], err.Error())
+			return match
+		}
+		varying[submatches[2]] = AttributeInfo{
+			Name:      string(submatches[2]),
+			Type:      string(submatches[1]),
+			ArraySize: arraySize,
+		}
+		return ""
+	})
+
 	return normalizeNewlines(source), varying
 }
 
 func insertIntermediateAttributes(source string, attributes []AttributeInfo, side string) string {
 	attributesString := ""
-	for index, attribute := range attributes {
-		attributesString += fmt.Sprintf("layout(location = %d) %s %s %s;\n", index, side, attribute.Type, attribute.Name)
+	slot := 0
+	for _, attribute := range attributes {
+		if attribute.ArraySize >= 1 {
+			attributesString += fmt.Sprintf("layout(location = %d) %s %s %s[%d];\n", slot, side, attribute.Type, attribute.Name, attribute.ArraySize)
+			slot += attribute.ArraySize
+		} else {
+			attributesString += fmt.Sprintf("layout(location = %d) %s %s %s;\n", slot, side, attribute.Type, attribute.Name)
+			slot++
+		}
 	}
+
 	reInsertPlace := regexp.MustCompile(`\n[layout|uniform]`)
 	inserted := false
 	source = reInsertPlace.ReplaceAllStringFunc(source, func(match string) string {
@@ -438,6 +465,7 @@ func insertIntermediateAttributes(source string, attributes []AttributeInfo, sid
 		inserted = true
 		return "\n\n" + attributesString + "\n\n" + match
 	})
+
 	return normalizeNewlines(source)
 }
 
