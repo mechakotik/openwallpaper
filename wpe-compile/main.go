@@ -987,10 +987,6 @@ func processParticleObject(object ParticleObject) {
 				init.MinVelocity[i] *= override.Speed
 				init.MaxVelocity[i] *= override.Speed
 			}
-			if init.TurbulentVelocity {
-				init.TurbulentSpeedMin *= override.Speed
-				init.TurbulentSpeedMax *= override.Speed
-			}
 		}
 		if override.Rate != 0 {
 			for i := range object.ParticleData.Emitters {
