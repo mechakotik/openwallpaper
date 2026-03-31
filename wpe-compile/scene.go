@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"maps"
-	"math"
 	"os"
 	"strconv"
 	"strings"
@@ -830,17 +829,6 @@ type AngularMovementOperator struct {
 	Force   Vector3
 }
 
-type OscillatePositionOperator struct {
-	Enabled      bool
-	Mask         Vector3
-	FrequencyMin float32
-	FrequencyMax float32
-	ScaleMin     float32
-	ScaleMax     float32
-	PhaseMin     float32
-	PhaseMax     float32
-}
-
 type AlphaFadeOperator struct {
 	Enabled     bool
 	FadeInTime  float32
@@ -864,12 +852,11 @@ type ColorChangeOperator struct {
 }
 
 type ParticleOperator struct {
-	Movement          MovementOperator
-	AngularMovement   AngularMovementOperator
-	OscillatePosition OscillatePositionOperator
-	AlphaFade         AlphaFadeOperator
-	SizeChange        SizeChangeOperator
-	ColorChange       ColorChangeOperator
+	Movement        MovementOperator
+	AngularMovement AngularMovementOperator
+	AlphaFade       AlphaFadeOperator
+	SizeChange      SizeChangeOperator
+	ColorChange     ColorChangeOperator
 }
 
 type ParticleEmitter struct {
@@ -1118,23 +1105,16 @@ func (init *ParticleInitializer) parseFromJSON(raw json.RawMessage) error {
 
 func (operator *ParticleOperator) parseFromJSON(raw json.RawMessage) error {
 	payload := struct {
-		Name         string          `json:"name"`
-		Gravity      json.RawMessage `json:"gravity"`
-		Drag         json.RawMessage `json:"drag"`
-		Force        json.RawMessage `json:"force"`
-		FrequencyMin json.RawMessage `json:"frequencymin"`
-		FrequencyMax json.RawMessage `json:"frequencymax"`
-		ScaleMin     json.RawMessage `json:"scalemin"`
-		ScaleMax     json.RawMessage `json:"scalemax"`
-		PhaseMin     json.RawMessage `json:"phasemin"`
-		PhaseMax     json.RawMessage `json:"phasemax"`
-		Mask         json.RawMessage `json:"mask"`
-		FadeInTime   json.RawMessage `json:"fadeintime"`
-		FadeOutTime  json.RawMessage `json:"fadeouttime"`
-		StartTime    json.RawMessage `json:"starttime"`
-		EndTime      json.RawMessage `json:"endtime"`
-		StartValue   json.RawMessage `json:"startvalue"`
-		EndValue     json.RawMessage `json:"endvalue"`
+		Name        string          `json:"name"`
+		Gravity     json.RawMessage `json:"gravity"`
+		Drag        json.RawMessage `json:"drag"`
+		Force       json.RawMessage `json:"force"`
+		FadeInTime  json.RawMessage `json:"fadeintime"`
+		FadeOutTime json.RawMessage `json:"fadeouttime"`
+		StartTime   json.RawMessage `json:"starttime"`
+		EndTime     json.RawMessage `json:"endtime"`
+		StartValue  json.RawMessage `json:"startvalue"`
+		EndValue    json.RawMessage `json:"endvalue"`
 	}{}
 
 	if err := json.Unmarshal(raw, &payload); err != nil {
@@ -1179,67 +1159,6 @@ func (operator *ParticleOperator) parseFromJSON(raw json.RawMessage) error {
 			}
 			operator.AngularMovement.Force = force
 		}
-	case "oscillateposition":
-		op := OscillatePositionOperator{
-			Enabled:      true,
-			Mask:         Vector3{1, 1, 0},
-			FrequencyMax: 5,
-			ScaleMax:     1,
-			PhaseMax:     float32(2 * math.Pi),
-		}
-		if bytesFromRawNullAware(payload.FrequencyMin) != nil {
-			frequencyMin, err := parseFloat64FromRaw(payload.FrequencyMin)
-			if err != nil {
-				return fmt.Errorf("cannot parse frequencymin for oscillateposition operator: %w", err)
-			}
-			op.FrequencyMin = float32(frequencyMin)
-		}
-		if bytesFromRawNullAware(payload.FrequencyMax) != nil {
-			frequencyMax, err := parseFloat64FromRaw(payload.FrequencyMax)
-			if err != nil {
-				return fmt.Errorf("cannot parse frequencymax for oscillateposition operator: %w", err)
-			}
-			op.FrequencyMax = float32(frequencyMax)
-		}
-		if op.FrequencyMax == 0 {
-			op.FrequencyMax = op.FrequencyMin
-		}
-		if bytesFromRawNullAware(payload.ScaleMin) != nil {
-			scaleMin, err := parseFloat64FromRaw(payload.ScaleMin)
-			if err != nil {
-				return fmt.Errorf("cannot parse scalemin for oscillateposition operator: %w", err)
-			}
-			op.ScaleMin = float32(scaleMin)
-		}
-		if bytesFromRawNullAware(payload.ScaleMax) != nil {
-			scaleMax, err := parseFloat64FromRaw(payload.ScaleMax)
-			if err != nil {
-				return fmt.Errorf("cannot parse scalemax for oscillateposition operator: %w", err)
-			}
-			op.ScaleMax = float32(scaleMax)
-		}
-		if bytesFromRawNullAware(payload.PhaseMin) != nil {
-			phaseMin, err := parseFloat64FromRaw(payload.PhaseMin)
-			if err != nil {
-				return fmt.Errorf("cannot parse phasemin for oscillateposition operator: %w", err)
-			}
-			op.PhaseMin = float32(phaseMin)
-		}
-		if bytesFromRawNullAware(payload.PhaseMax) != nil {
-			phaseMax, err := parseFloat64FromRaw(payload.PhaseMax)
-			if err != nil {
-				return fmt.Errorf("cannot parse phasemax for oscillateposition operator: %w", err)
-			}
-			op.PhaseMax = float32(phaseMax)
-		}
-		if bytesFromRawNullAware(payload.Mask) != nil {
-			mask, err := parseVector3FromRaw(payload.Mask, op.Mask)
-			if err != nil {
-				return fmt.Errorf("cannot parse mask for oscillateposition operator: %w", err)
-			}
-			op.Mask = mask
-		}
-		operator.OscillatePosition = op
 	case "sizechange":
 		op := SizeChangeOperator{
 			Enabled:    true,
