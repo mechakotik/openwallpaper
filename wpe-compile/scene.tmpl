@@ -369,20 +369,6 @@ __attribute__((export_name("update"))) void update(float delta) {
                     {{index .Operator.AngularMovement.Force 2}},
                 },
             },
-            .oscillate_position = {
-                .enabled = {{.Operator.OscillatePosition.Enabled}},
-                .mask = {
-                    {{index .Operator.OscillatePosition.Mask 0}},
-                    {{index .Operator.OscillatePosition.Mask 1}},
-                    {{index .Operator.OscillatePosition.Mask 2}},
-                },
-                .frequency_min = {{.Operator.OscillatePosition.FrequencyMin}},
-                .frequency_max = {{.Operator.OscillatePosition.FrequencyMax}},
-                .scale_min = {{.Operator.OscillatePosition.ScaleMin}},
-                .scale_max = {{.Operator.OscillatePosition.ScaleMax}},
-                .phase_min = {{.Operator.OscillatePosition.PhaseMin}},
-                .phase_max = {{.Operator.OscillatePosition.PhaseMax}},
-            },
             .size_change = {
                 .enabled = {{.Operator.SizeChange.Enabled}},
                 .start_time = {{.Operator.SizeChange.StartTime}},

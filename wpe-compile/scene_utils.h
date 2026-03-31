@@ -637,9 +637,6 @@ typedef struct {
     float position[3];
     float velocity[3];
     float acceleration[3];
-    float oscillate_frequency[3];
-    float oscillate_scale[3];
-    float oscillate_phase[3];
 
     float rotation[3];
     float angular_velocity[3];
@@ -714,17 +711,6 @@ typedef struct {
 
 typedef struct {
     bool enabled;
-    float mask[3];
-    float frequency_min;
-    float frequency_max;
-    float scale_min;
-    float scale_max;
-    float phase_min;
-    float phase_max;
-} particle_oscillate_position_operator_t;
-
-typedef struct {
-    bool enabled;
     float start_time;
     float end_time;
     float start_value;
@@ -748,7 +734,6 @@ typedef struct {
 typedef struct {
     particle_movement_operator_t movement;
     particle_angular_movement_operator_t angular_movement;
-    particle_oscillate_position_operator_t oscillate_position;
     particle_size_change_operator_t size_change;
     particle_color_change_operator_t color_change;
     particle_alpha_fade_operator_t alpha_fade;
@@ -888,36 +873,12 @@ void spawn_particle_instance(particle_t* particle, particle_emitter_t* emitter) 
     }
 
     for(int i = 0; i < 3; i++) {
-        instance->oscillate_frequency[i] = 0.0f;
-        instance->oscillate_scale[i] = 0.0f;
-        instance->oscillate_phase[i] = 0.0f;
-    }
-
-    for(int i = 0; i < 3; i++) {
         instance->rotation[i] = rand_float(particle->init.min_rotation[i], particle->init.max_rotation[i]);
     }
 
     for(int i = 0; i < 3; i++) {
         instance->angular_velocity[i] =
             rand_float(particle->init.min_angular_velocity[i], particle->init.max_angular_velocity[i]);
-    }
-
-    if(particle->operator.oscillate_position.enabled) {
-        float frequency_max = particle->operator.oscillate_position.frequency_max;
-        if(frequency_max == 0.0f) {
-            frequency_max = particle->operator.oscillate_position.frequency_min;
-        }
-        float phase_max = particle->operator.oscillate_position.phase_max + 2.0f *(float) M_PI;
-        for(int i = 0; i < 3; i++) {
-            if(fabsf(particle->operator.oscillate_position.mask[i]) < 0.01f) {
-                continue;
-            }
-            instance->oscillate_frequency[i] =
-                rand_float(particle->operator.oscillate_position.frequency_min, frequency_max);
-            instance->oscillate_scale[i] = rand_float(
-                particle->operator.oscillate_position.scale_min, particle->operator.oscillate_position.scale_max);
-            instance->oscillate_phase[i] = rand_float(particle->operator.oscillate_position.phase_min, phase_max);
-        }
     }
 
     instance->lifetime = rand_float(particle->init.min_lifetime, particle->init.max_lifetime);
@@ -956,22 +917,6 @@ void update_particle_instance(particle_t* particle, particle_instance_t* instanc
             float acceleration = particle->operator.movement.gravity[i] + drag_coeff * instance->velocity[i];
             instance->velocity[i] += acceleration * movement_speed * delta;
             instance->position[i] += instance->velocity[i] * delta;
-        }
-    }
-    if(particle->operator.oscillate_position.enabled) {
-        float time = instance->age - delta;
-        if(time < 0.0f) {
-            time = 0.0f;
-        }
-        for(int i = 0; i < 3; i++) {
-            if(fabsf(particle->operator.oscillate_position.mask[i]) < 0.01f) {
-                continue;
-            }
-            float frequency = instance->oscillate_frequency[i];
-            float scale = instance->oscillate_scale[i];
-            float phase = instance->oscillate_phase[i];
-            float delta_pos = -1.0f * scale * frequency * sinf(frequency * time + phase) * delta;
-            instance->position[i] += delta_pos;
         }
     }
     if(particle->operator.angular_movement.enabled) {
