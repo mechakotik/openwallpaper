@@ -469,7 +469,6 @@ func makeEffectPassthrough(colorBlendMode int) (ImageEffect, error) {
 
 	return ImageEffect{
 		Name:      "effectpassthrough",
-		Visible:   true,
 		Passes:    []MaterialPass{pass},
 		Materials: []Material{material},
 	}, nil
