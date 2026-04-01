@@ -318,10 +318,12 @@ type MaterialPass struct {
 }
 
 type Material struct {
-	Blending string
-	Shader   string
-	Textures []string
-	Combos   map[string]int
+	Blending         string
+	Shader           string
+	CompiledShader   int
+	Textures         []string
+	ImportedTextures []int
+	Combos           map[string]int
 }
 
 func (materialPass *MaterialPass) parseFromJSON(raw json.RawMessage) error {

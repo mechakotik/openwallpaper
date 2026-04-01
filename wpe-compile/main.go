@@ -203,32 +203,35 @@ func preprocessScene() {
 }
 
 func processImageObject(object *ImageObject) {
-	for _, texture := range object.Material.Textures {
-		addImportTextureTask(&ImportTextureTask{Name: texture})
+	object.Material.ImportedTextures = make([]int, len(object.Material.Textures))
+	for idx := range object.Material.Textures {
+		object.Material.ImportedTextures[idx] = addImportTextureTask(&ImportTextureTask{Name: object.Material.Textures[idx]})
 	}
-	addCompileShaderTask(&CompileShaderTask{
+	object.Material.CompiledShader = addCompileShaderTask(&CompileShaderTask{
 		Name:          object.Material.Shader,
 		Preprocess:    true,
 		Defines:       object.Material.Combos,
 		BoundTextures: []bool{},
 	})
 
-	for _, effect := range object.Effects {
-		for idx, material := range effect.Materials {
-			for _, texture := range material.Textures {
-				addImportTextureTask(&ImportTextureTask{Name: texture})
+	for effectIdx := range object.Effects {
+		for materialIdx := range object.Effects[effectIdx].Materials {
+			material := &object.Effects[effectIdx].Materials[materialIdx]
+			material.ImportedTextures = make([]int, len(material.Textures))
+			for idx := range material.Textures {
+				material.ImportedTextures[idx] = addImportTextureTask(&ImportTextureTask{Name: material.Textures[idx]})
 			}
 			addCompileShaderTask(&CompileShaderTask{
 				Name:          material.Shader,
 				Preprocess:    true,
 				Defines:       material.Combos,
-				BoundTextures: getEffectBoundTextures(material, effect.Passes[idx]),
+				BoundTextures: getEffectBoundTextures(material, &object.Effects[effectIdx].Passes[materialIdx]),
 			})
 		}
 	}
 }
 
-func getEffectBoundTextures(material Material, pass MaterialPass) []bool {
+func getEffectBoundTextures(material *Material, pass *MaterialPass) []bool {
 	boundTextures := make([]bool, len(material.Textures))
 
 	for slot, textureName := range material.Textures {
@@ -270,12 +273,12 @@ func processParticleObject(object *ParticleObject) {
 	}
 }
 
-func addImportTextureTask(task *ImportTextureTask) {
+func addImportTextureTask(task *ImportTextureTask) int {
 	if task.Name == "" {
-		return
+		return -1
 	}
 	if strings.HasPrefix(task.Name, "_rt_") {
-		return
+		return -1
 	}
 
 	for _, anyTask2 := range state.Tasks {
@@ -284,17 +287,18 @@ func addImportTextureTask(task *ImportTextureTask) {
 			continue
 		}
 		if task2.Name == task.Name {
-			return
+			return task2.ID
 		}
 	}
 
 	task.ID = len(state.Tasks)
 	state.Tasks = append(state.Tasks, task)
+	return task.ID
 }
 
-func addCompileShaderTask(task *CompileShaderTask) {
+func addCompileShaderTask(task *CompileShaderTask) int {
 	if task.Name == "" {
-		return
+		return -1
 	}
 
 	for _, anyTask2 := range state.Tasks {
@@ -306,12 +310,13 @@ func addCompileShaderTask(task *CompileShaderTask) {
 			task2.Preprocess == task.Preprocess &&
 			maps.Equal(task2.Defines, task.Defines) &&
 			slices.Equal(task2.BoundTextures, task.BoundTextures) {
-			return
+			return task2.ID
 		}
 	}
 
 	task.ID = len(state.Tasks)
 	state.Tasks = append(state.Tasks, task)
+	return task.ID
 }
 
 func executeTasks() {
@@ -455,7 +460,7 @@ func compileShader(task *CompileShaderTask) {
 	}
 	vertexSPIRVBytes, err := compileRawShader([]byte(transformed.VertexGLSL), glslcArgs)
 	if err != nil {
-		task.Error = fmt.Errorf("compiling vertex shader failed: %s", err)
+		task.Error = fmt.Errorf("compile vertex shader failed: %s", err)
 		return
 	}
 
@@ -465,7 +470,7 @@ func compileShader(task *CompileShaderTask) {
 	}
 	fragmentSPIRVBytes, err := compileRawShader([]byte(transformed.FragmentGLSL), glslcArgs)
 	if err != nil {
-		task.Error = fmt.Errorf("compiling fragment shader failed: %s", err)
+		task.Error = fmt.Errorf("compile fragment shader failed: %s", err)
 		return
 	}
 
