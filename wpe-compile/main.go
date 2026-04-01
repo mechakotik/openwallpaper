@@ -4,9 +4,11 @@ import (
 	"bytes"
 	_ "embed"
 	"fmt"
+	"maps"
 	"os"
 	"os/exec"
 	"runtime"
+	"slices"
 	"strings"
 	"sync"
 	"text/template"
@@ -30,6 +32,21 @@ type ImportTextureTask struct {
 	SpritesheetRows     int
 	SpritesheetFrames   int
 	SpritesheetDuration float32
+}
+
+type CompileShaderTask struct {
+	// in
+	Name          string
+	Preprocess    bool
+	Defines       map[string]int
+	BoundTextures []bool
+	ID            int
+
+	// out
+	Error            error
+	VertexUniforms   []UniformInfo
+	FragmentUniforms []UniformInfo
+	Samplers         []SamplerInfo
 }
 
 var (
@@ -189,14 +206,62 @@ func processImageObject(object *ImageObject) {
 	for _, texture := range object.Material.Textures {
 		addImportTextureTask(&ImportTextureTask{Name: texture})
 	}
+	addCompileShaderTask(&CompileShaderTask{
+		Name:          object.Material.Shader,
+		Preprocess:    true,
+		Defines:       object.Material.Combos,
+		BoundTextures: []bool{},
+	})
 
 	for _, effect := range object.Effects {
-		for _, material := range effect.Materials {
+		for idx, material := range effect.Materials {
 			for _, texture := range material.Textures {
 				addImportTextureTask(&ImportTextureTask{Name: texture})
 			}
+			addCompileShaderTask(&CompileShaderTask{
+				Name:          material.Shader,
+				Preprocess:    true,
+				Defines:       material.Combos,
+				BoundTextures: getEffectBoundTextures(material, effect.Passes[idx]),
+			})
 		}
 	}
+}
+
+func getEffectBoundTextures(material Material, pass MaterialPass) []bool {
+	boundTextures := make([]bool, len(material.Textures))
+
+	for slot, textureName := range material.Textures {
+		if textureName != "" {
+			boundTextures[slot] = true
+		}
+	}
+	for slot, textureName := range pass.Textures {
+		boundTextures = ensureBoolSlots(boundTextures, slot+1)
+		if textureName != "" {
+			boundTextures[slot] = true
+		}
+	}
+	for _, binding := range pass.Bind {
+		if binding.Index < 0 {
+			continue
+		}
+		boundTextures = ensureBoolSlots(boundTextures, binding.Index+1)
+		if binding.Name != "" {
+			boundTextures[binding.Index] = true
+		}
+	}
+
+	return boundTextures
+}
+
+func ensureBoolSlots(slots []bool, slotCount int) []bool {
+	if len(slots) >= slotCount {
+		return slots
+	}
+	resized := make([]bool, slotCount)
+	copy(resized, slots)
+	return resized
 }
 
 func processParticleObject(object *ParticleObject) {
@@ -219,6 +284,28 @@ func addImportTextureTask(task *ImportTextureTask) {
 			continue
 		}
 		if task2.Name == task.Name {
+			return
+		}
+	}
+
+	task.ID = len(state.Tasks)
+	state.Tasks = append(state.Tasks, task)
+}
+
+func addCompileShaderTask(task *CompileShaderTask) {
+	if task.Name == "" {
+		return
+	}
+
+	for _, anyTask2 := range state.Tasks {
+		task2, ok := anyTask2.(*CompileShaderTask)
+		if !ok {
+			continue
+		}
+		if task2.Name == task.Name &&
+			task2.Preprocess == task.Preprocess &&
+			maps.Equal(task2.Defines, task.Defines) &&
+			slices.Equal(task2.BoundTextures, task.BoundTextures) {
 			return
 		}
 	}
@@ -263,6 +350,16 @@ func executeTasks() {
 					mutex.Lock()
 					if task.Error != nil {
 						fmt.Printf("\r\033[Kimport texture %s failed: %s\n", task.Name, task.Error)
+					}
+				} else if task, ok := anyTask.(*CompileShaderTask); ok {
+					descriptions[threadIdx] = fmt.Sprintf("compiling shader %s", task.Name)
+					mutex.Unlock()
+
+					compileShader(task)
+
+					mutex.Lock()
+					if task.Error != nil {
+						fmt.Printf("\r\033[Kcompile shader %s failed: %s\n", task.Name, task.Error)
 					}
 				}
 
@@ -314,8 +411,103 @@ func importTexture(task *ImportTextureTask) {
 	task.SpritesheetDuration = converted.SpritesheetDuration
 
 	state.Mutex.Lock()
-	state.OutputMap[fmt.Sprintf("assets/texture%d.webp", task.ID)] = converted.Data
+	state.OutputMap[fmt.Sprintf("textures/%d.webp", task.ID)] = converted.Data
 	state.Mutex.Unlock()
+}
+
+func compileShader(task *CompileShaderTask) {
+	vertexShaderPath := "shaders/" + task.Name + ".vert"
+	fragmentShaderPath := "shaders/" + task.Name + ".frag"
+
+	vertexShaderBytes, err := getAssetBytes(vertexShaderPath)
+	if err != nil {
+		task.Error = err
+		return
+	}
+	fragmentShaderBytes, err := getAssetBytes(fragmentShaderPath)
+	if err != nil {
+		task.Error = err
+		return
+	}
+
+	transformed := PreprocessedShader{
+		VertexGLSL:   string(vertexShaderBytes),
+		FragmentGLSL: string(fragmentShaderBytes),
+	}
+	if task.Preprocess {
+		transformed, err = preprocessShader(string(vertexShaderBytes), string(fragmentShaderBytes), "assets/shaders", task.BoundTextures, task.Defines)
+		if err != nil {
+			task.Error = err
+			return
+		}
+	}
+
+	if args.KeepSources {
+		state.Mutex.Lock()
+		state.OutputMap[fmt.Sprintf("shaders/%d_vertex.glsl", task.ID)] = []byte(transformed.VertexGLSL)
+		state.OutputMap[fmt.Sprintf("shaders/%d_fragment.glsl", task.ID)] = []byte(transformed.FragmentGLSL)
+		state.Mutex.Unlock()
+	}
+
+	glslcArgs := []string{"-fshader-stage=vertex"}
+	for name, value := range task.Defines {
+		glslcArgs = append(glslcArgs, fmt.Sprintf("-D%s=%d", name, value))
+	}
+	vertexSPIRVBytes, err := compileRawShader([]byte(transformed.VertexGLSL), glslcArgs)
+	if err != nil {
+		task.Error = fmt.Errorf("compiling vertex shader failed: %s", err)
+		return
+	}
+
+	glslcArgs = []string{"-fshader-stage=fragment"}
+	for name, value := range task.Defines {
+		glslcArgs = append(glslcArgs, fmt.Sprintf("-D%s=%d", name, value))
+	}
+	fragmentSPIRVBytes, err := compileRawShader([]byte(transformed.FragmentGLSL), glslcArgs)
+	if err != nil {
+		task.Error = fmt.Errorf("compiling fragment shader failed: %s", err)
+		return
+	}
+
+	state.Mutex.Lock()
+	state.OutputMap[fmt.Sprintf("shaders/%d_vertex.spv", task.ID)] = vertexSPIRVBytes
+	state.OutputMap[fmt.Sprintf("shaders/%d_fragment.spv", task.ID)] = fragmentSPIRVBytes
+	state.Mutex.Unlock()
+
+	task.VertexUniforms = transformed.VertexUniforms
+	task.FragmentUniforms = transformed.FragmentUniforms
+	task.Samplers = transformed.Samplers
+}
+
+func compileRawShader(source []byte, glslcArgs []string) ([]byte, error) {
+	tempDirBytes, err := exec.Command("mktemp", "-d").Output()
+	if err != nil {
+		return []byte{}, fmt.Errorf("mktemp failed: %s", err)
+	}
+	tempDir := strings.TrimSuffix(string(tempDirBytes), "\n")
+
+	err = os.WriteFile(tempDir+"/shader.glsl", source, 0644)
+	if err != nil {
+		return []byte{}, fmt.Errorf("write shader.glsl failed: %s", err)
+	}
+
+	glslcArgs = append(glslcArgs, tempDir+"/shader.glsl", "-o", tempDir+"/shader.spv")
+	logBytes, err := exec.Command("glslc", glslcArgs...).CombinedOutput()
+	if err != nil {
+		return []byte{}, fmt.Errorf("glslc failed:\n%s", logBytes)
+	}
+
+	SPIRVBytes, err := os.ReadFile(tempDir + "/shader.spv")
+	if err != nil {
+		return []byte{}, fmt.Errorf("read shader.spv failed: %s", err)
+	}
+
+	err = os.RemoveAll(tempDir)
+	if err != nil {
+		println("warning: failed to remove temp dir: " + err.Error())
+	}
+
+	return SPIRVBytes, nil
 }
 
 func getAssetBytes(path string) ([]byte, error) {
