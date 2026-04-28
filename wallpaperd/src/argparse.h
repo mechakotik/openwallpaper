@@ -1,18 +1,19 @@
 #ifndef WD_ARGPARSE_H
 #define WD_ARGPARSE_H
 
+#include <sds.h>
 #include <stdbool.h>
 
 typedef struct wd_args_state {
-    char* wallpaper_path;
+    sds wallpaper_path;
 
     int num_options;
-    char** options_keys;
-    char** options_values; // value is empty if string is unset
+    sds* options_keys;
+    sds* options_values; // value is empty if string is unset
 
     int num_wallpaper_options;
-    char** wallpaper_options_keys;
-    char** wallpaper_options_values; // value is empty if string is unset
+    sds* wallpaper_options_keys;
+    sds* wallpaper_options_values; // value is empty if string is unset
 
     bool window;
     const char* display;

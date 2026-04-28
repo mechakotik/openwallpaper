@@ -4,32 +4,31 @@
 #include <string.h>
 #include "malloc.h"
 
-static bool get_cache_root_dir(char* path_out, size_t path_out_size) {
+static sds get_cache_root_dir(void) {
     const char* home = SDL_GetUserFolder(SDL_FOLDER_HOME);
-    if(home == NULL && home[0] == '\0') {
-        return false;
+    if(home == NULL || home[0] == '\0') {
+        return NULL;
     }
 
-    int ret = snprintf(path_out, path_out_size, "%s/.cache/wallpaperd", home);
-    if(ret < 0 || (size_t)ret >= path_out_size) {
-        return false;
+    sds path = sdscatprintf(sdsempty(), "%s/.cache/wallpaperd", home);
+    if(!SDL_CreateDirectory(path)) {
+        sdsfree(path);
+        return NULL;
     }
-    if(!SDL_CreateDirectory(path_out)) {
-        return false;
-    }
-    return true;
+    return path;
 }
 
-bool wd_cache_get_namespace_dir(const char* namespace, char* path_out, size_t path_out_size) {
-    char root_dir[WD_MAX_PATH];
-    if(!get_cache_root_dir(root_dir, sizeof(root_dir))) {
-        return false;
+sds wd_cache_get_namespace_dir(const char* namespace) {
+    sds path = get_cache_root_dir();
+    if(path == NULL) {
+        return NULL;
     }
-    int ret = snprintf(path_out, path_out_size, "%s/%s", root_dir, namespace);
-    if(ret < 0 || (size_t)ret >= path_out_size) {
-        return false;
+    path = sdscatprintf(path, "/%s", namespace);
+    if(!SDL_CreateDirectory(path)) {
+        sdsfree(path);
+        return NULL;
     }
-    return SDL_CreateDirectory(path_out);
+    return path;
 }
 
 bool wd_cache_read_file(const char* path, uint8_t** data_out, size_t* size_out) {

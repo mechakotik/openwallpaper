@@ -22,9 +22,12 @@ if(WD_SANITIZE)
     add_link_options(-fsanitize=address,leak,undefined -fno-sanitize=alignment)
 endif()
 
-file(GLOB_RECURSE WD_SOURCES src/*.c)
+file(GLOB_RECURSE WD_SOURCES src/*.c external/sds/sds.c)
 add_executable(wallpaperd ${WD_SOURCES})
-target_include_directories(wallpaperd PRIVATE include)
+target_include_directories(wallpaperd PRIVATE include external/sds)
+set_property(SOURCE external/sds/sds.c APPEND PROPERTY COMPILE_OPTIONS
+    -include "${CMAKE_CURRENT_SOURCE_DIR}/src/sds_alloc.h"
+)
 
 if(WD_SDL_SHARED)
     find_package(SDL3 REQUIRED CONFIG REQUIRED COMPONENTS SDL3-shared)

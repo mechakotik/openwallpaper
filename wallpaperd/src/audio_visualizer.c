@@ -1,4 +1,5 @@
 #include "audio_visualizer.h"
+#include <sds.h>
 #include <stdlib.h>
 #include <string.h>
 #include "error.h"
@@ -153,7 +154,7 @@ void wd_free_audio_visualizer(wd_audio_visualizer_state* state) {
         state->audio.cava_in = NULL;
     }
     if(state->audio.source != NULL) {
-        free(state->audio.source);
+        sdsfree(state->audio.source);
         state->audio.source = NULL;
     }
     if(state->mutex_initialized) {
@@ -266,7 +267,7 @@ static bool start_backend(
     state->backend = backend;
 
     state->audio = (struct audio_data){
-        .source = strdup(source != NULL ? source : "auto"),
+        .source = sdsnew(source != NULL ? source : "auto"),
         .format = -1,
         .rate = 0,
         .channels = 2,

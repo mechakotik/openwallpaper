@@ -28,3 +28,6 @@
 [submodule "owui/external/toml11"]
 	path = owui/external/toml11
 	url = https://github.com/ToruNiina/toml11
+[submodule "wallpaperd/external/sds"]
+	path = wallpaperd/external/sds
+	url = https://github.com/antirez/sds

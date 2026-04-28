@@ -3,6 +3,7 @@
 #include "wlroots.h"
 #include <SDL3/SDL.h>
 #include <fcntl.h>
+#include <sds.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -20,7 +21,7 @@
 typedef struct {
     uint32_t global_name;
     struct wl_output* output;
-    char* name;
+    sds name;
 } output_data;
 
 typedef struct wlroots_output_state {
@@ -62,8 +63,8 @@ static void output_scale(void* data, struct wl_output* output, int32_t factor) {
 
 static void output_name(void* data, struct wl_output* output, const char* name) {
     output_data* odata = (output_data*)data;
-    free(odata->name);
-    odata->name = strdup(name);
+    sdsfree(odata->name);
+    odata->name = sdsnew(name);
 }
 
 static void output_description(void* data, struct wl_output* output, const char* description) {}
@@ -83,7 +84,7 @@ static void free_outputs(wlroots_output_state* state) {
             wl_output_destroy(state->outputs[i].output);
             state->outputs[i].output = NULL;
         }
-        free(state->outputs[i].name);
+        sdsfree(state->outputs[i].name);
         state->outputs[i].name = NULL;
     }
 }
@@ -140,7 +141,7 @@ static void registry_global_remove(void* data, struct wl_registry* registry, uin
             wl_output_destroy(output->output);
             output->output = NULL;
         }
-        free(output->name);
+        sdsfree(output->name);
         *output = (output_data){0};
         return;
     }

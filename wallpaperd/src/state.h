@@ -3,11 +3,11 @@
 
 #include <stdint.h>
 #include "argparse.h"
+#include "audio_visualizer.h"
 #include "battery.h"
 #include "object_manager.h"
 #include "output.h"
 #include "scene.h"
-#include "audio_visualizer.h"
 #include "zip.h"
 
 typedef struct wd_state {

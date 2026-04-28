@@ -5,32 +5,18 @@
 #include "error.h"
 #include "malloc.h"
 
-static bool split_option(const char* option, char** key, char** value) {
-    int len = strlen(option);
-    int pos = -1;
-    for(int i = 0; i < len; i++) {
-        if(option[i] != '=') {
-            continue;
-        }
-        if(pos == -1) {
-            pos = i;
-        } else {
+static bool split_option(const char* option, sds* key, sds* value) {
+    const char* separator = strchr(option, '=');
+    if(separator == NULL) {
+        *key = sdsnew(option);
+        *value = sdsempty();
+    } else {
+        if(strchr(separator + 1, '=') != NULL) {
             wd_set_error("option '%s' has multiple '='", option);
             return false;
         }
-    }
-
-    if(pos == -1) {
-        *key = wd_malloc(sizeof(char) * (len + 1));
-        *value = wd_malloc(sizeof(char));
-        strcpy(*key, option);
-        *value[0] = '\0';
-    } else {
-        *key = wd_malloc(sizeof(char) * (pos + 1));
-        *value = wd_malloc(sizeof(char) * (len - pos));
-        strncpy(*key, option, pos);
-        strncpy(*value, option + pos + 1, len - pos - 1);
-        (*key)[pos] = (*value)[len - pos - 1] = '\0';
+        *key = sdsnewlen(option, (size_t)(separator - option));
+        *value = sdsnew(separator + 1);
     }
 
     return true;
@@ -53,9 +39,7 @@ bool wd_parse_args(wd_args_state* args, int argc, char* argv[]) {
                 wd_set_error("more than one wallpaper path provided, see --help");
                 return false;
             } else {
-                int len = strlen(argv[i]);
-                args->wallpaper_path = wd_malloc(sizeof(char) * (len + 1));
-                strcpy(args->wallpaper_path, argv[i]);
+                args->wallpaper_path = sdsnew(argv[i]);
                 path_set = true;
             }
         }
@@ -63,10 +47,10 @@ bool wd_parse_args(wd_args_state* args, int argc, char* argv[]) {
 
     args->num_options = num_options;
     args->num_wallpaper_options = num_wallpaper_options;
-    args->options_keys = wd_calloc(args->num_options, sizeof(char*));
-    args->options_values = wd_calloc(args->num_options, sizeof(char*));
-    args->wallpaper_options_keys = wd_calloc(args->num_wallpaper_options, sizeof(char*));
-    args->wallpaper_options_values = wd_calloc(args->num_wallpaper_options, sizeof(char*));
+    args->options_keys = wd_calloc(args->num_options, sizeof(sds));
+    args->options_values = wd_calloc(args->num_options, sizeof(sds));
+    args->wallpaper_options_keys = wd_calloc(args->num_wallpaper_options, sizeof(sds));
+    args->wallpaper_options_values = wd_calloc(args->num_wallpaper_options, sizeof(sds));
 
     for(int i = 0; i < args->num_options; i++) {
         if(!split_option(argv[i + 1] + 2, &args->options_keys[i], &args->options_values[i])) {
@@ -179,16 +163,16 @@ bool wd_parse_args(wd_args_state* args, int argc, char* argv[]) {
 
 void wd_free_args(wd_args_state* args) {
     for(int i = 0; i < args->num_options; i++) {
-        free(args->options_keys[i]);
-        free(args->options_values[i]);
+        sdsfree(args->options_keys[i]);
+        sdsfree(args->options_values[i]);
     }
     for(int i = 0; i < args->num_wallpaper_options; i++) {
-        free(args->wallpaper_options_keys[i]);
-        free(args->wallpaper_options_values[i]);
+        sdsfree(args->wallpaper_options_keys[i]);
+        sdsfree(args->wallpaper_options_values[i]);
     }
     free(args->options_keys);
     free(args->options_values);
-    free(args->wallpaper_path);
+    sdsfree(args->wallpaper_path);
     free(args->wallpaper_options_keys);
     free(args->wallpaper_options_values);
 }

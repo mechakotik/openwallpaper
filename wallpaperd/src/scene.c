@@ -2,6 +2,7 @@
 #include <SDL3/SDL.h>
 #include <inttypes.h>
 #include <lib_export.h>
+#include <sds.h>
 #include <stdlib.h>
 #include <string.h>
 #include <wasm_export.h>
@@ -100,25 +101,14 @@ static bool compile_aot_to_cache(
     const char* cache_path, const char* cache_key, const uint8_t* wasm_buffer, size_t wasm_size) {
     bool result = false;
 
-    char tmp_dir[WD_MAX_PATH] = {0};
-    if(!wd_cache_get_namespace_dir("tmp", tmp_dir, sizeof(tmp_dir))) {
+    sds tmp_dir = wd_cache_get_namespace_dir("tmp");
+    if(tmp_dir == NULL) {
         printf("warning: failed to get tmp cache dir for AOT compilation, using interpreter mode\n");
         goto cleanup;
     }
 
-    char wasm_path[WD_MAX_PATH] = {0};
-    size_t ret = snprintf(wasm_path, sizeof(wasm_path), "%s/%s.tmp-wasm", tmp_dir, cache_key);
-    if(ret < 0 || ret >= sizeof(wasm_path)) {
-        printf("warning: failed to get tmp cache path for AOT compilation, using interpreter mode\n");
-        goto cleanup;
-    }
-
-    char aot_path[WD_MAX_PATH] = {0};
-    ret = snprintf(aot_path, sizeof(aot_path), "%s/%s.tmp-aot", tmp_dir, cache_key);
-    if(ret < 0 || ret >= sizeof(aot_path)) {
-        printf("warning: failed to get tmp cache path for AOT compilation, using interpreter mode\n");
-        goto cleanup;
-    }
+    sds wasm_path = sdscatprintf(sdsdup(tmp_dir), "/%s.tmp-wasm", cache_key);
+    sds aot_path = sdscatprintf(sdsdup(tmp_dir), "/%s.tmp-aot", cache_key);
 
     wd_cache_remove_file(wasm_path);
     wd_cache_remove_file(aot_path);
@@ -144,12 +134,15 @@ static bool compile_aot_to_cache(
     result = true;
 
 cleanup:
-    if(wasm_path[0] != '\0') {
+    if(wasm_path != NULL) {
         wd_cache_remove_file(wasm_path);
+        sdsfree(wasm_path);
     }
-    if(!result && aot_path[0] != '\0') {
+    if(!result && aot_path != NULL) {
         wd_cache_remove_file(aot_path);
     }
+    sdsfree(aot_path);
+    sdsfree(tmp_dir);
     return result;
 }
 
@@ -159,25 +152,14 @@ static bool load_aot_module(
     uint8_t* aot_buffer = NULL;
     size_t aot_size = 0;
 
-    char cache_dir[WD_MAX_PATH];
-    if(!wd_cache_get_namespace_dir("aot", cache_dir, sizeof(cache_dir))) {
+    sds cache_dir = wd_cache_get_namespace_dir("aot");
+    if(cache_dir == NULL) {
         printf("warning: failed to get AOT cache dir, using interpreter mode\n");
         goto cleanup;
     }
 
-    char key[17];
-    int ret = snprintf(key, sizeof(key), "%016" PRIx64, fnv1a64(wasm_buffer, wasm_size));
-    if(ret < 0 || (size_t)ret >= sizeof(key)) {
-        printf("warning: failed to get AOT cache key, using interpreter mode\n");
-        goto cleanup;
-    }
-
-    char cache_path[WD_MAX_PATH];
-    ret = snprintf(cache_path, sizeof(cache_path), "%s/%s.aot", cache_dir, key);
-    if(ret < 0 || ret >= sizeof(cache_path)) {
-        printf("warning: failed to get AOT cache path, using interpreter mode\n");
-        goto cleanup;
-    }
+    sds key = sdscatprintf(sdsempty(), "%016" PRIx64, fnv1a64(wasm_buffer, wasm_size));
+    sds cache_path = sdscatprintf(sdsdup(cache_dir), "/%s.aot", key);
 
     if(!wd_cache_read_file(cache_path, &aot_buffer, &aot_size)) {
         if(!compile_aot_to_cache(cache_path, key, wasm_buffer, wasm_size)) {
@@ -204,6 +186,9 @@ cleanup:
     if(aot_buffer != NULL) {
         free(aot_buffer);
     }
+    sdsfree(cache_path);
+    sdsfree(key);
+    sdsfree(cache_dir);
     return loaded;
 }
 
