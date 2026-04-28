@@ -25,15 +25,17 @@ bool wd_init_output(wd_output_state* output, wd_args_state* args) {
         if(!wd_window_output_init(&output->data)) {
             return false;
         }
-        output->window = wd_window_output_get_window(output->data);
+        output->get_window = wd_window_output_get_window;
         output->free_output = wd_window_output_free;
     } else if(strcmp(name, "wlroots") == 0) {
 #ifdef WD_WLROOTS
         if(!wd_wlroots_output_init(&output->data, args->display)) {
             return false;
         }
-        output->window = wd_wlroots_output_get_window(output->data);
+        output->get_window = wd_wlroots_output_get_window;
+        output->update_output = wd_wlroots_output_update;
         output->output_hidden = wd_wlroots_output_hidden;
+        output->deactivate_output = wd_wlroots_output_deactivate;
         output->free_output = wd_wlroots_output_free;
 #else
         wd_set_error("wlroots output support is disabled, compile wallpaperd with -DWD_WLROOTS=ON to use it");
@@ -44,6 +46,20 @@ bool wd_init_output(wd_output_state* output, wd_args_state* args) {
         return false;
     }
 
+    if(output->get_window != NULL) {
+        output->window = output->get_window(output->data);
+    }
+
+    return true;
+}
+
+bool wd_update_output(wd_output_state* output) {
+    if(output->update_output != NULL && !output->update_output(output->data)) {
+        return false;
+    }
+    if(output->get_window != NULL) {
+        output->window = output->get_window(output->data);
+    }
     return true;
 }
 
@@ -54,10 +70,20 @@ bool wd_output_hidden(wd_output_state* output) {
     return false;
 }
 
+void wd_deactivate_output(wd_output_state* output) {
+    if(output->deactivate_output != NULL) {
+        output->deactivate_output(output->data);
+    }
+    if(output->get_window != NULL) {
+        output->window = output->get_window(output->data);
+    }
+}
+
 void wd_free_output(wd_output_state* output) {
     if(output->free_output != NULL) {
         output->free_output(output->data);
         output->data = NULL;
+        output->window = NULL;
     }
 }
 

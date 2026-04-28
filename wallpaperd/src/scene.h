@@ -14,6 +14,7 @@ typedef struct wd_scene_state {
     bool calling_init;
 
     struct SDL_GPUDevice* gpu;
+    struct SDL_Window* window;
     struct SDL_GPUCommandBuffer* command_buffer;
     struct SDL_GPUCopyPass* copy_pass;
     struct SDL_GPURenderPass* render_pass;

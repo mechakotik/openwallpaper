@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include "argparse.h"
 #include "error.h"
+#include "object_manager.h"
 #include "output.h"
 #include "ready.h"
 #include "state.h"
@@ -24,6 +25,14 @@ static void print_help() {
     printf("  --list-displays\n");
     printf("  --help\n");
     printf("  --version\n");
+}
+
+static void unload_scene(wd_state* state) {
+    wd_free_object_manager(state);
+    uint32_t unused;
+    wd_new_object(&state->object_manager, WD_OBJECT_EMPTY, NULL, &unused);
+    wd_free_scene(&state->scene);
+    wd_free_zip(&state->zip);
 }
 
 int main(int argc, char* argv[]) {
@@ -71,9 +80,6 @@ int main(int argc, char* argv[]) {
     if(!wd_init_output(&state.output, &state.args)) {
         goto handle_error;
     }
-    if(!wd_init_scene(&state)) {
-        goto handle_error;
-    }
 
     uint32_t fps = state.args.fps, frame_time = 0;
     if(fps != 0) {
@@ -82,6 +88,7 @@ int main(int argc, char* argv[]) {
 
     uint64_t prev_time = SDL_GetTicksNS();
 
+    bool scene_loaded = false;
     bool frame_skipped = false;
     uint64_t last_pause_check = prev_time;
     bool first_draw = true;
@@ -116,14 +123,45 @@ int main(int argc, char* argv[]) {
 
         SDL_Event event;
         bool quit = false;
-        while(SDL_PollEvent(&event)) {
-            if(event.type == SDL_EVENT_QUIT || event.type == SDL_EVENT_TERMINATING) {
-                quit = true;
-                break;
+        if(state.output.window != NULL) {
+            while(SDL_PollEvent(&event)) {
+                if(event.type == SDL_EVENT_QUIT || event.type == SDL_EVENT_TERMINATING) {
+                    quit = true;
+                    break;
+                }
             }
         }
         if(quit) {
             break;
+        }
+
+        if(!wd_update_output(&state.output)) {
+            goto handle_error;
+        }
+        if(state.output.window == NULL) {
+            if(scene_loaded) {
+                unload_scene(&state);
+                scene_loaded = false;
+                wd_unset_ready();
+                first_draw = true;
+                last_pause_check = cur_time;
+            }
+            wd_deactivate_output(&state.output);
+            SDL_Delay(200);
+            frame_skipped = true;
+            delta_factor = 0;
+            continue;
+        }
+        if(!scene_loaded) {
+            if(!wd_init_scene(&state)) {
+                goto handle_error;
+            }
+            scene_loaded = true;
+            first_draw = true;
+            prev_time = SDL_GetTicksNS();
+            last_pause_check = prev_time;
+            delta_factor = 0;
+            continue;
         }
 
         if(!first_draw && last_pause_check < cur_time - 2e8) {

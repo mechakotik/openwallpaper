@@ -85,8 +85,11 @@ void wd_free_object_manager(wd_state* state) {
         if(state->object_manager.type_buckets[i] != NULL) {
             free(state->object_manager.type_buckets[i]);
             free(state->object_manager.data_buckets[i]);
+            state->object_manager.type_buckets[i] = NULL;
+            state->object_manager.data_buckets[i] = NULL;
         } else {
             break;
         }
     }
+    state->object_manager.top = 0;
 }

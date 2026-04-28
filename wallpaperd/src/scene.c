@@ -229,6 +229,7 @@ static bool init_gpu(wd_state* state) {
         wd_set_error("failed to claim window for GPU device: %s", SDL_GetError());
         return false;
     }
+    scene->window = state->output.window;
 
     if(args->fps == 0) {
         bool ok = SDL_SetGPUSwapchainParameters(
@@ -515,8 +516,17 @@ void wd_free_scene(wd_scene_state* scene) {
         SDL_ReleaseGPUTexture(scene->gpu, scene->framebuffer);
         scene->framebuffer = NULL;
     }
+    if(scene->gpu != NULL && scene->window != NULL) {
+        SDL_ReleaseWindowFromGPUDevice(scene->gpu, scene->window);
+        scene->window = NULL;
+    }
     if(scene->gpu != NULL) {
         SDL_DestroyGPUDevice(scene->gpu);
         scene->gpu = NULL;
     }
+    scene->command_buffer = NULL;
+    scene->copy_pass = NULL;
+    scene->render_pass = NULL;
+    scene->width = 0;
+    scene->height = 0;
 }

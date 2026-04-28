@@ -15,7 +15,10 @@
 #include "hyprland.h"
 #include "malloc.h"
 
+#define WD_WLROOTS_MAX_OUTPUTS 32
+
 typedef struct {
+    uint32_t global_name;
     struct wl_output* output;
     char* name;
 } output_data;
@@ -26,11 +29,9 @@ typedef struct wlroots_output_state {
     struct wl_compositor* compositor;
     struct zwlr_layer_shell_v1* layer_shell;
 
-    output_data* outputs;
-    size_t outputs_len;
-    size_t outputs_cap;
+    output_data outputs[WD_WLROOTS_MAX_OUTPUTS];
     struct wl_output* target_output;
-    const char* target_output_name;
+    const char* requested_output_name;
 
     struct wl_surface* surface;
     struct zwlr_layer_surface_v1* layer_surface;
@@ -38,6 +39,7 @@ typedef struct wlroots_output_state {
     SDL_Window* window;
     uint32_t width;
     uint32_t height;
+    bool window_closed;
     bool sdl_initialized;
 
     enum {
@@ -76,7 +78,7 @@ static const struct wl_output_listener output_listener = {
 };
 
 static void free_outputs(wlroots_output_state* state) {
-    for(size_t i = 0; i < state->outputs_len; i++) {
+    for(size_t i = 0; i < WD_WLROOTS_MAX_OUTPUTS; i++) {
         if(state->outputs[i].output != NULL) {
             wl_output_destroy(state->outputs[i].output);
             state->outputs[i].output = NULL;
@@ -84,26 +86,26 @@ static void free_outputs(wlroots_output_state* state) {
         free(state->outputs[i].name);
         state->outputs[i].name = NULL;
     }
-    free(state->outputs);
-    state->outputs = NULL;
-    state->outputs_len = state->outputs_cap = 0;
 }
 
-static output_data* add_output(wlroots_output_state* state, uint32_t name, uint32_t version) {
-    if(state->outputs_len == state->outputs_cap) {
-        size_t new_cap = (state->outputs_cap == 0 ? 4 : state->outputs_cap * 2);
-        output_data* new_outputs = wd_realloc(state->outputs, sizeof(output_data) * new_cap);
-        state->outputs = new_outputs;
-        state->outputs_cap = new_cap;
+static void add_output(wlroots_output_state* state, uint32_t name, uint32_t version) {
+    output_data* output = NULL;
+    for(size_t i = 0; i < WD_WLROOTS_MAX_OUTPUTS; i++) {
+        if(state->outputs[i].output == NULL) {
+            output = &state->outputs[i];
+            break;
+        }
     }
 
-    output_data* output = &state->outputs[state->outputs_len];
-    *output = (output_data){0};
-    state->outputs_len++;
+    if(output == NULL) {
+        return;
+    }
 
+    *output = (output_data){0};
+
+    output->global_name = name;
     output->output = wl_registry_bind(state->registry, name, &wl_output_interface, version);
     wl_output_add_listener(output->output, &output_listener, output);
-    return output;
 }
 
 static void registry_global(
@@ -119,38 +121,67 @@ static void registry_global(
     }
 }
 
-static void registry_global_remove(void* data, struct wl_registry* registry, uint32_t name) {}
+static void registry_global_remove(void* data, struct wl_registry* registry, uint32_t name) {
+    (void)registry;
+
+    wlroots_output_state* odata = (wlroots_output_state*)data;
+    for(size_t i = 0; i < WD_WLROOTS_MAX_OUTPUTS; i++) {
+        output_data* output = &odata->outputs[i];
+        if(output->output == NULL || output->global_name != name) {
+            continue;
+        }
+
+        if(odata->target_output == output->output) {
+            odata->target_output = NULL;
+            odata->window_closed = true;
+        }
+
+        if(output->output != NULL) {
+            wl_output_destroy(output->output);
+            output->output = NULL;
+        }
+        free(output->name);
+        *output = (output_data){0};
+        return;
+    }
+}
 
 static const struct wl_registry_listener registry_listener = {
     .global = registry_global, .global_remove = registry_global_remove};
 
 static output_data* find_output_by_name(wlroots_output_state* odata, const char* name) {
-    for(size_t i = 0; i < odata->outputs_len; i++) {
-        if(odata->outputs[i].name != NULL && strcmp(odata->outputs[i].name, name) == 0) {
+    for(size_t i = 0; i < WD_WLROOTS_MAX_OUTPUTS; i++) {
+        if(odata->outputs[i].output != NULL && odata->outputs[i].name != NULL &&
+            strcmp(odata->outputs[i].name, name) == 0) {
             return &odata->outputs[i];
         }
     }
     return NULL;
 }
 
-static bool select_output(wlroots_output_state* odata, const char* requested) {
-    if(odata->outputs_len == 0) {
-        wd_set_error("no wlroots displays found");
+static output_data* first_output(wlroots_output_state* odata) {
+    for(size_t i = 0; i < WD_WLROOTS_MAX_OUTPUTS; i++) {
+        if(odata->outputs[i].output != NULL) {
+            return &odata->outputs[i];
+        }
+    }
+    return NULL;
+}
+
+static bool select_output(wlroots_output_state* odata) {
+    output_data* selected = NULL;
+    if(odata->requested_output_name != NULL && odata->requested_output_name[0] != '\0') {
+        selected = find_output_by_name(odata, odata->requested_output_name);
+    } else {
+        selected = first_output(odata);
+    }
+
+    if(selected == NULL) {
+        odata->target_output = NULL;
         return false;
     }
 
-    output_data* selected = &odata->outputs[0];
-    if(requested != NULL && requested[0] != '\0') {
-        output_data* matched = find_output_by_name(odata, requested);
-        if(matched == NULL) {
-            wd_set_error("display %s does not exist", requested);
-            return false;
-        }
-        selected = matched;
-    }
-
     odata->target_output = selected->output;
-    odata->target_output_name = selected->name;
     return true;
 }
 
@@ -174,11 +205,6 @@ static bool wlroots_connect(wlroots_output_state* odata) {
         return false;
     }
 
-    if(odata->outputs_len == 0) {
-        wd_set_error("no wlroots displays found");
-        return false;
-    }
-
     return true;
 }
 
@@ -193,29 +219,21 @@ static void layer_surface_configure(
     }
 }
 
-static void layer_surface_closed(void* data, struct zwlr_layer_surface_v1* surface) {}
+static void layer_surface_closed(void* data, struct zwlr_layer_surface_v1* surface) {
+    (void)surface;
+
+    wlroots_output_state* state = (wlroots_output_state*)data;
+    state->window_closed = true;
+}
 
 static const struct zwlr_layer_surface_v1_listener layer_surface_listener = {
     .configure = layer_surface_configure, .closed = layer_surface_closed};
 
-static void wlroots_free(wlroots_output_state* state, bool free_state) {
-    if(state == NULL) {
-        return;
+static void deactivate_window(wlroots_output_state* state) {
+    if(state->window != NULL) {
+        SDL_DestroyWindow(state->window);
+        state->window = NULL;
     }
-
-    if(state->sdl_initialized) {
-        if(state->window != NULL) {
-            SDL_DestroyWindow(state->window);
-            state->window = NULL;
-        }
-        SDL_Quit();
-        state->sdl_initialized = false;
-    }
-
-    if(state->session_type == SESSION_HYPRLAND) {
-        wd_hyprland_free(&state->hyprland);
-    }
-
     if(state->layer_surface != NULL) {
         zwlr_layer_surface_v1_destroy(state->layer_surface);
         state->layer_surface = NULL;
@@ -224,6 +242,86 @@ static void wlroots_free(wlroots_output_state* state, bool free_state) {
         wl_surface_destroy(state->surface);
         state->surface = NULL;
     }
+    state->width = 0;
+    state->height = 0;
+    state->window_closed = false;
+}
+
+static bool ensure_sdl_initialized(wlroots_output_state* state) {
+    if(state->sdl_initialized) {
+        return true;
+    }
+
+    SDL_SetHint(SDL_HINT_VIDEO_DRIVER, "wayland");
+    SDL_SetPointerProperty(SDL_GetGlobalProperties(), SDL_PROP_GLOBAL_VIDEO_WAYLAND_WL_DISPLAY_POINTER, state->display);
+    if(!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS)) {
+        wd_set_error("SDL_Init failed: %s", SDL_GetError());
+        return false;
+    }
+    state->sdl_initialized = true;
+    return true;
+}
+
+static bool activate_output(wlroots_output_state* state) {
+    if(state->target_output == NULL || state->window != NULL) {
+        return true;
+    }
+
+    state->surface = wl_compositor_create_surface(state->compositor);
+    state->layer_surface = zwlr_layer_shell_v1_get_layer_surface(
+        state->layer_shell, state->surface, state->target_output, ZWLR_LAYER_SHELL_V1_LAYER_BACKGROUND, "wallpaperd");
+    zwlr_layer_surface_v1_set_size(state->layer_surface, 0, 0);
+    zwlr_layer_surface_v1_set_anchor(
+        state->layer_surface, ZWLR_LAYER_SURFACE_V1_ANCHOR_TOP | ZWLR_LAYER_SURFACE_V1_ANCHOR_RIGHT |
+                                  ZWLR_LAYER_SURFACE_V1_ANCHOR_BOTTOM | ZWLR_LAYER_SURFACE_V1_ANCHOR_LEFT);
+    zwlr_layer_surface_v1_set_exclusive_zone(state->layer_surface, -1);
+    zwlr_layer_surface_v1_add_listener(state->layer_surface, &layer_surface_listener, state);
+    wl_surface_commit(state->surface);
+    wl_display_roundtrip(state->display);
+
+    if(state->width == 0 || state->height == 0 || state->window_closed) {
+        deactivate_window(state);
+        return true;
+    }
+    if(!ensure_sdl_initialized(state)) {
+        deactivate_window(state);
+        return false;
+    }
+
+    SDL_PropertiesID properties = SDL_CreateProperties();
+    SDL_SetPointerProperty(properties, SDL_PROP_WINDOW_CREATE_WAYLAND_WL_SURFACE_POINTER, state->surface);
+    SDL_SetBooleanProperty(properties, SDL_PROP_WINDOW_CREATE_HIGH_PIXEL_DENSITY_BOOLEAN, true);
+    SDL_SetNumberProperty(properties, SDL_PROP_WINDOW_CREATE_WIDTH_NUMBER, state->width);
+    SDL_SetNumberProperty(properties, SDL_PROP_WINDOW_CREATE_HEIGHT_NUMBER, state->height);
+    state->window = SDL_CreateWindowWithProperties(properties);
+    SDL_DestroyProperties(properties);
+    if(!state->window) {
+        wd_set_error("SDL_CreateWindowWithProperties failed: %s", SDL_GetError());
+        deactivate_window(state);
+        return false;
+    }
+
+    SDL_ShowWindow(state->window);
+    SDL_EnableScreenSaver();
+    return true;
+}
+
+static void wlroots_free(wlroots_output_state* state, bool free_state) {
+    if(state == NULL) {
+        return;
+    }
+
+    deactivate_window(state);
+
+    if(state->sdl_initialized) {
+        SDL_Quit();
+        state->sdl_initialized = false;
+    }
+
+    if(state->session_type == SESSION_HYPRLAND) {
+        wd_hyprland_free(&state->hyprland);
+    }
+
     if(state->layer_shell != NULL) {
         zwlr_layer_shell_v1_destroy(state->layer_shell);
         state->layer_shell = NULL;
@@ -250,48 +348,11 @@ static void wlroots_free(wlroots_output_state* state, bool free_state) {
 bool wd_wlroots_output_init(void** data, const char* display_name) {
     *data = wd_calloc(1, sizeof(wlroots_output_state));
     wlroots_output_state* state = (wlroots_output_state*)(*data);
+    state->requested_output_name = display_name;
 
     if(!wlroots_connect(state)) {
         goto handle_error;
     }
-    if(!select_output(state, display_name)) {
-        goto handle_error;
-    }
-
-    state->surface = wl_compositor_create_surface(state->compositor);
-    state->layer_surface = zwlr_layer_shell_v1_get_layer_surface(
-        state->layer_shell, state->surface, state->target_output, ZWLR_LAYER_SHELL_V1_LAYER_BACKGROUND, "wallpaperd");
-    zwlr_layer_surface_v1_set_size(state->layer_surface, 0, 0);
-    zwlr_layer_surface_v1_set_anchor(
-        state->layer_surface, ZWLR_LAYER_SURFACE_V1_ANCHOR_TOP | ZWLR_LAYER_SURFACE_V1_ANCHOR_RIGHT |
-                                  ZWLR_LAYER_SURFACE_V1_ANCHOR_BOTTOM | ZWLR_LAYER_SURFACE_V1_ANCHOR_LEFT);
-    zwlr_layer_surface_v1_set_exclusive_zone(state->layer_surface, -1);
-    zwlr_layer_surface_v1_add_listener(state->layer_surface, &layer_surface_listener, state);
-    wl_surface_commit(state->surface);
-    wl_display_roundtrip(state->display);
-
-    SDL_SetHint(SDL_HINT_VIDEO_DRIVER, "wayland");
-    SDL_SetPointerProperty(SDL_GetGlobalProperties(), SDL_PROP_GLOBAL_VIDEO_WAYLAND_WL_DISPLAY_POINTER, state->display);
-    if(!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS)) {
-        wd_set_error("SDL_Init failed: %s", SDL_GetError());
-        goto handle_error;
-    }
-    state->sdl_initialized = true;
-
-    SDL_PropertiesID properties = SDL_CreateProperties();
-    SDL_SetPointerProperty(properties, SDL_PROP_WINDOW_CREATE_WAYLAND_WL_SURFACE_POINTER, state->surface);
-    SDL_SetBooleanProperty(properties, SDL_PROP_WINDOW_CREATE_HIGH_PIXEL_DENSITY_BOOLEAN, true);
-    SDL_SetNumberProperty(properties, SDL_PROP_WINDOW_CREATE_WIDTH_NUMBER, state->width);
-    SDL_SetNumberProperty(properties, SDL_PROP_WINDOW_CREATE_HEIGHT_NUMBER, state->height);
-    state->window = SDL_CreateWindowWithProperties(properties);
-    SDL_DestroyProperties(properties);
-    if(!state->window) {
-        wd_set_error("SDL_CreateWindowWithProperties failed: %s", SDL_GetError());
-        goto handle_error;
-    }
-
-    SDL_ShowWindow(state->window);
-    SDL_EnableScreenSaver();
 
     const char* desktop = getenv("XDG_CURRENT_DESKTOP");
     if(desktop != NULL && strcmp(desktop, "Hyprland") == 0) {
@@ -302,6 +363,11 @@ bool wd_wlroots_output_init(void** data, const char* display_name) {
 
     if(state->session_type == SESSION_HYPRLAND) {
         wd_hyprland_init(&state->hyprland);
+    }
+
+    select_output(state);
+    if(!activate_output(state)) {
+        goto handle_error;
     }
 
     return true;
@@ -319,18 +385,53 @@ bool wd_wlroots_list_displays() {
         return false;
     }
 
-    for(size_t i = 0; i < state.outputs_len; i++) {
+    bool found = false;
+    for(size_t i = 0; i < WD_WLROOTS_MAX_OUTPUTS; i++) {
+        if(state.outputs[i].output == NULL) {
+            continue;
+        }
         const char* name = (state.outputs[i].name != NULL) ? state.outputs[i].name : "<unnamed>";
         printf("%s\n", name);
+        found = true;
+    }
+
+    if(!found) {
+        wd_set_error("no wlroots displays found");
+        wlroots_free(&state, false);
+        return false;
     }
 
     wlroots_free(&state, false);
     return true;
 }
 
+bool wd_wlroots_output_update(void* data) {
+    wlroots_output_state* state = (wlroots_output_state*)data;
+    if(state->window != NULL) {
+        return true;
+    }
+
+    if(wl_display_roundtrip(state->display) < 0) {
+        wd_set_error("wayland display roundtrip failed");
+        return false;
+    }
+    if(state->target_output == NULL) {
+        select_output(state);
+    }
+    if(state->target_output != NULL && !activate_output(state)) {
+        return false;
+    }
+
+    return true;
+}
+
+static bool output_connected(wlroots_output_state* state) {
+    return state->window != NULL && !state->window_closed && state->target_output != NULL;
+}
+
 SDL_Window* wd_wlroots_output_get_window(void* data) {
-    wlroots_output_state* odata = (wlroots_output_state*)data;
-    return odata->window;
+    wlroots_output_state* state = (wlroots_output_state*)data;
+    return output_connected(state) ? state->window : NULL;
 }
 
 bool wd_wlroots_output_hidden(void* data) {
@@ -342,6 +443,10 @@ bool wd_wlroots_output_hidden(void* data) {
     // TODO: check for fullscreen window with wlr-foreign-toplevel-management
     // TODO: check whether the screen is turned off by idle daemon somehow
     return false;
+}
+
+void wd_wlroots_output_deactivate(void* data) {
+    deactivate_window((wlroots_output_state*)data);
 }
 
 void wd_wlroots_output_free(void* data) {
