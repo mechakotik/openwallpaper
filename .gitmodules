@@ -31,3 +31,6 @@
 [submodule "wallpaperd/external/sds"]
 	path = wallpaperd/external/sds
 	url = https://github.com/antirez/sds
+[submodule "wallpaperd/external/yyjson"]
+	path = wallpaperd/external/yyjson
+	url = https://github.com/ibireme/yyjson

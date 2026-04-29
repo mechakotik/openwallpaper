@@ -186,6 +186,19 @@ static bool select_output(wlroots_output_state* odata) {
     return true;
 }
 
+static const char* target_output_name(wlroots_output_state* odata) {
+    if(odata->target_output == NULL) {
+        return NULL;
+    }
+
+    for(size_t i = 0; i < WD_WLROOTS_MAX_OUTPUTS; i++) {
+        if(odata->outputs[i].output != NULL && odata->outputs[i].output == odata->target_output) {
+            return odata->outputs[i].name;
+        }
+    }
+    return NULL;
+}
+
 static bool wlroots_connect(wlroots_output_state* odata) {
     odata->display = wl_display_connect(NULL);
     if(odata->display == NULL) {
@@ -225,6 +238,7 @@ static void layer_surface_closed(void* data, struct zwlr_layer_surface_v1* surfa
 
     wlroots_output_state* state = (wlroots_output_state*)data;
     state->window_closed = true;
+    state->target_output = NULL;
 }
 
 static const struct zwlr_layer_surface_v1_listener layer_surface_listener = {
@@ -438,7 +452,7 @@ SDL_Window* wd_wlroots_output_get_window(void* data) {
 bool wd_wlroots_output_hidden(void* data) {
     wlroots_output_state* odata = (wlroots_output_state*)data;
     if(odata->session_type == SESSION_HYPRLAND) {
-        return wd_hyprland_output_hidden(&odata->hyprland);
+        return wd_hyprland_output_hidden(&odata->hyprland, target_output_name(odata));
     }
 
     // TODO: check for fullscreen window with wlr-foreign-toplevel-management
