@@ -152,6 +152,12 @@ bool wd_parse_args(wd_args_state* args, int argc, char* argv[]) {
             if(!parse_scale_mode(value, &args->scale_mode)) {
                 return false;
             }
+        } else if(strcmp(key, "filter") == 0) {
+            if(value[0] == '\0') {
+                wd_set_error("no value for --filter is set");
+                return false;
+            }
+            args->filter = value;
         } else if(strcmp(key, "list-displays") == 0) {
             if(value[0] != '\0') {
                 wd_set_error("--list-displays is a flag, cannot set value");

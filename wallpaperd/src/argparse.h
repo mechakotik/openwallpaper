@@ -32,6 +32,7 @@ typedef struct wd_args_state {
     const char* audio_source;
     bool no_audio;
     wd_scale_mode scale_mode;
+    const char* filter;
 
     bool list_displays;
     bool help;

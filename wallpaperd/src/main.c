@@ -32,6 +32,7 @@ static void print_help() {
         "\n"
         "video-specific options:\n"
         "  --scale-mode=<aspect-crop|aspect-fit|stretch>\n"
+        "  --filter=<filter>\n"
         "\n");
 }
 

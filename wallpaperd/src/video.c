@@ -109,6 +109,14 @@ static bool set_mpv_speed(mpv_handle* mpv, float speed) {
     return true;
 }
 
+static bool set_mpv_filter(mpv_handle* mpv, const char* filter) {
+    if(filter == NULL) {
+        return true;
+    }
+    return set_mpv_option_string(mpv, "scale", filter) && set_mpv_option_string(mpv, "dscale", filter) &&
+           set_mpv_option_string(mpv, "cscale", filter);
+}
+
 static void get_scale_mode_options(wd_scale_mode scale_mode, const char** keepaspect, const char** panscan) {
     if(scale_mode == WD_SCALE_MODE_ASPECT_CROP) {
         *keepaspect = "yes";
@@ -211,6 +219,9 @@ static bool init_mpv(struct wd_state* state, wd_video_state* video) {
         !set_mpv_option_string(video->mpv, "keepaspect", keepaspect) ||
         !set_mpv_option_string(video->mpv, "panscan", panscan) ||
         !set_mpv_option_string(video->mpv, "hwdec", "auto-safe")) {
+        return false;
+    }
+    if(!set_mpv_filter(video->mpv, state->args.filter)) {
         return false;
     }
 
