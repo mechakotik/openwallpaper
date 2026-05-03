@@ -1,38 +1,44 @@
-#include <SDL3/SDL.h>
 #include <stdio.h>
+#include <string.h>
 #include "argparse.h"
 #include "error.h"
-#include "object_manager.h"
 #include "output.h"
 #include "ready.h"
+#include "scene.h"
 #include "state.h"
+#include "video.h"
 
 static void print_help() {
-    printf("usage: wallpaperd [OPTIONS] [WALLPAPER_PATH] [WALLPAPER_OPTIONS]\n");
-    printf("funny animated wallpaper app\n\n");
-
-    printf("  --display=<display>\n");
-    printf("  --fps=<fps>\n");
-    printf("  --speed=<speed>\n");
-    printf("  --prefer-dgpu\n");
-    printf("  --pause-hidden\n");
-    printf("  --pause-on-bat\n");
-    printf("  --audio-backend=<backend>\n");
-    printf("  --audio-source=<source>\n");
-    printf("  --no-audio\n");
-    printf("  --window\n\n");
-
-    printf("  --list-displays\n");
-    printf("  --help\n");
-    printf("  --version\n");
+    printf(
+        "usage: wallpaperd [OPTIONS] [SCENE_PATH] [SCENE_OPTIONS]\n"
+        "       wallpaperd [OPTIONS] [VIDEO_PATH]\n"
+        "funny animated wallpaper app\n"
+        "\n"
+        "common options:\n"
+        "  --display=<display>\n"
+        "  --speed=<speed>\n"
+        "  --pause-hidden\n"
+        "  --pause-on-bat\n"
+        "  --window\n"
+        "  --list-displays\n"
+        "  --help\n"
+        "  --version\n"
+        "\n"
+        "scene-specific options:\n"
+        "  --prefer-dgpu\n"
+        "  --audio-backend=<backend>\n"
+        "  --audio-source=<source>\n"
+        "  --no-audio\n"
+        "\n");
 }
 
-static void unload_scene(wd_state* state) {
-    wd_free_object_manager(state);
-    uint32_t unused;
-    wd_new_object(&state->object_manager, WD_OBJECT_EMPTY, NULL, &unused);
-    wd_free_scene(&state->scene);
-    wd_free_zip(&state->zip);
+static bool is_scene(const char* path) {
+    if(path == NULL) {
+        return false;
+    }
+
+    const char* ext = strrchr(path, '.');
+    return ext != NULL && strcmp(ext, ".owf") == 0;
 }
 
 int main(int argc, char* argv[]) {
@@ -69,125 +75,26 @@ int main(int argc, char* argv[]) {
         goto handle_error;
     }
 
-    float speed = 1;
-    if(state.args.speed != 0) {
-        speed = state.args.speed;
-    }
+    bool scene_wallpaper = is_scene(wd_get_wallpaper_path(&state.args));
+    bool opengl = !scene_wallpaper;
 
-    if(!wd_init_audio_visualizer(&state.audio_visualizer, &state.args)) {
+#ifndef WD_VIDEO
+    if(!scene_wallpaper) {
+        wd_set_error("video wallpaper support is disabled, rebuild with -DWD_VIDEO=ON");
         goto handle_error;
     }
-    if(!wd_init_output(&state.output, &state.args)) {
+#endif
+
+    if(!wd_init_output(&state.output, &state.args, opengl)) {
         goto handle_error;
     }
 
-    uint32_t fps = state.args.fps, frame_time = 0;
-    if(fps != 0) {
-        frame_time = 1000000000 / fps;
-    }
-
-    uint64_t prev_time = SDL_GetTicksNS();
-
-    bool scene_loaded = false;
-    bool frame_skipped = false;
-    uint64_t last_pause_check = prev_time;
-    bool first_draw = true;
-    float delta_factor = 1;
-
-    if(state.args.pause_on_bat) {
-        wd_init_battery(&state.battery);
-    }
-
-    while(true) {
-        uint64_t cur_time = SDL_GetTicksNS();
-
-        if(fps != 0) {
-            uint64_t delta = 0;
-            if(cur_time > prev_time) {
-                delta = cur_time - prev_time;
-            }
-            if(delta < frame_time) {
-                SDL_DelayNS(frame_time - delta);
-            }
-        }
-
-        float delta = 0;
-        if(!frame_skipped && cur_time > prev_time) {
-            delta = (float)(cur_time - prev_time) / 1e9;
-            if(delta > 1) {
-                delta = 1;
-            }
-        }
-        prev_time = cur_time;
-        frame_skipped = false;
-
-        SDL_Event event;
-        bool quit = false;
-        if(state.output.window != NULL) {
-            while(SDL_PollEvent(&event)) {
-                if(event.type == SDL_EVENT_QUIT || event.type == SDL_EVENT_TERMINATING) {
-                    quit = true;
-                    break;
-                }
-            }
-        }
-        if(quit) {
-            break;
-        }
-
-        if(!wd_update_output(&state.output)) {
+    if(scene_wallpaper) {
+        if(!wd_run_scene(&state)) {
             goto handle_error;
         }
-        if(state.output.window == NULL) {
-            if(scene_loaded) {
-                unload_scene(&state);
-                scene_loaded = false;
-                wd_unset_ready();
-                first_draw = true;
-                last_pause_check = cur_time;
-            }
-            wd_deactivate_output(&state.output);
-            SDL_Delay(200);
-            frame_skipped = true;
-            delta_factor = 0;
-            continue;
-        }
-        if(!scene_loaded) {
-            if(!wd_init_scene(&state)) {
-                goto handle_error;
-            }
-            scene_loaded = true;
-            first_draw = true;
-            prev_time = SDL_GetTicksNS();
-            last_pause_check = prev_time;
-            delta_factor = 0;
-            continue;
-        }
-
-        if(!first_draw && last_pause_check < cur_time - 2e8) {
-            if((state.args.pause_hidden && wd_output_hidden(&state.output)) ||
-                (state.args.pause_on_bat && wd_battery_discharging(&state.battery))) {
-                SDL_Delay(200);
-                frame_skipped = true;
-                delta_factor = 0;
-                continue;
-            }
-            last_pause_check = cur_time;
-        }
-
-        delta_factor += delta * 5;
-        if(delta_factor > 1) {
-            delta_factor = 1;
-        }
-
-        if(!wd_update_scene(&state, delta * delta_factor * speed)) {
-            goto handle_error;
-        }
-
-        if(first_draw) {
-            wd_set_ready();
-            first_draw = false;
-        }
+    } else if(!wd_run_video(&state)) {
+        goto handle_error;
     }
 
     wd_free_state(&state);

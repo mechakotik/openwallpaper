@@ -4,6 +4,7 @@ project(wallpaperd)
 include(GNUInstallDirs)
 find_package(PkgConfig)
 
+option(WD_VIDEO "Enable video wallpaper support with mpv" ON)
 option(WD_WLROOTS "Enable wlroots output support" ON)
 option(WD_AUDIO_VISUALIZER "Enable audio visualization support" ON)
 
@@ -28,6 +29,10 @@ target_include_directories(wallpaperd PRIVATE include external/sds)
 set_property(SOURCE external/sds/sds.c APPEND PROPERTY COMPILE_OPTIONS
     -include "${CMAKE_CURRENT_SOURCE_DIR}/src/sds_alloc.h"
 )
+
+if(WD_VIDEO)
+    target_compile_definitions(wallpaperd PRIVATE WD_VIDEO)
+endif()
 
 if(WD_SDL_SHARED)
     find_package(SDL3 REQUIRED CONFIG REQUIRED COMPONENTS SDL3-shared)

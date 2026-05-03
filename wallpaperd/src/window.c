@@ -8,15 +8,32 @@ typedef struct window_output_data {
     SDL_Window* window;
 } window_output_state;
 
-bool wd_window_output_init(void** data) {
+bool wd_window_output_init(void** data, bool opengl) {
     if(!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS)) {
         wd_set_error("SDL_Init failed: %s", SDL_GetError());
+        return false;
+    }
+
+    if(opengl) {
+        if(!SDL_GL_SetAttribute(SDL_GL_ACCELERATED_VISUAL, 1)) {
+            wd_set_error("SDL_GL_SetAttribute(SDL_GL_ACCELERATED_VISUAL) failed: %s", SDL_GetError());
+            return false;
+        }
+        if(!SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1)) {
+            wd_set_error("SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER) failed: %s", SDL_GetError());
+            return false;
+        }
     }
 
     *data = wd_malloc(sizeof(window_output_state));
     window_output_state* odata = (window_output_state*)(*data);
 
-    odata->window = SDL_CreateWindow("wallpaperd", 1280, 720, SDL_WINDOW_HIGH_PIXEL_DENSITY | SDL_WINDOW_RESIZABLE);
+    SDL_WindowFlags flags = SDL_WINDOW_HIGH_PIXEL_DENSITY | SDL_WINDOW_RESIZABLE;
+    if(opengl) {
+        flags |= SDL_WINDOW_OPENGL;
+    }
+
+    odata->window = SDL_CreateWindow("wallpaperd", 1280, 720, flags);
     if(odata->window == NULL) {
         wd_set_error("SDL_CreateWindow failed: %s", SDL_GetError());
         return false;

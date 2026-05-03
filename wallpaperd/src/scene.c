@@ -9,6 +9,7 @@
 #include "cache.h"
 #include "error.h"
 #include "malloc.h"
+#include "ready.h"
 #include "state.h"
 #include "wasm_api.h"
 #include "zip.h"
@@ -359,7 +360,7 @@ bool init_wasm(wd_state* state) {
     return true;
 }
 
-bool wd_init_scene(wd_state* state) {
+static bool init_scene(wd_state* state) {
     wd_scene_state* scene = &state->scene;
 
     if(!init_gpu(state)) {
@@ -384,7 +385,7 @@ bool wd_init_scene(wd_state* state) {
     return true;
 }
 
-bool wd_update_scene(wd_state* state, float delta) {
+static bool update_scene(wd_state* state, float delta) {
     wd_scene_state* scene = &state->scene;
 
     scene->command_buffer = SDL_AcquireGPUCommandBuffer(scene->gpu);
@@ -467,6 +468,135 @@ bool wd_flush_command_buffer(wd_scene_state* scene) {
     if(scene->command_buffer == NULL) {
         wd_set_error("SDL_AcquireGPUCommandBuffer failed: %s", SDL_GetError());
         return false;
+    }
+
+    return true;
+}
+
+static void free_scene_with_deps(wd_state* state) {
+    wd_free_object_manager(state);
+    uint32_t unused;
+    wd_new_object(&state->object_manager, WD_OBJECT_EMPTY, NULL, &unused);
+    wd_free_scene(&state->scene);
+    wd_free_zip(&state->zip);
+}
+
+bool wd_run_scene(wd_state* state) {
+    if(!wd_init_audio_visualizer(&state->audio_visualizer, &state->args)) {
+        return false;
+    }
+
+    float speed = 1;
+    if(state->args.speed != 0) {
+        speed = state->args.speed;
+    }
+
+    uint32_t fps = state->args.fps, frame_time = 0;
+    if(fps != 0) {
+        frame_time = 1000000000 / fps;
+    }
+
+    uint64_t prev_time = SDL_GetTicksNS();
+    bool wallpaper_loaded = false;
+    bool frame_skipped = false;
+    uint64_t last_pause_check = prev_time;
+    bool first_draw = true;
+    float delta_factor = 1;
+
+    if(state->args.pause_on_bat) {
+        wd_init_battery(&state->battery);
+    }
+
+    while(true) {
+        uint64_t cur_time = SDL_GetTicksNS();
+
+        if(fps != 0) {
+            uint64_t delta_ns = 0;
+            if(cur_time > prev_time) {
+                delta_ns = cur_time - prev_time;
+            }
+            if(delta_ns < frame_time) {
+                SDL_DelayNS(frame_time - delta_ns);
+            }
+        }
+
+        float delta = 0;
+        if(!frame_skipped && cur_time > prev_time) {
+            delta = (float)(cur_time - prev_time) / 1e9;
+            if(delta > 1) {
+                delta = 1;
+            }
+        }
+        prev_time = cur_time;
+        frame_skipped = false;
+
+        SDL_Event event;
+        bool quit = false;
+        if(state->output.window != NULL) {
+            while(SDL_PollEvent(&event)) {
+                if(event.type == SDL_EVENT_QUIT || event.type == SDL_EVENT_TERMINATING) {
+                    quit = true;
+                    break;
+                }
+            }
+        }
+        if(quit) {
+            break;
+        }
+
+        if(!wd_update_output(&state->output)) {
+            return false;
+        }
+        if(state->output.window == NULL) {
+            if(wallpaper_loaded) {
+                free_scene_with_deps(state);
+                wallpaper_loaded = false;
+                wd_unset_ready();
+                first_draw = true;
+                last_pause_check = cur_time;
+            }
+            wd_deactivate_output(&state->output);
+            SDL_Delay(200);
+            frame_skipped = true;
+            delta_factor = 0;
+            continue;
+        }
+        if(!wallpaper_loaded) {
+            if(!init_scene(state)) {
+                return false;
+            }
+            wallpaper_loaded = true;
+            first_draw = true;
+            prev_time = SDL_GetTicksNS();
+            last_pause_check = prev_time;
+            delta_factor = 0;
+            continue;
+        }
+
+        if(!first_draw && last_pause_check < cur_time - 200000000) {
+            if((state->args.pause_hidden && wd_output_hidden(&state->output)) ||
+                (state->args.pause_on_bat && wd_battery_discharging(&state->battery))) {
+                SDL_Delay(200);
+                frame_skipped = true;
+                delta_factor = 0;
+                continue;
+            }
+            last_pause_check = cur_time;
+        }
+
+        delta_factor += delta * 5;
+        if(delta_factor > 1) {
+            delta_factor = 1;
+        }
+
+        if(!update_scene(state, delta * delta_factor * speed)) {
+            return false;
+        }
+
+        if(first_draw) {
+            wd_set_ready();
+            first_draw = false;
+        }
     }
 
     return true;

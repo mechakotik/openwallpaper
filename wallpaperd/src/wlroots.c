@@ -42,6 +42,7 @@ typedef struct wlroots_output_state {
     uint32_t height;
     bool window_closed;
     bool sdl_initialized;
+    bool opengl;
 
     enum {
         SESSION_WLROOTS,
@@ -302,12 +303,28 @@ static bool activate_output(wlroots_output_state* state) {
         deactivate_window(state);
         return false;
     }
+    if(state->opengl) {
+        if(!SDL_GL_SetAttribute(SDL_GL_ACCELERATED_VISUAL, 1)) {
+            wd_set_error("SDL_GL_SetAttribute(SDL_GL_ACCELERATED_VISUAL) failed: %s", SDL_GetError());
+            deactivate_window(state);
+            return false;
+        }
+        if(!SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1)) {
+            wd_set_error("SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER) failed: %s", SDL_GetError());
+            deactivate_window(state);
+            return false;
+        }
+    }
 
     SDL_PropertiesID properties = SDL_CreateProperties();
     SDL_SetPointerProperty(properties, SDL_PROP_WINDOW_CREATE_WAYLAND_WL_SURFACE_POINTER, state->surface);
     SDL_SetBooleanProperty(properties, SDL_PROP_WINDOW_CREATE_HIGH_PIXEL_DENSITY_BOOLEAN, true);
     SDL_SetNumberProperty(properties, SDL_PROP_WINDOW_CREATE_WIDTH_NUMBER, state->width);
     SDL_SetNumberProperty(properties, SDL_PROP_WINDOW_CREATE_HEIGHT_NUMBER, state->height);
+    if(state->opengl) {
+        SDL_SetBooleanProperty(properties, SDL_PROP_WINDOW_CREATE_OPENGL_BOOLEAN, true);
+        SDL_SetBooleanProperty(properties, SDL_PROP_WINDOW_CREATE_WAYLAND_CREATE_EGL_WINDOW_BOOLEAN, true);
+    }
     state->window = SDL_CreateWindowWithProperties(properties);
     SDL_DestroyProperties(properties);
     if(!state->window) {
@@ -360,10 +377,11 @@ static void wlroots_free(wlroots_output_state* state, bool free_state) {
     }
 }
 
-bool wd_wlroots_output_init(void** data, const char* display_name) {
+bool wd_wlroots_output_init(void** data, const char* display_name, bool opengl) {
     *data = wd_calloc(1, sizeof(wlroots_output_state));
     wlroots_output_state* state = (wlroots_output_state*)(*data);
     state->requested_output_name = display_name;
+    state->opengl = opengl;
 
     if(!wlroots_connect(state)) {
         goto handle_error;

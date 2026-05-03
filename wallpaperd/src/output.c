@@ -18,18 +18,18 @@ static const char* get_output(wd_args_state* args) {
     return "window";
 }
 
-bool wd_init_output(wd_output_state* output, wd_args_state* args) {
+bool wd_init_output(wd_output_state* output, wd_args_state* args, bool opengl) {
     const char* name = get_output(args);
 
     if(strcmp(name, "window") == 0) {
-        if(!wd_window_output_init(&output->data)) {
+        if(!wd_window_output_init(&output->data, opengl)) {
             return false;
         }
         output->get_window = wd_window_output_get_window;
         output->free_output = wd_window_output_free;
     } else if(strcmp(name, "wlroots") == 0) {
 #ifdef WD_WLROOTS
-        if(!wd_wlroots_output_init(&output->data, args->display)) {
+        if(!wd_wlroots_output_init(&output->data, args->display, opengl)) {
             return false;
         }
         output->get_window = wd_wlroots_output_get_window;

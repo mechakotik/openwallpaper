@@ -55,6 +55,73 @@ static bool dynapi_import(void* handle, const char* name, void** fn) {
         return false;                                         \
     }
 
+#ifdef WD_VIDEO
+
+#include <mpv/client.h>
+#include <mpv/render.h>
+
+#define MPV_DECLARE(name) MPV_DECLTYPE(name) * wd_##name
+
+#define MPV_IMPORT(handle, name, cleanup)                   \
+    if(!dynapi_import(handle, #name, (void**)&wd_##name)) { \
+        cleanup;                                            \
+        return false;                                       \
+    }
+
+MPV_DECLARE(mpv_error_string);
+MPV_DECLARE(mpv_create);
+MPV_DECLARE(mpv_initialize);
+MPV_DECLARE(mpv_terminate_destroy);
+MPV_DECLARE(mpv_set_option);
+MPV_DECLARE(mpv_set_option_string);
+MPV_DECLARE(mpv_command);
+MPV_DECLARE(mpv_set_property_string);
+MPV_DECLARE(mpv_wait_event);
+MPV_DECLARE(mpv_render_context_create);
+MPV_DECLARE(mpv_render_context_render);
+MPV_DECLARE(mpv_render_context_report_swap);
+MPV_DECLARE(mpv_render_context_free);
+MPV_DECLARE(mpv_render_context_set_update_callback);
+MPV_DECLARE(mpv_render_context_update);
+
+static void* mpv;
+
+static void wd_dynapi_close_mpv() {
+    dynapi_dlclose(&mpv);
+}
+
+bool wd_dynapi_load_mpv() {
+    if(mpv != NULL) {
+        return true;
+    }
+
+    static const char* libraries[] = {"libmpv.so.2", "libmpv.so"};
+    mpv = dynapi_dlopen(libraries, sizeof(libraries) / sizeof(libraries[0]));
+    if(mpv == NULL) {
+        return false;
+    }
+
+    MPV_IMPORT(mpv, mpv_error_string, wd_dynapi_close_mpv());
+    MPV_IMPORT(mpv, mpv_create, wd_dynapi_close_mpv());
+    MPV_IMPORT(mpv, mpv_initialize, wd_dynapi_close_mpv());
+    MPV_IMPORT(mpv, mpv_terminate_destroy, wd_dynapi_close_mpv());
+    MPV_IMPORT(mpv, mpv_set_option, wd_dynapi_close_mpv());
+    MPV_IMPORT(mpv, mpv_set_option_string, wd_dynapi_close_mpv());
+    MPV_IMPORT(mpv, mpv_command, wd_dynapi_close_mpv());
+    MPV_IMPORT(mpv, mpv_set_property_string, wd_dynapi_close_mpv());
+    MPV_IMPORT(mpv, mpv_wait_event, wd_dynapi_close_mpv());
+    MPV_IMPORT(mpv, mpv_render_context_create, wd_dynapi_close_mpv());
+    MPV_IMPORT(mpv, mpv_render_context_render, wd_dynapi_close_mpv());
+    MPV_IMPORT(mpv, mpv_render_context_report_swap, wd_dynapi_close_mpv());
+    MPV_IMPORT(mpv, mpv_render_context_free, wd_dynapi_close_mpv());
+    MPV_IMPORT(mpv, mpv_render_context_set_update_callback, wd_dynapi_close_mpv());
+    MPV_IMPORT(mpv, mpv_render_context_update, wd_dynapi_close_mpv());
+
+    return true;
+}
+
+#endif
+
 static void* wayland;
 
 struct wl_proxy;

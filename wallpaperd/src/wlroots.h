@@ -5,7 +5,7 @@
 
 #include <stdbool.h>
 
-bool wd_wlroots_output_init(void** data, const char* display_name);
+bool wd_wlroots_output_init(void** data, const char* display_name, bool opengl);
 struct SDL_Window* wd_wlroots_output_get_window(void* data);
 bool wd_wlroots_output_update(void* data);
 bool wd_wlroots_output_hidden(void* data);

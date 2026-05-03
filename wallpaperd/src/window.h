@@ -3,7 +3,7 @@
 
 #include <stdbool.h>
 
-bool wd_window_output_init(void** data);
+bool wd_window_output_init(void** data, bool opengl);
 struct SDL_Window* wd_window_output_get_window(void* data);
 void wd_window_output_free(void* data);
 

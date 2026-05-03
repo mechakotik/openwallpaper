@@ -25,8 +25,7 @@ typedef struct wd_scene_state {
 
 struct wd_state;
 
-bool wd_init_scene(struct wd_state* state);
-bool wd_update_scene(struct wd_state* state, float delta);
+bool wd_run_scene(struct wd_state* state);
 bool wd_flush_command_buffer(wd_scene_state* scene);
 void wd_free_scene(wd_scene_state* scene);
 

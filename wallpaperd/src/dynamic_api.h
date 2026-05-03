@@ -3,6 +3,10 @@
 
 #include <stdbool.h>
 
+#ifdef WD_VIDEO
+bool wd_dynapi_load_mpv();
+#endif
+
 bool wd_dynapi_load_wayland();
 
 #ifdef WD_PIPEWIRE

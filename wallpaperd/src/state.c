@@ -12,6 +12,7 @@ void wd_free_state(wd_state* state) {
     wd_free_audio_visualizer(&state->audio_visualizer);
     wd_free_object_manager(state);
     wd_free_scene(&state->scene);
+    wd_free_video(&state->video);
     wd_free_zip(&state->zip);
     wd_free_output(&state->output);
     wd_free_args(&state->args);
