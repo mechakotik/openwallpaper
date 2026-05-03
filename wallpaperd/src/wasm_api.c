@@ -25,11 +25,25 @@
         return 0;                                 \
     }
 
+static void* app_slice_to_native(wasm_module_inst_t instance, uint32_t ptr, uint64_t size) {
+    if(!wasm_runtime_validate_app_addr(instance, ptr, size)) {
+        return NULL;
+    }
+    return wasm_runtime_addr_app_to_native(instance, ptr);
+}
+
+static char* app_str_to_native(wasm_module_inst_t instance, uint32_t ptr) {
+    if(!wasm_runtime_validate_app_str_addr(instance, ptr)) {
+        return NULL;
+    }
+    return wasm_runtime_addr_app_to_native(instance, ptr);
+}
+
 uint32_t ow_get_file_size(wasm_exec_env_t exec_env, uint32_t path_ptr) {
     wasm_module_inst_t instance = wasm_runtime_get_module_inst(exec_env);
     wd_state* state = wasm_runtime_get_custom_data(instance);
 
-    const char* path = wasm_runtime_addr_app_to_native(instance, path_ptr);
+    const char* path = app_str_to_native(instance, path_ptr);
     DEBUG_CHECK_RET0(path != NULL, "ow_load_file path address is out of bounds");
     size_t size;
     if(!wd_zip_get_file_size(&state->zip, path, &size)) {
@@ -50,7 +64,7 @@ void ow_read_file(wasm_exec_env_t exec_env, uint32_t path_ptr, uint32_t data_ptr
     wasm_module_inst_t instance = wasm_runtime_get_module_inst(exec_env);
     wd_state* state = wasm_runtime_get_custom_data(instance);
 
-    const char* path = wasm_runtime_addr_app_to_native(instance, path_ptr);
+    const char* path = app_str_to_native(instance, path_ptr);
     DEBUG_CHECK(path != NULL, "ow_read_file path address is out of bounds");
     size_t size = 0;
     if(!wd_zip_get_file_size(&state->zip, path, &size)) {
@@ -64,7 +78,7 @@ void ow_read_file(wasm_exec_env_t exec_env, uint32_t path_ptr, uint32_t data_ptr
         return;
     }
 
-    uint8_t* data_ptr_real = wasm_runtime_addr_app_to_native(instance, data_ptr);
+    uint8_t* data_ptr_real = app_slice_to_native(instance, data_ptr, size);
     DEBUG_CHECK(data_ptr_real != NULL, "ow_read_file data address is out of bounds");
     if(!wd_zip_read_file(&state->zip, path, data_ptr_real)) {
         wasm_runtime_set_exception(instance, "");
@@ -103,7 +117,8 @@ void ow_begin_render_pass(wasm_exec_env_t exec_env, uint32_t info_ptr) {
     DEBUG_CHECK(scene->copy_pass == NULL, "called ow_begin_render_pass when copy pass is active");
     DEBUG_CHECK(scene->render_pass == NULL, "called ow_begin_render_pass when render pass is active");
 
-    ow_render_pass_info* info = (ow_render_pass_info*)wasm_runtime_addr_app_to_native(instance, info_ptr);
+    ow_render_pass_info* info =
+        (ow_render_pass_info*)app_slice_to_native(instance, info_ptr, sizeof(ow_render_pass_info));
     DEBUG_CHECK(info != NULL, "ow_begin_render_pass info address is out of bounds");
 
     SDL_GPUColorTargetInfo color_target_info = {0};
@@ -207,7 +222,7 @@ static uint32_t create_shader_from_bytecode(
 static uint32_t create_shader_from_file(wasm_exec_env_t exec_env, uint32_t path_ptr, bool fragment) {
     wasm_module_inst_t instance = wasm_runtime_get_module_inst(exec_env);
     wd_state* state = wasm_runtime_get_custom_data(instance);
-    const char* path_ptr_real = wasm_runtime_addr_app_to_native(instance, path_ptr);
+    const char* path_ptr_real = app_str_to_native(instance, path_ptr);
     DEBUG_CHECK_RET0(path_ptr_real != NULL, "ow_create_shader_from_file path address is out of bounds");
 
     size_t size = 0;
@@ -230,7 +245,7 @@ static uint32_t create_shader_from_file(wasm_exec_env_t exec_env, uint32_t path_
 
 uint32_t ow_create_vertex_shader_from_bytecode(wasm_exec_env_t exec_env, uint32_t bytecode_ptr, uint32_t size) {
     wasm_module_inst_t instance = wasm_runtime_get_module_inst(exec_env);
-    const uint8_t* bytecode_ptr_real = wasm_runtime_addr_app_to_native(instance, bytecode_ptr);
+    const uint8_t* bytecode_ptr_real = app_slice_to_native(instance, bytecode_ptr, size);
     DEBUG_CHECK_RET0(
         bytecode_ptr_real != NULL, "ow_create_vertex_shader_from_bytecode bytecode address is out of bounds");
     return create_shader_from_bytecode(exec_env, bytecode_ptr_real, size, false);
@@ -242,7 +257,7 @@ uint32_t ow_create_vertex_shader_from_file(wasm_exec_env_t exec_env, uint32_t pa
 
 uint32_t ow_create_fragment_shader_from_bytecode(wasm_exec_env_t exec_env, uint32_t bytecode_ptr, uint32_t size) {
     wasm_module_inst_t instance = wasm_runtime_get_module_inst(exec_env);
-    const uint8_t* bytecode_ptr_real = wasm_runtime_addr_app_to_native(instance, bytecode_ptr);
+    const uint8_t* bytecode_ptr_real = app_slice_to_native(instance, bytecode_ptr, size);
     DEBUG_CHECK_RET0(
         bytecode_ptr_real != NULL, "ow_create_fragment_shader_from_bytecode bytecode address is out of bounds");
     return create_shader_from_bytecode(exec_env, bytecode_ptr_real, size, true);
@@ -300,7 +315,7 @@ void ow_update_buffer(wasm_exec_env_t exec_env, uint32_t buffer, uint32_t offset
     wd_state* state = wasm_runtime_get_custom_data(instance);
     wd_scene_state* scene = &state->scene;
 
-    void* data_ptr_real = wasm_runtime_addr_app_to_native(instance, data_ptr);
+    void* data_ptr_real = app_slice_to_native(instance, data_ptr, size);
     DEBUG_CHECK(data_ptr_real != NULL, "ow_update_buffer data address is out of bounds");
     DEBUG_CHECK(scene->copy_pass != NULL, "called ow_update_buffer when no copy pass is active");
 
@@ -342,7 +357,7 @@ uint32_t ow_create_texture(wasm_exec_env_t exec_env, uint32_t info_ptr) {
     wd_state* state = wasm_runtime_get_custom_data(instance);
     wd_scene_state* scene = &state->scene;
 
-    ow_texture_info* info = (ow_texture_info*)wasm_runtime_addr_app_to_native(instance, info_ptr);
+    ow_texture_info* info = (ow_texture_info*)app_slice_to_native(instance, info_ptr, sizeof(ow_texture_info));
     DEBUG_CHECK_RET0(info != NULL, "ow_create_texture info address is out of bounds");
 
     SDL_GPUTextureCreateInfo texture_info = {0};
@@ -424,8 +439,8 @@ uint32_t ow_create_texture_from_image(wasm_exec_env_t exec_env, uint32_t path_pt
     wd_state* state = wasm_runtime_get_custom_data(instance);
     wd_scene_state* scene = &state->scene;
 
-    const char* path = wasm_runtime_addr_app_to_native(instance, path_ptr);
-    ow_texture_info* info = (ow_texture_info*)wasm_runtime_addr_app_to_native(instance, info_ptr);
+    const char* path = app_str_to_native(instance, path_ptr);
+    ow_texture_info* info = (ow_texture_info*)app_slice_to_native(instance, info_ptr, sizeof(ow_texture_info));
     DEBUG_CHECK_RET0(path != NULL, "ow_create_texture_from_image path address is out of bounds");
     DEBUG_CHECK_RET0(info != NULL, "ow_create_texture_from_image info address is out of bounds");
     DEBUG_CHECK_RET0(scene->copy_pass != NULL, "called ow_create_texture_from_image when no copy pass is active");
@@ -510,10 +525,13 @@ void ow_update_texture(wasm_exec_env_t exec_env, uint32_t data_ptr, uint32_t pix
     wd_state* state = wasm_runtime_get_custom_data(instance);
     wd_scene_state* scene = &state->scene;
 
-    void* data = wasm_runtime_addr_app_to_native(instance, data_ptr);
-    ow_texture_update_destination* dest = wasm_runtime_addr_app_to_native(instance, dest_ptr);
-    DEBUG_CHECK(data != NULL, "ow_update_texture data address is out of bounds");
+    ow_texture_update_destination* dest =
+        app_slice_to_native(instance, dest_ptr, sizeof(ow_texture_update_destination));
     DEBUG_CHECK(dest != NULL, "ow_update_texture destination address is out of bounds");
+    uint64_t data_size = (uint64_t)dest->w * dest->h * 4;
+    DEBUG_CHECK(data_size <= UINT32_MAX, "ow_update_texture data size exceeds wasm32 size limits");
+    void* data = app_slice_to_native(instance, data_ptr, data_size);
+    DEBUG_CHECK(data != NULL, "ow_update_texture data address is out of bounds");
 
     SDL_GPUTexture* sdl_texture;
     wd_object_type object_type;
@@ -522,7 +540,7 @@ void ow_update_texture(wasm_exec_env_t exec_env, uint32_t data_ptr, uint32_t pix
     DEBUG_CHECK(object_type == WD_OBJECT_TEXTURE, "passed non-texture object as ow_update_texture destination texture");
 
     SDL_GPUTransferBufferCreateInfo transfer_info = {0};
-    transfer_info.size = dest->w * dest->h * 4;
+    transfer_info.size = (uint32_t)data_size;
     transfer_info.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
 
     SDL_GPUTransferBuffer* transfer_buffer = SDL_CreateGPUTransferBuffer(scene->gpu, &transfer_info);
@@ -569,7 +587,7 @@ uint32_t ow_create_sampler(wasm_exec_env_t exec_env, uint32_t info_ptr) {
     wd_state* state = wasm_runtime_get_custom_data(instance);
     wd_scene_state* scene = &state->scene;
 
-    ow_sampler_info* info = (ow_sampler_info*)wasm_runtime_addr_app_to_native(instance, info_ptr);
+    ow_sampler_info* info = (ow_sampler_info*)app_slice_to_native(instance, info_ptr, sizeof(ow_sampler_info));
     DEBUG_CHECK_RET0(info != NULL, "ow_create_sampler info address is out of bounds");
 
     SDL_GPUSamplerCreateInfo sampler_info = {0};
@@ -698,7 +716,7 @@ uint32_t ow_create_pipeline(wasm_exec_env_t exec_env, uint32_t info_ptr) {
     wd_state* state = wasm_runtime_get_custom_data(instance);
     wd_scene_state* scene = &state->scene;
 
-    ow_pipeline_info* info = (ow_pipeline_info*)wasm_runtime_addr_app_to_native(instance, info_ptr);
+    ow_pipeline_info* info = (ow_pipeline_info*)app_slice_to_native(instance, info_ptr, sizeof(ow_pipeline_info));
     DEBUG_CHECK_RET0(info != NULL, "ow_create_pipeline info address is out of bounds");
     SDL_GPUGraphicsPipelineCreateInfo pipeline_info = {0};
 
@@ -715,11 +733,11 @@ uint32_t ow_create_pipeline(wasm_exec_env_t exec_env, uint32_t info_ptr) {
     DEBUG_CHECK_RET0(object_type == WD_OBJECT_FRAGMENT_SHADER,
         "fragment_shader object in ow_pipeline_info is not a fragment shader");
 
+    ow_vertex_binding_info* vertex_bindings = (ow_vertex_binding_info*)app_slice_to_native(
+        instance, info->vertex_bindings_ptr, (uint64_t)info->vertex_bindings_count * sizeof(ow_vertex_binding_info));
+    DEBUG_CHECK_RET0(vertex_bindings != NULL, "ow_pipeline_info vertex_bindings address is out of bounds");
     SDL_GPUVertexBufferDescription* sdl_vertex_buffer_descriptions =
         wd_calloc(info->vertex_bindings_count, sizeof(SDL_GPUVertexBufferDescription));
-    ow_vertex_binding_info* vertex_bindings =
-        (ow_vertex_binding_info*)wasm_runtime_addr_app_to_native(instance, info->vertex_bindings_ptr);
-    DEBUG_CHECK_RET0(vertex_bindings != NULL, "ow_pipeline_info vertex_bindings address is out of bounds");
 
     for(uint32_t i = 0; i < info->vertex_bindings_count; i++) {
         sdl_vertex_buffer_descriptions[i].slot = vertex_bindings[i].slot;
@@ -734,11 +752,11 @@ uint32_t ow_create_pipeline(wasm_exec_env_t exec_env, uint32_t info_ptr) {
     pipeline_info.vertex_input_state.num_vertex_buffers = info->vertex_bindings_count;
     pipeline_info.vertex_input_state.vertex_buffer_descriptions = sdl_vertex_buffer_descriptions;
 
+    ow_vertex_attribute* vertex_attributes = (ow_vertex_attribute*)app_slice_to_native(
+        instance, info->vertex_attributes_ptr, (uint64_t)info->vertex_attributes_count * sizeof(ow_vertex_attribute));
+    DEBUG_CHECK_RET0(vertex_attributes != NULL, "ow_pipeline_info vertex_attributes address is out of bounds");
     SDL_GPUVertexAttribute* sdl_vertex_attributes =
         wd_calloc(info->vertex_attributes_count, sizeof(SDL_GPUVertexAttribute));
-    ow_vertex_attribute* vertex_attributes =
-        (ow_vertex_attribute*)wasm_runtime_addr_app_to_native(instance, info->vertex_attributes_ptr);
-    DEBUG_CHECK_RET0(vertex_attributes != NULL, "ow_pipeline_info vertex_attributes address is out of bounds");
 
     for(uint32_t i = 0; i < info->vertex_attributes_count; i++) {
         sdl_vertex_attributes[i].buffer_slot = vertex_attributes[i].slot;
@@ -863,7 +881,7 @@ void ow_push_vertex_uniform_data(wasm_exec_env_t exec_env, uint32_t slot, uint32
     wd_state* state = wasm_runtime_get_custom_data(instance);
     wd_scene_state* scene = &state->scene;
 
-    void* data_real = wasm_runtime_addr_app_to_native(instance, data);
+    void* data_real = app_slice_to_native(instance, data, size);
     DEBUG_CHECK(data_real != NULL, "ow_push_vertex_uniform_data data address is out of bounds");
     DEBUG_CHECK(slot < 4, "only 4 uniform data slots are available for one shader type");
     SDL_PushGPUVertexUniformData(scene->command_buffer, slot, data_real, size);
@@ -874,7 +892,7 @@ void ow_push_fragment_uniform_data(wasm_exec_env_t exec_env, uint32_t slot, uint
     wd_state* state = wasm_runtime_get_custom_data(instance);
     wd_scene_state* scene = &state->scene;
 
-    void* data_real = wasm_runtime_addr_app_to_native(instance, data);
+    void* data_real = app_slice_to_native(instance, data, size);
     DEBUG_CHECK(data_real != NULL, "ow_push_fragment_uniform_data data address is out of bounds");
     DEBUG_CHECK(slot < 4, "only 4 uniform data slots are available for one shader type");
     SDL_PushGPUFragmentUniformData(scene->command_buffer, slot, data_real, size);
@@ -894,12 +912,17 @@ void ow_render_geometry(wasm_exec_env_t exec_env, uint32_t pipeline, uint32_t bi
     DEBUG_CHECK(sdl_pipeline != NULL, "passed non-existent object as ow_render_geometry pipeline");
     DEBUG_CHECK(object_type == WD_OBJECT_PIPELINE, "passed non-pipeline object as ow_render_geometry pipeline");
 
-    ow_bindings_info* bindings = (ow_bindings_info*)wasm_runtime_addr_app_to_native(instance, bindings_ptr);
+    ow_bindings_info* bindings =
+        (ow_bindings_info*)app_slice_to_native(instance, bindings_ptr, sizeof(ow_bindings_info));
     DEBUG_CHECK(bindings != NULL, "ow_render_geometry bindings address is out of bounds");
+    uint32_t* vertex_buffers = app_slice_to_native(
+        instance, bindings->vertex_buffers_ptr, (uint64_t)bindings->vertex_buffers_count * sizeof(uint32_t));
+    DEBUG_CHECK(vertex_buffers != NULL, "ow_bindings_info vertex_buffers address is out of bounds");
+    ow_texture_binding* texture_bindings = (ow_texture_binding*)app_slice_to_native(instance,
+        bindings->texture_bindings_ptr, (uint64_t)bindings->texture_bindings_count * sizeof(ow_texture_binding));
+    DEBUG_CHECK(texture_bindings != NULL, "ow_bindings_info texture_bindings address is out of bounds");
     SDL_GPUBufferBinding* sdl_vertex_buffer_bindings =
         wd_calloc(bindings->vertex_buffers_count, sizeof(SDL_GPUBufferBinding));
-    uint32_t* vertex_buffers = wasm_runtime_addr_app_to_native(instance, bindings->vertex_buffers_ptr);
-    DEBUG_CHECK(vertex_buffers != NULL, "ow_bindings_info vertex_buffers address is out of bounds");
 
     for(uint32_t i = 0; i < bindings->vertex_buffers_count; i++) {
         SDL_GPUBuffer* sdl_buffer = NULL;
@@ -911,9 +934,6 @@ void ow_render_geometry(wasm_exec_env_t exec_env, uint32_t pipeline, uint32_t bi
         sdl_vertex_buffer_bindings[i].offset = 0;
     }
 
-    ow_texture_binding* texture_bindings =
-        (ow_texture_binding*)wasm_runtime_addr_app_to_native(instance, bindings->texture_bindings_ptr);
-    DEBUG_CHECK(texture_bindings != NULL, "ow_bindings_info texture_bindings address is out of bounds");
     SDL_GPUTextureSamplerBinding* sdl_texture_bindings =
         wd_calloc(bindings->texture_bindings_count, sizeof(SDL_GPUTextureSamplerBinding));
 
@@ -955,12 +975,17 @@ void ow_render_geometry_indexed(wasm_exec_env_t exec_env, uint32_t pipeline, uin
     DEBUG_CHECK(sdl_pipeline != NULL, "passed non-existent object as ow_render_geometry pipeline");
     DEBUG_CHECK(object_type == WD_OBJECT_PIPELINE, "passed non-pipeline object as ow_render_geometry pipeline");
 
-    ow_bindings_info* bindings = (ow_bindings_info*)wasm_runtime_addr_app_to_native(instance, bindings_ptr);
+    ow_bindings_info* bindings =
+        (ow_bindings_info*)app_slice_to_native(instance, bindings_ptr, sizeof(ow_bindings_info));
     DEBUG_CHECK(bindings != NULL, "ow_render_geometry_indexed bindings address is out of bounds");
+    uint32_t* vertex_buffers = app_slice_to_native(
+        instance, bindings->vertex_buffers_ptr, (uint64_t)bindings->vertex_buffers_count * sizeof(uint32_t));
+    DEBUG_CHECK(vertex_buffers != NULL, "ow_bindings_info vertex_buffers address is out of bounds");
+    ow_texture_binding* texture_bindings = (ow_texture_binding*)app_slice_to_native(instance,
+        bindings->texture_bindings_ptr, (uint64_t)bindings->texture_bindings_count * sizeof(ow_texture_binding));
+    DEBUG_CHECK(texture_bindings != NULL, "ow_bindings_info texture_bindings address is out of bounds");
     SDL_GPUBufferBinding* sdl_vertex_buffer_bindings =
         wd_calloc(bindings->vertex_buffers_count, sizeof(SDL_GPUBufferBinding));
-    uint32_t* vertex_buffers = wasm_runtime_addr_app_to_native(instance, bindings->vertex_buffers_ptr);
-    DEBUG_CHECK(vertex_buffers != NULL, "ow_bindings_info vertex_buffers address is out of bounds");
 
     for(uint32_t i = 0; i < bindings->vertex_buffers_count; i++) {
         SDL_GPUBuffer* sdl_buffer = NULL;
@@ -972,9 +997,6 @@ void ow_render_geometry_indexed(wasm_exec_env_t exec_env, uint32_t pipeline, uin
         sdl_vertex_buffer_bindings[i].offset = 0;
     }
 
-    ow_texture_binding* texture_bindings =
-        (ow_texture_binding*)wasm_runtime_addr_app_to_native(instance, bindings->texture_bindings_ptr);
-    DEBUG_CHECK(texture_bindings != NULL, "ow_bindings_info texture_bindings address is out of bounds");
     SDL_GPUTextureSamplerBinding* sdl_texture_bindings =
         wd_calloc(bindings->texture_bindings_count, sizeof(SDL_GPUTextureSamplerBinding));
 
@@ -1017,8 +1039,8 @@ void ow_render_geometry_indexed(wasm_exec_env_t exec_env, uint32_t pipeline, uin
 void ow_get_screen_size(wasm_exec_env_t exec_env, uint32_t width, uint32_t height) {
     wasm_module_inst_t instance = wasm_runtime_get_module_inst(exec_env);
     wd_state* state = wasm_runtime_get_custom_data(instance);
-    uint32_t* width_real = wasm_runtime_addr_app_to_native(instance, width);
-    uint32_t* height_real = wasm_runtime_addr_app_to_native(instance, height);
+    uint32_t* width_real = app_slice_to_native(instance, width, sizeof(uint32_t));
+    uint32_t* height_real = app_slice_to_native(instance, height, sizeof(uint32_t));
     DEBUG_CHECK(width_real != NULL, "ow_get_screen_size width address is out of bounds");
     DEBUG_CHECK(height_real != NULL, "ow_get_screen_size height address is out of bounds");
 
@@ -1033,8 +1055,8 @@ void ow_get_screen_size(wasm_exec_env_t exec_env, uint32_t width, uint32_t heigh
 uint32_t ow_get_mouse_state(wasm_exec_env_t exec_env, uint32_t x_ptr, uint32_t y_ptr) {
     wasm_module_inst_t instance = wasm_runtime_get_module_inst(exec_env);
     wd_state* state = wasm_runtime_get_custom_data(instance);
-    float* x_ptr_real = wasm_runtime_addr_app_to_native(instance, x_ptr);
-    float* y_ptr_real = wasm_runtime_addr_app_to_native(instance, y_ptr);
+    float* x_ptr_real = app_slice_to_native(instance, x_ptr, sizeof(float));
+    float* y_ptr_real = app_slice_to_native(instance, y_ptr, sizeof(float));
     DEBUG_CHECK_RET0(x_ptr_real != NULL, "ow_get_mouse_state x address is out of bounds");
     DEBUG_CHECK_RET0(y_ptr_real != NULL, "ow_get_mouse_state y address is out of bounds");
 
@@ -1066,7 +1088,7 @@ uint32_t ow_get_mouse_state(wasm_exec_env_t exec_env, uint32_t x_ptr, uint32_t y
 void ow_get_audio_spectrum(wasm_exec_env_t exec_env, uint32_t data_ptr, uint32_t length) {
     wasm_module_inst_t instance = wasm_runtime_get_module_inst(exec_env);
     wd_state* state = wasm_runtime_get_custom_data(instance);
-    float* data_ptr_real = wasm_runtime_addr_app_to_native(instance, data_ptr);
+    float* data_ptr_real = app_slice_to_native(instance, data_ptr, (uint64_t)length * sizeof(float));
     DEBUG_CHECK(data_ptr_real != NULL, "ow_get_audio_spectrum data address is out of bounds");
     wd_audio_visualizer_get_spectrum(&state->audio_visualizer, data_ptr_real, (size_t)length);
 }
@@ -1074,7 +1096,7 @@ void ow_get_audio_spectrum(wasm_exec_env_t exec_env, uint32_t data_ptr, uint32_t
 uint32_t ow_get_option(wasm_exec_env_t exec_env, uint32_t name_ptr) {
     wasm_module_inst_t instance = wasm_runtime_get_module_inst(exec_env);
     wd_state* state = wasm_runtime_get_custom_data(instance);
-    const char* name_ptr_real = wasm_runtime_addr_app_to_native(instance, name_ptr);
+    const char* name_ptr_real = app_str_to_native(instance, name_ptr);
     DEBUG_CHECK_RET0(name_ptr_real != NULL, "ow_get_option name address is out of bounds");
 
     for(int i = 0; i < state->args.num_wallpaper_options; i++) {
