@@ -109,6 +109,22 @@ static bool set_mpv_speed(mpv_handle* mpv, float speed) {
     return true;
 }
 
+static void get_scale_mode_options(wd_scale_mode scale_mode, const char** keepaspect, const char** panscan) {
+    if(scale_mode == WD_SCALE_MODE_ASPECT_CROP) {
+        *keepaspect = "yes";
+        *panscan = "1.0";
+        return;
+    }
+    if(scale_mode == WD_SCALE_MODE_ASPECT_FIT) {
+        *keepaspect = "yes";
+        *panscan = "0.0";
+        return;
+    }
+
+    *keepaspect = "no";
+    *panscan = "0.0";
+}
+
 static bool drain_events(wd_video_state* video) {
     while(true) {
         mpv_event* event = mpv_wait_event(video->mpv, 0);
@@ -185,10 +201,15 @@ static bool init_mpv(struct wd_state* state, wd_video_state* video) {
         return false;
     }
 
+    const char* keepaspect = NULL;
+    const char* panscan = NULL;
+    get_scale_mode_options(state->args.scale_mode, &keepaspect, &panscan);
+
     if(!set_mpv_option_string(video->mpv, "vo", "libmpv") || !set_mpv_option_string(video->mpv, "audio", "no") ||
         !set_mpv_option_string(video->mpv, "loop-file", "inf") ||
         !set_mpv_option_string(video->mpv, "keep-open", "yes") ||
-        !set_mpv_option_string(video->mpv, "panscan", "1.0") ||
+        !set_mpv_option_string(video->mpv, "keepaspect", keepaspect) ||
+        !set_mpv_option_string(video->mpv, "panscan", panscan) ||
         !set_mpv_option_string(video->mpv, "hwdec", "auto-safe")) {
         return false;
     }

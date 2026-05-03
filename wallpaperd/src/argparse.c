@@ -22,6 +22,23 @@ static bool split_option(const char* option, sds* key, sds* value) {
     return true;
 }
 
+static bool parse_scale_mode(const char* value, wd_scale_mode* scale_mode) {
+    if(strcmp(value, "aspect-crop") == 0) {
+        *scale_mode = WD_SCALE_MODE_ASPECT_CROP;
+        return true;
+    }
+    if(strcmp(value, "aspect-fit") == 0) {
+        *scale_mode = WD_SCALE_MODE_ASPECT_FIT;
+        return true;
+    }
+    if(strcmp(value, "stretch") == 0) {
+        *scale_mode = WD_SCALE_MODE_STRETCH;
+        return true;
+    }
+    wd_set_error("invalid --scale-mode value, must be one of: aspect-crop, aspect-fit, stretch");
+    return false;
+}
+
 bool wd_parse_args(wd_args_state* args, int argc, char* argv[]) {
     int num_options = 0;
     int num_wallpaper_options = 0;
@@ -127,6 +144,14 @@ bool wd_parse_args(wd_args_state* args, int argc, char* argv[]) {
                 return false;
             }
             args->no_audio = true;
+        } else if(strcmp(key, "scale-mode") == 0) {
+            if(value[0] == '\0') {
+                wd_set_error("no value for --scale-mode is set");
+                return false;
+            }
+            if(!parse_scale_mode(value, &args->scale_mode)) {
+                return false;
+            }
         } else if(strcmp(key, "list-displays") == 0) {
             if(value[0] != '\0') {
                 wd_set_error("--list-displays is a flag, cannot set value");

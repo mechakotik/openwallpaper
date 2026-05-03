@@ -4,6 +4,12 @@
 #include <sds.h>
 #include <stdbool.h>
 
+typedef enum wd_scale_mode {
+    WD_SCALE_MODE_ASPECT_CROP,
+    WD_SCALE_MODE_ASPECT_FIT,
+    WD_SCALE_MODE_STRETCH,
+} wd_scale_mode;
+
 typedef struct wd_args_state {
     sds wallpaper_path;
 
@@ -25,6 +31,7 @@ typedef struct wd_args_state {
     const char* audio_backend;
     const char* audio_source;
     bool no_audio;
+    wd_scale_mode scale_mode;
 
     bool list_displays;
     bool help;

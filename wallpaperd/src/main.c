@@ -29,6 +29,9 @@ static void print_help() {
         "  --audio-backend=<backend>\n"
         "  --audio-source=<source>\n"
         "  --no-audio\n"
+        "\n"
+        "video-specific options:\n"
+        "  --scale-mode=<aspect-crop|aspect-fit|stretch>\n"
         "\n");
 }
 
@@ -84,6 +87,11 @@ int main(int argc, char* argv[]) {
         goto handle_error;
     }
 #endif
+
+    if(!scene_wallpaper && state.args.num_wallpaper_options > 0) {
+        wd_set_error("cannot specify scene options for video wallpaper (see --help)");
+        goto handle_error;
+    }
 
     if(!wd_init_output(&state.output, &state.args, opengl)) {
         goto handle_error;
