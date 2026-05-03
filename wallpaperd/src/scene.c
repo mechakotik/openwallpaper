@@ -294,6 +294,14 @@ bool init_wasm(wd_state* state) {
         scene->module_buffer = NULL;
         return false;
     }
+    if(module_size > UINT32_MAX) {
+        wd_set_error("scene.wasm is too large");
+        return false;
+    }
+    if(wasm_runtime_get_file_package_type(scene->module_buffer, (uint32_t)module_size) != Wasm_Module_Bytecode) {
+        wd_set_error("scene.wasm must be wasm bytecode");
+        return false;
+    }
 
     char error_buf[128];
     uint8_t* wasm_buffer = scene->module_buffer;
