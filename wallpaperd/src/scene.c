@@ -3,6 +3,7 @@
 #include <inttypes.h>
 #include <lib_export.h>
 #include <sds.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <wasm_export.h>
