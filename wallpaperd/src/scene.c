@@ -14,6 +14,10 @@
 #include "wasm_api.h"
 #include "zip.h"
 
+#ifndef WD_WAMRC_BINARY
+#define WD_WAMRC_BINARY "wamrc"
+#endif
+
 static NativeSymbol native_symbols[] = {
     {"ow_get_file_size", ow_get_file_size, "(i)i"},
     {"ow_read_file", ow_read_file, "(ii)"},
@@ -63,7 +67,7 @@ static uint64_t fnv1a64(const uint8_t* data, size_t size) {
 
 static bool run_wamrc(const char* wasm_path, const char* aot_path) {
     bool result = false;
-    const char* args[] = {"wamrc", "-o", aot_path, wasm_path, NULL};
+    const char* args[] = {WD_WAMRC_BINARY, "-o", aot_path, wasm_path, NULL};
 
     SDL_PropertiesID props = SDL_CreateProperties();
     if(props == 0) {
