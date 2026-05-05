@@ -20,19 +20,29 @@
     </p>
 </div>
 
-OpenWallpaper is a powerful open source platform for interactive live wallpapers. Heavily inspired by Wallpaper Engine, it steps away from restrictive declarative scene formats in favour of WebAssembly. In OpenWallpaper, a scene is a WASM module - meaning if you can code it, you can make it a wallpaper!
+OpenWallpaper is an open platform for live wallpapers, inspired by Wallpaper Engine and aiming to become a viable open source alternative to it. It supports KDE Plasma Wayland, Hyprland and wlroots-based compositors through wlr-layer-shell protocol.
 
-It runs on Linux Wayland with `wlr-layer-shell` protocol, supporting KDE Plasma Wayland, Hyprland and wlroots-based compositors. More platforms will be added soon.
+- **OpenWallpaper scenes** - like Wallpaper Engine scenes, but better! Instead of using limited declarative format, a scene is a WebAssembly module - meaning if you can code it, you can make it a wallpaper, while having lightweight runtime and native performance with AOT compilation
 
-With wpe-compile, you can convert Wallpaper Engine pkg scenes to OpenWallpaper owf scenes. So OpenWallpaper is both an independent platform and a Wallpaper Engine implementation for Linux.
+- **Wallpaper Engine scenes** - can be converted to OpenWallpaper scenes with wpe-compile, so OpenWallpaper is also an open source Wallpaper Engine implementation
 
-## Build from source
+- **Video and GIF wallpapers** - supported through libmpv
+
+- **Pause hidden** - try to detect when wallpaper is covered by another window and can't be visible, and pause rendering, saving CPU and GPU resources (DE-dependent, see [platform support](https://openwallpaper.org/wallpaperd.html))
+
+- **Multiple monitors** - render to specific display when it's connected, and sleep without wasting resources when it's not
+
+- **Audio visualization** - scene API exposes audio spectrum data through cava
+
+## Install
 
 You will need following dependencies:
 
 - C/C++ compiler
 - CMake
 - Git
+- mpv (*optional, for video and GIF wallpapers*)
+- LLVM 17-20 *(optional, for scene AOT compilation)*
 - wayland-scanner *(optional, for wlr-layer-shell output support)*
 - libpipewire, libspa *(optional, for PipeWire audio visualizer)*
 - libpulse-simple *(optional, for PulseAudio audio visualizer)*
