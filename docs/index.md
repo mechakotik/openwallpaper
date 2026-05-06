@@ -10,16 +10,26 @@
 </div>
 \endhtmlonly
 
-OpenWallpaper is a powerful open source platform for interactive live wallpapers. It combines the performance of Wallpaper Engine scenes with the flexibility of web wallpapers. In OpenWallpaper, a scene is a WASM module -- meaning if you can code it, you can make it a wallpaper, platform-independent, with lightweight runtime and near-native performance.
+OpenWallpaper is an open platform for live wallpapers, inspired by Wallpaper Engine and aiming to become a viable open source alternative to it. It supports KDE Plasma Wayland, Hyprland and wlroots-based compositors through wlr-layer-shell protocol.
 
-The API is close to being stabilized, but breaking changes are still possible. [wallpaperd](\ref wallpaperd) (renderer) works on most Linux Wayland desktops, including KDE Plasma, Hyprland and wlroots based compositors. Many Wallpaper Engine pkg scenes may be converted into OpenWallpaper owf scenes with [wpe-compile](\ref wpe-compile), but conversion is not 100% accurate. There is a user-friendly GUI in early development.
+- **OpenWallpaper scenes** -- like Wallpaper Engine scenes, but better! Instead of using limited declarative format, a scene is a WebAssembly module - meaning if you can code it, you can make it a wallpaper, while having lightweight runtime and native performance with AOT compilation
+
+- **Wallpaper Engine scenes** -- can be converted to OpenWallpaper scenes with wpe-compile, so OpenWallpaper is also an open source Wallpaper Engine implementation
+
+- **Video and GIF wallpapers** -- supported through libmpv
+
+- **Pause hidden** -- try to detect when wallpaper is covered by another window and can't be visible, and pause rendering, saving CPU and GPU resources (DE-dependent, see [platform support](https://openwallpaper.org/wallpaperd.html))
+
+- **Multiple monitors** -- render to specific display when it's connected, and sleep without wasting resources when it's not
+
+- **Audio visualization** -- scene API exposes audio spectrum data through cava
 
 Ecosystem:
 
-- [wallpaperd](\ref wallpaperd) -- OpenWallpaper scene renderer made with C and SDL3 GPU
+- [wallpaperd](\ref wallpaperd) -- Live wallpaper app, supporting OpenWallpaper scenes as well as video wallpapers
 - [wpe-compile](\ref wpe-compile) -- A tool to make OpenWallpaper scenes from Wallpaper Engine pkg scenes using code generation
 
-Format documentation:
+Scene development:
 
 - [Examples](\ref examples)
 - [Developer guide](\ref overview)

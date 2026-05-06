@@ -4,7 +4,7 @@
     <img src="triangle-transparent.webp" width="400">
 </div>
 
-Drawing a triangle is the "Hello, world" of graphics programming. It may seem overcomplicated if you didn't work with graphics APIs before. If so, think about why it's designed like this and could not be simplified, and you will understand it easily (this also works with any other programming concept).
+Drawing a triangle is the "Hello, world" of graphics programming. It may seem overcomplicated if you didn't work with graphics APIs before. If so, think about why it's designed like this and could not be simplified, and you will understand it easily.
 
 ## Vertex buffer
 

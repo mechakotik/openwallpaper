@@ -25,19 +25,19 @@ ow_get_audio_spectrum(spectrum, 16);
 
 You may see an example of `ow_get_audio_spectrum` usage in [visualizer example](\ref examples).
 
-## Wallpaper options
+## Scene options
 
-This feature allows to change the behavior of the scene at runtime. Wallpaper options are specified in wallpaperd CLI arguments after the wallpaper path like this:
+This feature allows to change the behavior of the scene at runtime. Scene options are specified in wallpaperd CLI arguments after the scene path like this:
 
 ```
-wallpaperd wallpaper.owf --scale-mode=aspect-crop
+wallpaperd scene.owf --key=value
 ```
 
-To get a value of a wallpaper option, use `ow_get_option` function. It will return option value as null-terminated string. If option is not specified, it will return `NULL`. If the option is specified but has no value, it will return an empty string `""`.
+To get a value of a scene option, use `ow_get_option` function. It will return option value as null-terminated string. If option is not specified, it will return `NULL`. If the option is specified but has no value, it will return an empty string `""`.
 
 ```c
-const char* scale_mode = ow_get_option("scale-mode");
-if(scale_mode != NULL && strcmp(scale_mode, "aspect-crop") == 0) {
+const char* value = ow_get_option("key");
+if(value != NULL) {
     // do something
 }
 ```
