@@ -194,6 +194,7 @@ if(WD_WLROOTS)
         add_protocol(wayland)
         add_protocol(xdg-shell)
         add_protocol(wlr-layer-shell-unstable-v1)
+        add_protocol(hyprland-lock-notify-v1)
 
         set(YYJSON_INSTALL OFF CACHE BOOL "" FORCE)
         add_subdirectory(external/yyjson EXCLUDE_FROM_ALL)

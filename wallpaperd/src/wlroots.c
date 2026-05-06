@@ -3,6 +3,7 @@
 #include "wlroots.h"
 #include <SDL3/SDL.h>
 #include <fcntl.h>
+#include <hyprland-lock-notify-v1.h>
 #include <sds.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -29,6 +30,8 @@ typedef struct wlroots_output_state {
     struct wl_registry* registry;
     struct wl_compositor* compositor;
     struct zwlr_layer_shell_v1* layer_shell;
+    struct hyprland_lock_notifier_v1* lock_notifier;
+    struct hyprland_lock_notification_v1* lock_notification;
 
     output_data outputs[WD_WLROOTS_MAX_OUTPUTS];
     struct wl_output* target_output;
@@ -43,6 +46,7 @@ typedef struct wlroots_output_state {
     bool window_closed;
     bool sdl_initialized;
     bool opengl;
+    bool locked;
 
     enum {
         SESSION_WLROOTS,
@@ -110,6 +114,30 @@ static void add_output(wlroots_output_state* state, uint32_t name, uint32_t vers
     wl_output_add_listener(output->output, &output_listener, output);
 }
 
+static void lock_notification_locked(void* data, struct hyprland_lock_notification_v1* notification) {
+    wlroots_output_state* state = (wlroots_output_state*)data;
+    state->locked = true;
+}
+
+static void lock_notification_unlocked(void* data, struct hyprland_lock_notification_v1* notification) {
+    wlroots_output_state* state = (wlroots_output_state*)data;
+    state->locked = false;
+}
+
+static const struct hyprland_lock_notification_v1_listener lock_notification_listener = {
+    .locked = lock_notification_locked,
+    .unlocked = lock_notification_unlocked,
+};
+
+static void init_lock_notification(wlroots_output_state* state) {
+    if(state->lock_notifier == NULL) {
+        return;
+    }
+    state->lock_notification = hyprland_lock_notifier_v1_get_lock_notification(state->lock_notifier);
+    hyprland_lock_notification_v1_add_listener(state->lock_notification, &lock_notification_listener, state);
+    wl_display_roundtrip(state->display);
+}
+
 static void registry_global(
     void* data, struct wl_registry* registry, uint32_t name, const char* interface, uint32_t version) {
     wlroots_output_state* odata = (wlroots_output_state*)data;
@@ -118,6 +146,9 @@ static void registry_global(
     } else if(strcmp(interface, zwlr_layer_shell_v1_interface.name) == 0) {
         odata->layer_shell =
             (struct zwlr_layer_shell_v1*)wl_registry_bind(registry, name, &zwlr_layer_shell_v1_interface, 1);
+    } else if(strcmp(interface, hyprland_lock_notifier_v1_interface.name) == 0) {
+        odata->lock_notifier = (struct hyprland_lock_notifier_v1*)wl_registry_bind(
+            registry, name, &hyprland_lock_notifier_v1_interface, 1);
     } else if(strcmp(interface, wl_output_interface.name) == 0) {
         add_output(odata, name, version);
     }
@@ -220,6 +251,7 @@ static bool wlroots_connect(wlroots_output_state* odata) {
         return false;
     }
 
+    init_lock_notification(odata);
     return true;
 }
 
@@ -354,6 +386,14 @@ static void wlroots_free(wlroots_output_state* state, bool free_state) {
         wd_hyprland_free(&state->hyprland);
     }
 
+    if(state->lock_notification != NULL) {
+        hyprland_lock_notification_v1_destroy(state->lock_notification);
+        state->lock_notification = NULL;
+    }
+    if(state->lock_notifier != NULL) {
+        hyprland_lock_notifier_v1_destroy(state->lock_notifier);
+        state->lock_notifier = NULL;
+    }
     if(state->layer_shell != NULL) {
         zwlr_layer_shell_v1_destroy(state->layer_shell);
         state->layer_shell = NULL;
@@ -469,12 +509,18 @@ SDL_Window* wd_wlroots_output_get_window(void* data) {
 
 bool wd_wlroots_output_hidden(void* data) {
     wlroots_output_state* odata = (wlroots_output_state*)data;
+
+    if(odata->lock_notification != NULL) {
+        wl_display_roundtrip(odata->display);
+        if(odata->locked) {
+            return true;
+        }
+    }
+
     if(odata->session_type == SESSION_HYPRLAND) {
         return wd_hyprland_output_hidden(&odata->hyprland, target_output_name(odata));
     }
 
-    // TODO: check for fullscreen window with wlr-foreign-toplevel-management
-    // TODO: check whether the screen is turned off by idle daemon somehow
     return false;
 }
 
