@@ -10,7 +10,7 @@ typedef struct wd_scene_state {
     wasm_module_inst_t instance;
     wasm_function_inst_t update_func;
     wasm_exec_env_t exec_env;
-    uint32_t* wallpaper_options_values_wasm;
+    uint32_t* scene_options_values_wasm;
     bool calling_init;
 
     struct SDL_GPUDevice* gpu;

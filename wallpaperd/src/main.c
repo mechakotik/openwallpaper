@@ -89,7 +89,7 @@ int main(int argc, char* argv[]) {
     }
 #endif
 
-    if(!scene_wallpaper && state.args.num_wallpaper_options > 0) {
+    if(!scene_wallpaper && state.args.num_scene_options > 0) {
         wd_set_error("cannot specify scene options for video wallpaper (see --help)");
         goto handle_error;
     }

@@ -41,13 +41,13 @@ static bool parse_scale_mode(const char* value, wd_scale_mode* scale_mode) {
 
 bool wd_parse_args(wd_args_state* args, int argc, char* argv[]) {
     int num_options = 0;
-    int num_wallpaper_options = 0;
+    int num_scene_options = 0;
     bool path_set = false;
 
     for(int i = 1; i < argc; i++) {
         if(argv[i][0] == '-' && argv[i][1] == '-') {
             if(path_set) {
-                num_wallpaper_options++;
+                num_scene_options++;
             } else {
                 num_options++;
             }
@@ -63,11 +63,11 @@ bool wd_parse_args(wd_args_state* args, int argc, char* argv[]) {
     }
 
     args->num_options = num_options;
-    args->num_wallpaper_options = num_wallpaper_options;
+    args->num_scene_options = num_scene_options;
     args->options_keys = wd_calloc(args->num_options, sizeof(sds));
     args->options_values = wd_calloc(args->num_options, sizeof(sds));
-    args->wallpaper_options_keys = wd_calloc(args->num_wallpaper_options, sizeof(sds));
-    args->wallpaper_options_values = wd_calloc(args->num_wallpaper_options, sizeof(sds));
+    args->scene_options_keys = wd_calloc(args->num_scene_options, sizeof(sds));
+    args->scene_options_values = wd_calloc(args->num_scene_options, sizeof(sds));
 
     for(int i = 0; i < args->num_options; i++) {
         if(!split_option(argv[i + 1] + 2, &args->options_keys[i], &args->options_values[i])) {
@@ -182,9 +182,9 @@ bool wd_parse_args(wd_args_state* args, int argc, char* argv[]) {
         }
     }
 
-    for(int i = 0; i < args->num_wallpaper_options; i++) {
-        if(!split_option(argv[i + args->num_options + 2] + 2, &args->wallpaper_options_keys[i],
-               &args->wallpaper_options_values[i])) {
+    for(int i = 0; i < args->num_scene_options; i++) {
+        if(!split_option(
+               argv[i + args->num_options + 2] + 2, &args->scene_options_keys[i], &args->scene_options_values[i])) {
             return false;
         }
     }
@@ -197,25 +197,25 @@ void wd_free_args(wd_args_state* args) {
         sdsfree(args->options_keys[i]);
         sdsfree(args->options_values[i]);
     }
-    for(int i = 0; i < args->num_wallpaper_options; i++) {
-        sdsfree(args->wallpaper_options_keys[i]);
-        sdsfree(args->wallpaper_options_values[i]);
+    for(int i = 0; i < args->num_scene_options; i++) {
+        sdsfree(args->scene_options_keys[i]);
+        sdsfree(args->scene_options_values[i]);
     }
     free(args->options_keys);
     free(args->options_values);
     sdsfree(args->wallpaper_path);
-    free(args->wallpaper_options_keys);
-    free(args->wallpaper_options_values);
+    free(args->scene_options_keys);
+    free(args->scene_options_values);
 }
 
 const char* wd_get_wallpaper_path(wd_args_state* args) {
     return args->wallpaper_path;
 }
 
-const char* wd_get_wallpaper_option(wd_args_state* args, const char* name) {
-    for(int i = 0; i < args->num_wallpaper_options; i++) {
-        if(strcmp(args->wallpaper_options_keys[i], name) == 0) {
-            return args->wallpaper_options_values[i];
+const char* wd_get_scene_option(wd_args_state* args, const char* name) {
+    for(int i = 0; i < args->num_scene_options; i++) {
+        if(strcmp(args->scene_options_keys[i], name) == 0) {
+            return args->scene_options_values[i];
         }
     }
     return NULL;

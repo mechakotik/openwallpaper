@@ -346,18 +346,18 @@ bool init_wasm(wd_state* state) {
         return false;
     }
 
-    scene->wallpaper_options_values_wasm = wd_malloc(sizeof(uint32_t) * args->num_wallpaper_options);
-    for(int i = 0; i < args->num_wallpaper_options; i++) {
-        const char* value = args->wallpaper_options_values[i];
+    scene->scene_options_values_wasm = wd_malloc(sizeof(uint32_t) * args->num_scene_options);
+    for(int i = 0; i < args->num_scene_options; i++) {
+        const char* value = args->scene_options_values[i];
         void* value_wasm_native = NULL;
         uint32_t value_wasm =
             wasm_runtime_module_malloc(scene->instance, sizeof(char) * (strlen(value) + 1), &value_wasm_native);
         if(value_wasm == 0) {
-            wd_set_error("failed to allocate wasm memory for wallpaper option value");
+            wd_set_error("failed to allocate wasm memory for scene option value");
             return false;
         }
         memcpy(value_wasm_native, value, sizeof(char) * (strlen(value) + 1));
-        scene->wallpaper_options_values_wasm[i] = value_wasm;
+        scene->scene_options_values_wasm[i] = value_wasm;
     }
 
     scene->calling_init = true;
@@ -616,9 +616,9 @@ bool wd_run_scene(wd_state* state) {
 }
 
 void wd_free_scene(wd_scene_state* scene) {
-    if(scene->wallpaper_options_values_wasm != NULL) {
-        free(scene->wallpaper_options_values_wasm);
-        scene->wallpaper_options_values_wasm = NULL;
+    if(scene->scene_options_values_wasm != NULL) {
+        free(scene->scene_options_values_wasm);
+        scene->scene_options_values_wasm = NULL;
     }
     if(scene->exec_env != NULL) {
         wasm_runtime_destroy_exec_env(scene->exec_env);

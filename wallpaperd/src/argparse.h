@@ -17,9 +17,9 @@ typedef struct wd_args_state {
     sds* options_keys;
     sds* options_values; // value is empty if string is unset
 
-    int num_wallpaper_options;
-    sds* wallpaper_options_keys;
-    sds* wallpaper_options_values; // value is empty if string is unset
+    int num_scene_options;
+    sds* scene_options_keys;
+    sds* scene_options_values; // value is empty if string is unset
 
     bool window;
     const char* display;
@@ -43,6 +43,6 @@ bool wd_parse_args(wd_args_state* args, int argc, char* argv[]);
 void wd_free_args(wd_args_state* args);
 
 const char* wd_get_wallpaper_path(wd_args_state* args);
-const char* wd_get_wallpaper_option(wd_args_state* args, const char* name);
+const char* wd_get_scene_option(wd_args_state* args, const char* name);
 
 #endif

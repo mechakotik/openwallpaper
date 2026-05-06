@@ -1099,9 +1099,9 @@ uint32_t ow_get_option(wasm_exec_env_t exec_env, uint32_t name_ptr) {
     const char* name_ptr_real = app_str_to_native(instance, name_ptr);
     DEBUG_CHECK_RET0(name_ptr_real != NULL, "ow_get_option name address is out of bounds");
 
-    for(int i = 0; i < state->args.num_wallpaper_options; i++) {
-        if(strcmp(state->args.wallpaper_options_keys[i], name_ptr_real) == 0) {
-            return state->scene.wallpaper_options_values_wasm[i];
+    for(int i = 0; i < state->args.num_scene_options; i++) {
+        if(strcmp(state->args.scene_options_keys[i], name_ptr_real) == 0) {
+            return state->scene.scene_options_values_wasm[i];
         }
     }
 
