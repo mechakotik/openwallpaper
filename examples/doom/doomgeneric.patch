@@ -1,0 +1,65 @@
+diff --git a/doomgeneric/d_iwad.c b/doomgeneric/d_iwad.c
+index 508cc61..ccacef6 100644
+--- a/doomgeneric/d_iwad.c
++++ b/doomgeneric/d_iwad.c
+@@ -431,6 +431,11 @@ static char *CheckDirectoryHasIWAD(char *dir, char *iwadname)
+ 
+     printf("Trying IWAD file:%s\n", filename);
+ 
++    if (!strcmp(filename, "doom.wad"))
++    {
++        return filename;
++    }
++
+     if (M_FileExists(filename))
+     {
+         return filename;
+diff --git a/doomgeneric/i_video.c b/doomgeneric/i_video.c
+index 84bebde..89ec478 100644
+--- a/doomgeneric/i_video.c
++++ b/doomgeneric/i_video.c
+@@ -239,9 +239,9 @@ void I_InitGraphics (void)
+ 		s_Fb.red.length = 8;
+ 		s_Fb.transp.length = 8;
+ 
+-		s_Fb.blue.offset = 0;
++		s_Fb.red.offset = 0;
+ 		s_Fb.green.offset = 8;
+-		s_Fb.red.offset = 16;
++		s_Fb.blue.offset = 16;
+ 		s_Fb.transp.offset = 24;
+ 	}
+ 
+diff --git a/doomgeneric/w_file_stdc.c b/doomgeneric/w_file_stdc.c
+index 829e960..3127b1e 100644
+--- a/doomgeneric/w_file_stdc.c
++++ b/doomgeneric/w_file_stdc.c
+@@ -17,6 +17,7 @@
+ //
+ 
+ #include <stdio.h>
++#include <string.h>
+ 
+ #include "m_misc.h"
+ #include "w_file.h"
+@@ -30,12 +31,19 @@ typedef struct
+ 
+ extern wad_file_class_t stdc_wad_file;
+ 
++extern void *wad_c_ptr;
++extern size_t wad_c_len;
++
+ static wad_file_t *W_StdC_OpenFile(char *path)
+ {
+     stdc_wad_file_t *result;
+     FILE *fstream;
+ 
+-    fstream = fopen(path, "rb");
++    if (!strcmp(path, "doom.wad")) {
++        fstream = fmemopen(wad_c_ptr, wad_c_len, "rb");
++    } else {
++        fstream = fopen(path, "rb");
++    }
+ 
+     if (fstream == NULL)
+     {
