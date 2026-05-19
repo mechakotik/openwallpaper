@@ -49,6 +49,10 @@ bool wd_init_output(wd_output_state* output, wd_args_state* args, bool opengl) {
     if(output->get_window != NULL) {
         output->window = output->get_window(output->data);
     }
+    if(!SDL_SetBooleanProperty(gpu_properties, SDL_PROP_GPU_DEVICE_CREATE_DEBUGMODE_BOOLEAN, false)) {
+        wd_set_error("failed to disable GPU debugmode: %s", SDL_GetError());
+        return false;
+    }
 
     return true;
 }
