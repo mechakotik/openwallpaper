@@ -73,11 +73,11 @@ var (
 //go:embed module/main.c
 var mainCode []byte
 
+//go:embed module/defs.h
+var defsCode []byte
+
 //go:embed module/scene.tmpl
 var sceneTemplateCode []byte
-
-//go:embed module/scene_utils.h
-var sceneUtilsCode []byte
 
 func main() {
 	arg.MustParse(&args)
@@ -116,16 +116,15 @@ func main() {
 	if err != nil {
 		panic("parsing scene template failed: " + err.Error())
 	}
-	sceneSourceBuffer := bytes.Buffer{}
-	err = sceneTemplate.ExecuteTemplate(&sceneSourceBuffer, "scene", state.Scene)
+	sceneCodeBuffer := bytes.Buffer{}
+	err = sceneTemplate.ExecuteTemplate(&sceneCodeBuffer, "scene", state.Scene)
 	if err != nil {
 		panic("executing scene template failed: " + err.Error())
 	}
-	sceneSource := sceneSourceBuffer.Bytes()
+	sceneCode := sceneCodeBuffer.Bytes()
 
 	if args.KeepSources {
-		state.OutputMap["main.c"] = mainCode
-		state.OutputMap["scene.h"] = sceneSource
+		state.OutputMap["scene.h"] = sceneCode
 	}
 
 	tempDirBytes, err := exec.Command("mktemp", "-d").Output()
@@ -135,9 +134,9 @@ func main() {
 	tempDir := strings.TrimSuffix(string(tempDirBytes), "\n")
 
 	files := map[string][]byte{
-		"main.c":        mainCode,
-		"scene.h":       sceneSource,
-		"scene_utils.h": sceneUtilsCode,
+		"main.c":  mainCode,
+		"defs.h":  defsCode,
+		"scene.h": sceneCode,
 	}
 
 	for name, content := range files {
@@ -151,6 +150,7 @@ func main() {
 		tempDir + "/main.c",
 		"-o",
 		tempDir + "/scene.wasm",
+		"-DSCENE",
 		"-I../include",
 		"-O3",
 		"-Wl,--allow-undefined",
@@ -192,13 +192,20 @@ func main() {
 
 func preprocessScene() {
 	state.Tasks = []any{}
+	state.Scene.Types = []int{}
+
 	for _, object := range state.Scene.Objects {
 		if imageObject, ok := object.(*ImageObject); ok {
 			processImageObject(imageObject)
+			state.Scene.Types = append(state.Scene.Types, 0)
 		} else if particleObject, ok := object.(*ParticleObject); ok {
 			processParticleObject(particleObject)
+			state.Scene.Types = append(state.Scene.Types, 1)
+		} else {
+			state.Scene.Types = append(state.Scene.Types, 2)
 		}
 	}
+
 	executeTasks()
 }
 
@@ -325,11 +332,10 @@ func executeTasks() {
 	descriptions := []string{}
 	startTimes := []int{}
 	mutex := sync.Mutex{}
-	wait := []chan struct{}{}
+	wg := sync.WaitGroup{}
 
 	for threadIdx := range runtime.NumCPU() {
-		finished := make(chan struct{})
-		wait = append(wait, finished)
+		wg.Add(1)
 		descriptions = append(descriptions, "")
 		startTimes = append(startTimes, 0)
 
@@ -338,7 +344,7 @@ func executeTasks() {
 				mutex.Lock()
 				if nextTaskIdx >= len(state.Tasks) {
 					mutex.Unlock()
-					close(finished)
+					wg.Done()
 					return
 				}
 				taskIdx := nextTaskIdx
@@ -382,9 +388,7 @@ func executeTasks() {
 		}()
 	}
 
-	for _, finished := range wait {
-		<-finished
-	}
+	wg.Wait()
 	fmt.Printf("\r\033[K")
 }
 

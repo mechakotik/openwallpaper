@@ -318,12 +318,16 @@ type MaterialPass struct {
 }
 
 type Material struct {
-	Blending         string
-	Shader           string
+	Blending string
+	Shader   string
+	Textures []string
+	Combos   map[string]int
+
 	CompiledShader   int
-	Textures         []string
+	VertexUniforms   []UniformInfo
+	FragmentUniforms []UniformInfo
+	Samplers         []SamplerInfo
 	ImportedTextures []int
-	Combos           map[string]int
 }
 
 func (materialPass *MaterialPass) parseFromJSON(raw json.RawMessage) error {
@@ -1465,8 +1469,11 @@ type SceneGeneral struct {
 type SceneObject any
 
 type Scene struct {
-	Objects []SceneObject
-	General SceneGeneral
+	Objects  []SceneObject
+	Types    []int
+	General  SceneGeneral
+	Shaders  []CompileShaderTask
+	Textures []ImportTextureTask
 }
 
 func parseOrthogonalProjection(raw json.RawMessage) (OrthogonalProjection, error) {
