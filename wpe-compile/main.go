@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"runtime"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"text/template"
@@ -56,10 +57,13 @@ var (
 	}
 	args struct {
 		Input       string `arg:"positional,required"`
-		Output      string `arg:"positional,required"`
+		Output      string `arg:"positional"`
 		Project     string `arg:"--project"`
 		Particles   bool   `arg:"--particles" default:"true"`
 		KeepSources bool   `arg:"--keep-sources"`
+		ListObjects bool   `arg:"--list-objects"`
+		SkipObjects string `arg:"--skip-objects"`
+		SkipEffects string `arg:"--skip-effects"`
 	}
 	state struct {
 		PKGMap    map[string][]byte
@@ -72,6 +76,24 @@ var (
 
 //go:embed module/main.c
 var mainCode []byte
+
+//go:embed module/renderer.c
+var rendererCode []byte
+
+//go:embed module/common.c
+var commonCode []byte
+
+//go:embed module/uniform.c
+var uniformCode []byte
+
+//go:embed module/image.c
+var imageCode []byte
+
+//go:embed module/transform.c
+var transformCode []byte
+
+//go:embed module/scene_data.c
+var sceneDataCode []byte
 
 //go:embed module/defs.h
 var defsCode []byte
@@ -109,6 +131,24 @@ func main() {
 		panic("parse scene.json failed: " + err.Error())
 	}
 
+	if args.ListObjects {
+		printObjectList()
+		return
+	}
+	if args.SkipEffects != "" {
+		if err := applySkipEffects(args.SkipEffects); err != nil {
+			panic("invalid --skip-effects: " + err.Error())
+		}
+	}
+	if args.SkipObjects != "" {
+		if err := applySkipObjects(args.SkipObjects); err != nil {
+			panic("invalid --skip-objects: " + err.Error())
+		}
+	}
+	if args.Output == "" {
+		panic("output path is required")
+	}
+
 	preprocessScene()
 	fmt.Printf("\r\033[K[%d/%d] compiling scene module\n", len(state.Tasks), len(state.Tasks))
 
@@ -134,9 +174,15 @@ func main() {
 	tempDir := strings.TrimSuffix(string(tempDirBytes), "\n")
 
 	files := map[string][]byte{
-		"main.c":  mainCode,
-		"defs.h":  defsCode,
-		"scene.h": sceneCode,
+		"main.c":       mainCode,
+		"renderer.c":   rendererCode,
+		"common.c":     commonCode,
+		"uniform.c":    uniformCode,
+		"image.c":      imageCode,
+		"transform.c":  transformCode,
+		"scene_data.c": sceneDataCode,
+		"defs.h":       defsCode,
+		"scene.h":      sceneCode,
 	}
 
 	for name, content := range files {
@@ -148,6 +194,12 @@ func main() {
 
 	compileArgs := []string{
 		tempDir + "/main.c",
+		tempDir + "/renderer.c",
+		tempDir + "/common.c",
+		tempDir + "/uniform.c",
+		tempDir + "/image.c",
+		tempDir + "/transform.c",
+		tempDir + "/scene_data.c",
 		"-o",
 		tempDir + "/scene.wasm",
 		"-DSCENE",
@@ -193,20 +245,292 @@ func main() {
 func preprocessScene() {
 	state.Tasks = []any{}
 	state.Scene.Types = []int{}
+	state.Scene.Shaders = nil
+	state.Scene.Textures = nil
+	state.Scene.PassthroughShader = -1
 
+	needsPassthroughShader := false
 	for _, object := range state.Scene.Objects {
 		if imageObject, ok := object.(*ImageObject); ok {
 			processImageObject(imageObject)
+			needsPassthroughShader = true
 			state.Scene.Types = append(state.Scene.Types, 0)
-		} else if particleObject, ok := object.(*ParticleObject); ok {
-			processParticleObject(particleObject)
+		} else if _, ok := object.(*ParticleObject); ok {
 			state.Scene.Types = append(state.Scene.Types, 1)
 		} else {
 			state.Scene.Types = append(state.Scene.Types, 2)
 		}
 	}
 
-	executeTasks()
+	if needsPassthroughShader {
+		state.Scene.PassthroughShader = addCompileShaderTask(&CompileShaderTask{
+			Name:          "passthrough",
+			Preprocess:    true,
+			Defines:       map[string]int{"TRANSFORM": 1},
+			BoundTextures: []bool{true},
+		})
+	}
+
+	executeTasksFrom(0)
+	firstTaskCount := len(state.Tasks)
+	fmt.Printf("\r\033[K[%d/%d] collecting additional textures", firstTaskCount, firstTaskCount)
+	addSamplerDefaultTextureTasks()
+	if len(state.Tasks) > firstTaskCount {
+		executeTasksFrom(firstTaskCount)
+	}
+	collectSceneTaskResults()
+}
+
+type objectInfo struct {
+	index    int
+	id       int
+	parent   int
+	name     string
+	typeName string
+}
+
+func sceneObjectInfo(index int, object SceneObject) objectInfo {
+	switch object := object.(type) {
+	case *ImageObject:
+		return objectInfo{
+			index:    index,
+			id:       object.ID,
+			parent:   object.Parent,
+			name:     object.Name,
+			typeName: "image",
+		}
+	case *ParticleObject:
+		return objectInfo{
+			index:    index,
+			id:       object.ID,
+			parent:   object.Parent,
+			name:     object.Name,
+			typeName: "particle",
+		}
+	case *EmptyObject:
+		return objectInfo{
+			index:    index,
+			id:       object.ID,
+			parent:   object.Parent,
+			name:     "",
+			typeName: "empty",
+		}
+	default:
+		return objectInfo{
+			index:    index,
+			parent:   -1,
+			typeName: "unknown",
+		}
+	}
+}
+
+func printObjectList() {
+	for objectIndex, object := range state.Scene.Objects {
+		info := sceneObjectInfo(objectIndex, object)
+		parent := ""
+		if info.parent != -1 {
+			parent = fmt.Sprintf(" parent=%d", info.parent)
+		}
+		extra := ""
+		if imageObject, ok := object.(*ImageObject); ok {
+			extra = fmt.Sprintf(" effects=%d", len(imageObject.Effects))
+		}
+		fmt.Printf("object %d id=%d%s type=%s name=%q%s\n",
+			info.index, info.id, parent, info.typeName, info.name, extra)
+		if imageObject, ok := object.(*ImageObject); ok {
+			for effectIndex, effect := range imageObject.Effects {
+				fmt.Printf("  effect %d: %s (%d passes)\n", effectIndex, effectDisplayName(effect), len(effect.Passes))
+			}
+		}
+	}
+}
+
+func effectDisplayName(effect ImageEffect) string {
+	effectPath := strings.TrimSpace(effect.Path)
+	if effectPath != "" {
+		effectPath = strings.TrimSuffix(effectPath, "/effect.json")
+		effectPath = strings.TrimSuffix(effectPath, "/")
+		if slash := strings.LastIndexByte(effectPath, '/'); slash >= 0 {
+			effectPath = effectPath[slash+1:]
+		}
+		if effectPath != "" {
+			return effectPath
+		}
+	}
+	return effect.Name
+}
+
+func applySkipObjects(spec string) error {
+	selectors, err := parseIndexRanges(spec, func(r rune) bool {
+		return r == ',' || r == ';' || r == '\n'
+	})
+	if err != nil {
+		return err
+	}
+
+	skippedIndexes := map[int]bool{}
+	skippedIDs := map[int]bool{}
+	for objectIndex, object := range state.Scene.Objects {
+		info := sceneObjectInfo(objectIndex, object)
+		if indexRangesMatch(selectors, objectIndex) {
+			skippedIndexes[objectIndex] = true
+			skippedIDs[info.id] = true
+		}
+	}
+
+	for changed := true; changed; {
+		changed = false
+		for objectIndex, object := range state.Scene.Objects {
+			if skippedIndexes[objectIndex] {
+				continue
+			}
+			info := sceneObjectInfo(objectIndex, object)
+			if info.parent >= 0 && skippedIDs[info.parent] {
+				skippedIndexes[objectIndex] = true
+				skippedIDs[info.id] = true
+				changed = true
+			}
+		}
+	}
+
+	filteredObjects := state.Scene.Objects[:0]
+	for objectIndex, object := range state.Scene.Objects {
+		if skippedIndexes[objectIndex] {
+			continue
+		}
+		filteredObjects = append(filteredObjects, object)
+	}
+	state.Scene.Objects = filteredObjects
+	return nil
+}
+
+type indexRange struct {
+	start int
+	end   int
+}
+
+type effectSkipRule struct {
+	objectRanges []indexRange
+	effectRanges []indexRange
+}
+
+func applySkipEffects(spec string) error {
+	rules, err := parseEffectSkipRules(spec)
+	if err != nil {
+		return err
+	}
+	for objectIndex, object := range state.Scene.Objects {
+		imageObject, ok := object.(*ImageObject)
+		if !ok {
+			continue
+		}
+		filteredEffects := imageObject.Effects[:0]
+		for effectIndex, effect := range imageObject.Effects {
+			skip := false
+			for _, rule := range rules {
+				if effectRuleMatches(rule, objectIndex, effectIndex) {
+					skip = true
+					break
+				}
+			}
+			if skip {
+				continue
+			}
+			filteredEffects = append(filteredEffects, effect)
+		}
+		imageObject.Effects = filteredEffects
+	}
+	return nil
+}
+
+func parseEffectSkipRules(spec string) ([]effectSkipRule, error) {
+	clauses := strings.FieldsFunc(spec, func(r rune) bool {
+		return r == ';' || r == '\n'
+	})
+	rules := []effectSkipRule{}
+	for _, clause := range clauses {
+		clause = strings.TrimSpace(clause)
+		if clause == "" {
+			continue
+		}
+		objectSpec, effectSpec, found := strings.Cut(clause, ":")
+		if !found {
+			return nil, fmt.Errorf("rule %q must use object-index:effect-indices", clause)
+		}
+		objectRanges, err := parseIndexRanges(objectSpec, func(r rune) bool {
+			return r == ','
+		})
+		if err != nil {
+			return nil, fmt.Errorf("rule %q has invalid object indices: %w", clause, err)
+		}
+		effectRanges, err := parseIndexRanges(effectSpec, func(r rune) bool {
+			return r == ','
+		})
+		if err != nil {
+			return nil, fmt.Errorf("rule %q has invalid effect indices: %w", clause, err)
+		}
+		rules = append(rules, effectSkipRule{
+			objectRanges: objectRanges,
+			effectRanges: effectRanges,
+		})
+	}
+	if len(rules) == 0 {
+		return nil, fmt.Errorf("empty effect skip spec")
+	}
+	return rules, nil
+}
+
+func effectRuleMatches(rule effectSkipRule, objectIndex int, effectIndex int) bool {
+	return indexRangesMatch(rule.objectRanges, objectIndex) && indexRangesMatch(rule.effectRanges, effectIndex)
+}
+
+func parseIndexRanges(spec string, split func(rune) bool) ([]indexRange, error) {
+	parts := strings.FieldsFunc(spec, split)
+	ranges := []indexRange{}
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		indexRange, err := parseIndexRange(part)
+		if err != nil {
+			return nil, err
+		}
+		ranges = append(ranges, indexRange)
+	}
+	if len(ranges) == 0 {
+		return nil, fmt.Errorf("empty index list")
+	}
+	return ranges, nil
+}
+
+func parseIndexRange(spec string) (indexRange, error) {
+	spec = strings.TrimSpace(spec)
+	if before, after, found := strings.Cut(spec, "-"); found {
+		start, startErr := strconv.Atoi(strings.TrimSpace(before))
+		end, endErr := strconv.Atoi(strings.TrimSpace(after))
+		if startErr != nil || endErr != nil || start < 0 || end < 0 {
+			return indexRange{}, fmt.Errorf("invalid index range %q", spec)
+		}
+		if start > end {
+			start, end = end, start
+		}
+		return indexRange{start: start, end: end}, nil
+	}
+	index, err := strconv.Atoi(spec)
+	if err != nil || index < 0 {
+		return indexRange{}, fmt.Errorf("invalid index %q", spec)
+	}
+	return indexRange{start: index, end: index}, nil
+}
+
+func indexRangesMatch(ranges []indexRange, index int) bool {
+	for _, indexRange := range ranges {
+		if index >= indexRange.start && index <= indexRange.end {
+			return true
+		}
+	}
+	return false
 }
 
 func processImageObject(object *ImageObject) {
@@ -221,19 +545,167 @@ func processImageObject(object *ImageObject) {
 		BoundTextures: []bool{},
 	})
 
+	if object.ColorBlendMode != 0 {
+		effectPassthrough, err := makeEffectPassthrough(object.ColorBlendMode)
+		if err != nil {
+			fmt.Printf("warning: skipping image object %s colorBlendMode because creating effectpassthrough failed: %s\n", object.Name, err)
+		} else {
+			object.Effects = append(object.Effects, effectPassthrough)
+		}
+	}
 	for effectIdx := range object.Effects {
-		for materialIdx := range object.Effects[effectIdx].Materials {
-			material := &object.Effects[effectIdx].Materials[materialIdx]
-			material.ImportedTextures = make([]int, len(material.Textures))
-			for idx := range material.Textures {
-				material.ImportedTextures[idx] = addImportTextureTask(&ImportTextureTask{Name: material.Textures[idx]})
+		effect := &object.Effects[effectIdx]
+		for materialIdx := range effect.Materials {
+			material := &effect.Materials[materialIdx]
+			var pass *MaterialPass
+			if materialIdx < len(effect.Passes) {
+				pass = &effect.Passes[materialIdx]
 			}
-			addCompileShaderTask(&CompileShaderTask{
-				Name:          material.Shader,
-				Preprocess:    true,
-				Defines:       material.Combos,
-				BoundTextures: getEffectBoundTextures(material, &object.Effects[effectIdx].Passes[materialIdx]),
-			})
+			processEffectMaterial(material, pass)
+		}
+	}
+}
+
+func makeEffectPassthrough(colorBlendMode int) (ImageEffect, error) {
+	materialBytes, err := getAssetBytes("materials/util/effectpassthrough.json")
+	if err != nil {
+		return ImageEffect{}, fmt.Errorf("loading effectpassthrough material failed: %w", err)
+	}
+
+	var material Material
+	if err := material.parseFromJSON(materialBytes); err != nil {
+		return ImageEffect{}, fmt.Errorf("parsing effectpassthrough material failed: %w", err)
+	}
+
+	if material.Combos == nil {
+		material.Combos = map[string]int{}
+	}
+	material.Combos["BONECOUNT"] = 1
+	material.Combos["BLENDMODE"] = colorBlendMode
+	material.Blending = "disabled"
+
+	pass := MaterialPass{
+		Combos: map[string]int{
+			"BONECOUNT": 1,
+			"BLENDMODE": colorBlendMode,
+		},
+	}
+
+	return ImageEffect{
+		Name:      "effectpassthrough",
+		Passes:    []MaterialPass{pass},
+		Materials: []Material{material},
+	}, nil
+}
+
+func processEffectMaterial(material *Material, pass *MaterialPass) {
+	material.ImportedTextures = make([]int, len(material.Textures))
+	for idx := range material.Textures {
+		material.ImportedTextures[idx] = addImportTextureTask(&ImportTextureTask{Name: material.Textures[idx]})
+	}
+
+	defines := material.Combos
+	boundTextures := make([]bool, len(material.Textures))
+	for slot, textureName := range material.Textures {
+		if textureName != "" {
+			boundTextures[slot] = true
+		}
+	}
+	if pass != nil {
+		pass.ImportedTextures = make([]int, len(pass.Textures))
+		for idx := range pass.Textures {
+			pass.ImportedTextures[idx] = addImportTextureTask(&ImportTextureTask{Name: pass.Textures[idx]})
+		}
+		defines = pass.Combos
+		boundTextures = getEffectBoundTextures(material, pass)
+	}
+
+	material.CompiledShader = addCompileShaderTask(&CompileShaderTask{
+		Name:          material.Shader,
+		Preprocess:    true,
+		Defines:       defines,
+		BoundTextures: boundTextures,
+	})
+}
+
+func collectSceneTaskResults() {
+	reportedCompileTasks := skipFailedEffects()
+	state.Scene.Textures = nil
+	state.Scene.Shaders = nil
+	for _, anyTask := range state.Tasks {
+		switch task := anyTask.(type) {
+		case *ImportTextureTask:
+			if task.Error != nil {
+				fmt.Printf("warning: skipping texture %s: %s\n", task.Name, task.Error)
+				continue
+			}
+			state.Scene.Textures = append(state.Scene.Textures, *task)
+		case *CompileShaderTask:
+			if task.Error != nil {
+				if reportedCompileTasks[task.ID] {
+					continue
+				}
+				fmt.Printf("warning: skipping shader %s: %s\n", task.Name, task.Error)
+				continue
+			}
+			state.Scene.Shaders = append(state.Scene.Shaders, *task)
+		}
+	}
+}
+
+func skipFailedEffects() map[int]bool {
+	reportedCompileTasks := map[int]bool{}
+	for _, object := range state.Scene.Objects {
+		imageObject, ok := object.(*ImageObject)
+		if !ok {
+			continue
+		}
+
+		filteredEffects := imageObject.Effects[:0]
+		for _, effect := range imageObject.Effects {
+			failedTasks := failedEffectShaderTasks(&effect)
+			if len(failedTasks) > 0 {
+				for _, failedTask := range failedTasks {
+					if !reportedCompileTasks[failedTask.ID] {
+						fmt.Printf("warning: skipping effect %s shader %s: %s\n",
+							effectDisplayName(effect), failedTask.Name, failedTask.Error)
+						reportedCompileTasks[failedTask.ID] = true
+					}
+				}
+				continue
+			}
+			filteredEffects = append(filteredEffects, effect)
+		}
+		imageObject.Effects = filteredEffects
+	}
+	return reportedCompileTasks
+}
+
+func failedEffectShaderTasks(effect *ImageEffect) []*CompileShaderTask {
+	failedTasks := []*CompileShaderTask{}
+	seenTaskIDs := map[int]bool{}
+	for materialIdx := range effect.Materials {
+		material := &effect.Materials[materialIdx]
+		if material.CompiledShader < 0 || material.CompiledShader >= len(state.Tasks) {
+			continue
+		}
+		task, ok := state.Tasks[material.CompiledShader].(*CompileShaderTask)
+		if ok && task.Error != nil && !seenTaskIDs[task.ID] {
+			failedTasks = append(failedTasks, task)
+			seenTaskIDs[task.ID] = true
+		}
+	}
+	return failedTasks
+}
+
+func addSamplerDefaultTextureTasks() {
+	for _, anyTask := range state.Tasks {
+		task, ok := anyTask.(*CompileShaderTask)
+		if !ok || task.Error != nil {
+			continue
+		}
+		for _, sampler := range task.Samplers {
+			addImportTextureTask(&ImportTextureTask{Name: sampler.Default})
 		}
 	}
 }
@@ -274,17 +746,11 @@ func ensureBoolSlots(slots []bool, slotCount int) []bool {
 	return resized
 }
 
-func processParticleObject(object *ParticleObject) {
-	for _, texture := range object.ParticleData.Material.Textures {
-		addImportTextureTask(&ImportTextureTask{Name: texture})
-	}
-}
-
 func addImportTextureTask(task *ImportTextureTask) int {
 	if task.Name == "" {
 		return -1
 	}
-	if strings.HasPrefix(task.Name, "_rt_") {
+	if task.Name == "previous" || strings.HasPrefix(task.Name, "_rt_") || strings.HasPrefix(task.Name, "_alias_") {
 		return -1
 	}
 
@@ -326,9 +792,13 @@ func addCompileShaderTask(task *CompileShaderTask) int {
 	return task.ID
 }
 
-func executeTasks() {
-	nextTaskIdx := 0
+func executeTasksFrom(startTaskIdx int) {
+	nextTaskIdx := startTaskIdx
 	finishedCount := 0
+	totalCount := len(state.Tasks)
+	if startTaskIdx >= totalCount {
+		return
+	}
 	descriptions := []string{}
 	startTimes := []int{}
 	mutex := sync.Mutex{}
@@ -342,7 +812,7 @@ func executeTasks() {
 		go func() {
 			for {
 				mutex.Lock()
-				if nextTaskIdx >= len(state.Tasks) {
+				if nextTaskIdx >= totalCount {
 					mutex.Unlock()
 					wg.Done()
 					return
@@ -369,9 +839,6 @@ func executeTasks() {
 					compileShader(task)
 
 					mutex.Lock()
-					if task.Error != nil {
-						fmt.Printf("\r\033[Kcompile shader %s failed: %s\n", task.Name, task.Error)
-					}
 				}
 
 				descriptions[threadIdx] = ""
@@ -382,7 +849,7 @@ func executeTasks() {
 						lastTask = idx
 					}
 				}
-				fmt.Printf("\r\033[K[%d/%d] %s", finishedCount, len(state.Tasks), descriptions[lastTask])
+				fmt.Printf("\r\033[K[%d/%d] %s", startTaskIdx+finishedCount, len(state.Tasks), descriptions[lastTask])
 				mutex.Unlock()
 			}
 		}()

@@ -315,6 +315,8 @@ type MaterialPass struct {
 	Constants map[string][]float32
 	Target    string
 	Bind      []MaterialPassBindItem
+
+	ImportedTextures []int
 }
 
 type Material struct {
@@ -501,6 +503,7 @@ type EffectFBO struct {
 
 type ImageEffect struct {
 	Name      string
+	Path      string
 	Passes    []MaterialPass
 	FBOs      []EffectFBO
 	Materials []Material
@@ -635,6 +638,7 @@ func (effect *ImageEffect) parseFromSceneJSON(raw json.RawMessage, pkgMap *map[s
 		return fmt.Errorf("effect entry missing file path")
 	}
 	effectPath := string(payload.File)
+	effect.Path = effectPath
 
 	effectBytes, err := loadBytesFromPackage(pkgMap, effectPath)
 	if err != nil {
@@ -1102,8 +1106,6 @@ func (init *ParticleInitializer) parseFromJSON(raw json.RawMessage) error {
 			}
 			init.MaxAngularVelocity = max
 		}
-	default:
-		fmt.Printf("warning: unknown particle initializer %s\n", name)
 	}
 
 	return nil
@@ -1260,8 +1262,6 @@ func (operator *ParticleOperator) parseFromJSON(raw json.RawMessage) error {
 			op.FadeOutTime = float32(fadeOutTime)
 		}
 		operator.AlphaFade = op
-	default:
-		fmt.Printf("warning: unknown particle operator %s\n", name)
 	}
 
 	return nil
@@ -1469,11 +1469,12 @@ type SceneGeneral struct {
 type SceneObject any
 
 type Scene struct {
-	Objects  []SceneObject
-	Types    []int
-	General  SceneGeneral
-	Shaders  []CompileShaderTask
-	Textures []ImportTextureTask
+	Objects           []SceneObject
+	Types             []int
+	General           SceneGeneral
+	Shaders           []CompileShaderTask
+	Textures          []ImportTextureTask
+	PassthroughShader int
 }
 
 func parseOrthogonalProjection(raw json.RawMessage) (OrthogonalProjection, error) {

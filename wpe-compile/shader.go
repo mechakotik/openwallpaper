@@ -28,8 +28,9 @@ type AttributeInfo struct {
 }
 
 type SamplerInfo struct {
-	Name    string
-	Default string
+	Name        string
+	Default     string
+	TextureSlot int
 }
 
 type PreprocessedShader struct {
@@ -113,7 +114,7 @@ func preprocessShader(vertexSource, fragmentSource, includePath string, boundTex
 		varying = append(varying, info)
 	}
 
-	fragmentSource, samplerNames := preprocessSamplers(fragmentSource)
+	fragmentSource, samplers := preprocessSamplers(fragmentSource)
 	vertexSource = insertIntermediateAttributes(vertexSource, varying, "out")
 	fragmentSource = insertIntermediateAttributes(fragmentSource, varying, "in")
 
@@ -148,18 +149,15 @@ func preprocessShader(vertexSource, fragmentSource, includePath string, boundTex
 		}
 	}
 
-	samplers := []SamplerInfo{}
-	for _, samplerName := range samplerNames {
+	for idx := range samplers {
+		samplerName := samplers[idx].Name
 		defaultTexture := ""
 		if texture, exists := fragmentDefaults[samplerName]; exists {
 			defaultTexture = texture
 		} else if texture, exists := vertexDefaults[samplerName]; exists {
 			defaultTexture = texture
 		}
-		samplers = append(samplers, SamplerInfo{
-			Name:    samplerName,
-			Default: defaultTexture,
-		})
+		samplers[idx].Default = defaultTexture
 	}
 
 	return PreprocessedShader{
@@ -469,19 +467,49 @@ func insertIntermediateAttributes(source string, attributes []AttributeInfo, sid
 	return normalizeNewlines(source)
 }
 
-func preprocessSamplers(source string) (string, []string) {
+func preprocessSamplers(source string) (string, []SamplerInfo) {
 	reSampler := regexp.MustCompile(`uniform\s*sampler2D\s*([a-z|A-Z|0-9|_]*)\s*;`)
-	samplers := []string{}
-	header := ""
+	declaredSamplers := []SamplerInfo{}
 	source = reSampler.ReplaceAllStringFunc(source, func(match string) string {
 		submatches := reSampler.FindStringSubmatch(match)
-		samplers = append(samplers, string(submatches[1]))
-		header += fmt.Sprintf("layout(set = 2, binding = %d) uniform sampler2D %s;\n", len(samplers)-1, string(submatches[1]))
+		name := string(submatches[1])
+		textureSlot := len(declaredSamplers)
+		if parsedSlot, ok := parseTextureSlotFromSamplerName(name); ok {
+			textureSlot = parsedSlot
+		}
+		declaredSamplers = append(declaredSamplers, SamplerInfo{
+			Name:        name,
+			TextureSlot: textureSlot,
+		})
 		return ""
 	})
 
+	searchSource := stripGLSLComments(source)
+	samplers := []SamplerInfo{}
+	header := ""
+	for _, sampler := range declaredSamplers {
+		if !sourceUsesIdentifier(searchSource, sampler.Name) {
+			continue
+		}
+		samplers = append(samplers, sampler)
+		header += fmt.Sprintf("layout(set = 2, binding = %d) uniform sampler2D %s;\n", len(samplers)-1, sampler.Name)
+	}
+
 	source = strings.Replace(source, "#version 450", "#version 450\n"+header, 1)
 	return source, samplers
+}
+
+func stripGLSLComments(source string) string {
+	reBlockComment := regexp.MustCompile(`(?s)/\*.*?\*/`)
+	source = reBlockComment.ReplaceAllString(source, "")
+
+	reLineComment := regexp.MustCompile(`//.*`)
+	return reLineComment.ReplaceAllString(source, "")
+}
+
+func sourceUsesIdentifier(source string, identifier string) bool {
+	reIdentifier := regexp.MustCompile(`(^|[^a-zA-Z0-9_])` + regexp.QuoteMeta(identifier) + `([^a-zA-Z0-9_]|$)`)
+	return reIdentifier.FindStringIndex(source) != nil
 }
 
 func preprocessUniforms(source string, set int) (string, []UniformInfo) {
