@@ -1,5 +1,6 @@
 #include <math.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include "defs.h"
 
@@ -21,6 +22,10 @@ static void update_camera_state(float delta) {
 
     state.mouse_x = mouse_x;
     state.mouse_y = mouse_y;
+
+    if(state.audio_spectrum != NULL && state.audio_spectrum_size > 0) {
+        ow_get_audio_spectrum(state.audio_spectrum, (size_t)state.audio_spectrum_size);
+    }
 
     if(!state.parallax_initialized) {
         state.parallax_mouse_x = 0.5f;
@@ -70,6 +75,11 @@ __attribute__((export_name("init"))) void init() {
         } else {
             printf("warning: unknown scale mode, defaulting to aspect-crop\n");
         }
+    }
+
+    if(scene.audio_spectrum_size > 0) {
+        state.audio_spectrum_size = scene.audio_spectrum_size;
+        state.audio_spectrum = calloc((size_t)state.audio_spectrum_size, sizeof(float));
     }
 
     ow_begin_copy_pass();

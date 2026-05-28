@@ -1480,6 +1480,7 @@ type Scene struct {
 	Shaders           []CompileShaderTask
 	Textures          []ImportTextureTask
 	PassthroughShader int
+	AudioSpectrumSize int
 }
 
 func parseOrthogonalProjection(raw json.RawMessage) (OrthogonalProjection, error) {

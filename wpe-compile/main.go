@@ -261,6 +261,7 @@ func preprocessScene() {
 	state.Scene.Shaders = nil
 	state.Scene.Textures = nil
 	state.Scene.PassthroughShader = -1
+	state.Scene.AudioSpectrumSize = 0
 
 	needsPassthroughShader := false
 	for _, object := range state.Scene.Objects {
@@ -822,8 +823,50 @@ func collectSceneTaskResults() {
 				continue
 			}
 			state.Scene.Shaders = append(state.Scene.Shaders, *task)
+			state.Scene.AudioSpectrumSize = maxAudioSpectrumSize(
+				state.Scene.AudioSpectrumSize, task.VertexUniforms, task.FragmentUniforms)
 		}
 	}
+}
+
+func maxAudioSpectrumSize(current int, uniformLists ...[]UniformInfo) int {
+	for _, uniforms := range uniformLists {
+		for _, uniform := range uniforms {
+			size := audioSpectrumUniformSize(uniform)
+			if size > current {
+				current = size
+			}
+		}
+	}
+	return current
+}
+
+func audioSpectrumUniformSize(uniform UniformInfo) int {
+	if uniform.Type != "float" || uniform.ArraySize <= 0 {
+		return 0
+	}
+
+	name, ok := strings.CutPrefix(uniform.Name, "g_AudioSpectrum")
+	if !ok {
+		return 0
+	}
+	name, left := strings.CutSuffix(name, "Left")
+	if !left {
+		var right bool
+		name, right = strings.CutSuffix(name, "Right")
+		if !right {
+			return 0
+		}
+	}
+
+	size, err := strconv.Atoi(name)
+	if err != nil || size <= 0 {
+		return 0
+	}
+	if uniform.ArraySize > size {
+		return uniform.ArraySize
+	}
+	return size
 }
 
 func skipFailedParticleObjects(reportedCompileTasks map[int]bool) {

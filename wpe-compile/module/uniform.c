@@ -153,7 +153,70 @@ static void write_texture_resolution(uint8_t* data, int offset, wpe_texture_targ
     }
 }
 
-static bool write_builtin_uniform(uint8_t* data, int offset, wpe_uniform_info* uniform, wpe_object* object,
+static int audio_spectrum_size_from_uniform_name(const char* name) {
+    const char* prefix = "g_AudioSpectrum";
+    size_t prefix_len = strlen(prefix);
+    if(name == NULL || strncmp(name, prefix, prefix_len) != 0) {
+        return 0;
+    }
+
+    const char* size_start = name + prefix_len;
+    if(*size_start < '0' || *size_start > '9') {
+        return 0;
+    }
+
+    char* suffix = NULL;
+    long size = strtol(size_start, &suffix, 10);
+    if(size <= 0 || (strcmp(suffix, "Left") != 0 && strcmp(suffix, "Right") != 0)) {
+        return 0;
+    }
+    return (int)size;
+}
+
+static float audio_spectrum_value(const wpe_renderer_state* state, int target_size, int index) {
+    if(state == NULL || state->audio_spectrum == NULL || state->audio_spectrum_size <= 0 || target_size <= 0 ||
+        index < 0) {
+        return 0.0f;
+    }
+
+    int source_size = state->audio_spectrum_size;
+    int start = index * source_size / target_size;
+    int end = (index + 1) * source_size / target_size;
+    if(start >= source_size) {
+        start = source_size - 1;
+    }
+    if(end <= start) {
+        end = start + 1;
+    }
+    if(end > source_size) {
+        end = source_size;
+    }
+
+    float sum = 0.0f;
+    for(int i = start; i < end; i++) {
+        sum += state->audio_spectrum[i];
+    }
+    return sum / (float)(end - start);
+}
+
+static bool write_audio_spectrum_uniform(
+    uint8_t* data, int offset, int stride, wpe_uniform_info* uniform, const wpe_renderer_state* state) {
+    int spectrum_size = audio_spectrum_size_from_uniform_name(uniform->name);
+    if(spectrum_size == 0) {
+        return false;
+    }
+    if(strcmp(uniform->type, "float") != 0 || uniform->array_size <= 0) {
+        return false;
+    }
+
+    for(int i = 0; i < uniform->array_size; i++) {
+        float value = i < spectrum_size ? audio_spectrum_value(state, spectrum_size, i) : 0.0f;
+        write_float_value(data, offset + stride * i, value);
+    }
+    return true;
+}
+
+static bool write_builtin_uniform(uint8_t* data, int offset, int stride, wpe_uniform_info* uniform, wpe_object* object,
     wpe_texture_target* texture_slots, int num_texture_slots, wpe_transform_matrices matrices,
     const wpe_renderer_state* state) {
     const char* name = uniform->name;
@@ -196,6 +259,14 @@ static bool write_builtin_uniform(uint8_t* data, int offset, wpe_uniform_info* u
     }
     if(strcmp(name, "g_Color4") == 0) {
         write_vec4(data, offset, image->color.r, image->color.g, image->color.b, image->alpha);
+        return true;
+    }
+    if(strcmp(name, "g_Color") == 0) {
+        if(strcmp(uniform->type, "vec4") == 0) {
+            write_vec4(data, offset, image->color.r, image->color.g, image->color.b, image->alpha);
+        } else {
+            write_vec3(data, offset, image->color.r, image->color.g, image->color.b);
+        }
         return true;
     }
     if(strcmp(name, "g_Brightness") == 0) {
@@ -265,8 +336,10 @@ static bool write_builtin_uniform(uint8_t* data, int offset, wpe_uniform_info* u
         return true;
     }
     if(strcmp(name, "g_ParallaxPosition") == 0) {
-        (void)state;
         write_vec2(data, offset, matrices.parallax_position_x, matrices.parallax_position_y);
+        return true;
+    }
+    if(write_audio_spectrum_uniform(data, offset, stride, uniform, state)) {
         return true;
     }
 
@@ -410,7 +483,7 @@ uint8_t* wpe_build_uniform_data(wpe_uniform_info* uniforms, int num_uniforms, wp
         }
         offset = align_to(offset, alignment);
         if(!write_builtin_uniform(
-               data, offset, &uniforms[i], object, texture_slots, num_texture_slots, matrices, state)) {
+               data, offset, stride, &uniforms[i], object, texture_slots, num_texture_slots, matrices, state)) {
             wpe_uniform_info uniform = uniforms[i];
             wpe_uniform_constant* constant = find_constant(constants, num_constants, uniform.constant_name);
             if(constant != NULL && constant->values != NULL && constant->len > 0) {

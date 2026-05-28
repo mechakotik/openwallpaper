@@ -364,6 +364,7 @@ typedef struct {
     size_t num_objects;
     wpe_scene_general general;
     int passthrough_shader_id;
+    int audio_spectrum_size;
 } wpe_scene;
 
 typedef struct {
@@ -423,6 +424,8 @@ typedef struct {
     float parallax_mouse_y;
     bool parallax_initialized;
     wpe_scale_mode scale_mode;
+    float* audio_spectrum;
+    int audio_spectrum_size;
 } wpe_renderer_state;
 
 #if defined(SCENE) && defined(WPE_COMPILE_SCENE_DEFINE)
