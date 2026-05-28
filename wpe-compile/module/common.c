@@ -189,7 +189,7 @@ wpe_texture* wpe_material_texture_at(wpe_material* material, int slot) {
     return material->textures[slot].texture;
 }
 
-static ow_blend_mode blend_mode_from_name(const char* name) {
+ow_blend_mode wpe_blend_mode_from_name(const char* name) {
     if(name == NULL || name[0] == '\0' || strcmp(name, "normal") == 0) {
         return blend_normal;
     }
@@ -205,7 +205,7 @@ static ow_blend_mode blend_mode_from_name(const char* name) {
     return blend_translucent;
 }
 
-static ow_sampler_id sampler_for_texture(wpe_texture* texture) {
+ow_sampler_id wpe_sampler_for_texture(wpe_texture* texture) {
     if(texture == NULL) {
         return linear_clamp_sampler;
     }
@@ -316,7 +316,7 @@ void wpe_init_material(wpe_material* material) {
     }
 
     material->texture_pipeline =
-        create_quad_pipeline(material->shader, blend_mode_from_name(material->blending), OW_TEXTURE_RGBA8_UNORM);
+        create_quad_pipeline(material->shader, wpe_blend_mode_from_name(material->blending), OW_TEXTURE_RGBA8_UNORM);
     material->disabled_texture_pipeline =
         create_quad_pipeline(material->shader, blend_disabled, OW_TEXTURE_RGBA8_UNORM);
 }
@@ -342,7 +342,7 @@ void wpe_init_effect_present_pipeline(wpe_material* material, const char* blendi
     if(material == NULL || material->shader == NULL) {
         return;
     }
-    ow_blend_mode blend_mode = blend_mode_from_name(blending);
+    ow_blend_mode blend_mode = wpe_blend_mode_from_name(blending);
     material->present_texture_pipeline = create_quad_pipeline(material->shader, blend_mode, OW_TEXTURE_RGBA8_UNORM);
 }
 
@@ -526,7 +526,7 @@ static ow_texture_binding* build_texture_bindings(wpe_material* material, wpe_ma
         };
 
         if(target.source_texture != NULL) {
-            bindings[sampler_idx].sampler = sampler_for_texture(target.source_texture);
+            bindings[sampler_idx].sampler = wpe_sampler_for_texture(target.source_texture);
         }
     }
 

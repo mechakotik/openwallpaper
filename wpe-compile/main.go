@@ -5,6 +5,7 @@ import (
 	_ "embed"
 	"fmt"
 	"maps"
+	"math"
 	"os"
 	"os/exec"
 	"runtime"
@@ -38,6 +39,7 @@ type ImportTextureTask struct {
 type CompileShaderTask struct {
 	// in
 	Name          string
+	BuiltIn       string
 	Preprocess    bool
 	Defines       map[string]int
 	BoundTextures []bool
@@ -89,6 +91,9 @@ var uniformCode []byte
 //go:embed module/image.c
 var imageCode []byte
 
+//go:embed module/particle.c
+var particleCode []byte
+
 //go:embed module/transform.c
 var transformCode []byte
 
@@ -100,6 +105,12 @@ var defsCode []byte
 
 //go:embed module/scene.tmpl
 var sceneTemplateCode []byte
+
+//go:embed module/particle_vertex.glsl
+var particleVertexGLSL []byte
+
+//go:embed module/particle_fragment.glsl
+var particleFragmentGLSL []byte
 
 func main() {
 	arg.MustParse(&args)
@@ -179,6 +190,7 @@ func main() {
 		"common.c":     commonCode,
 		"uniform.c":    uniformCode,
 		"image.c":      imageCode,
+		"particle.c":   particleCode,
 		"transform.c":  transformCode,
 		"scene_data.c": sceneDataCode,
 		"defs.h":       defsCode,
@@ -198,6 +210,7 @@ func main() {
 		tempDir + "/common.c",
 		tempDir + "/uniform.c",
 		tempDir + "/image.c",
+		tempDir + "/particle.c",
 		tempDir + "/transform.c",
 		tempDir + "/scene_data.c",
 		"-o",
@@ -255,8 +268,13 @@ func preprocessScene() {
 			processImageObject(imageObject)
 			needsPassthroughShader = true
 			state.Scene.Types = append(state.Scene.Types, 0)
-		} else if _, ok := object.(*ParticleObject); ok {
-			state.Scene.Types = append(state.Scene.Types, 1)
+		} else if particleObject, ok := object.(*ParticleObject); ok {
+			if args.Particles && processParticleObject(particleObject) {
+				needsPassthroughShader = true
+				state.Scene.Types = append(state.Scene.Types, 1)
+			} else {
+				state.Scene.Types = append(state.Scene.Types, 2)
+			}
 		} else {
 			state.Scene.Types = append(state.Scene.Types, 2)
 		}
@@ -272,8 +290,13 @@ func preprocessScene() {
 	}
 
 	executeTasksFrom(0)
+	particleShaderTaskStart := len(state.Tasks)
+	addParticleShaderTasks()
+	if len(state.Tasks) > particleShaderTaskStart {
+		executeTasksFrom(particleShaderTaskStart)
+	}
+
 	firstTaskCount := len(state.Tasks)
-	fmt.Printf("\r\033[K[%d/%d] collecting additional textures", firstTaskCount, firstTaskCount)
 	addSamplerDefaultTextureTasks()
 	if len(state.Tasks) > firstTaskCount {
 		executeTasksFrom(firstTaskCount)
@@ -566,6 +589,154 @@ func processImageObject(object *ImageObject) {
 	}
 }
 
+func processParticleObject(object *ParticleObject) bool {
+	if len(object.ParticleData.Material.Textures) == 0 {
+		fmt.Printf("warning: skipping particle object %s because it has no texture\n", object.Name)
+		return false
+	}
+	if len(object.ParticleData.Renderers) != 1 || object.ParticleData.Renderers[0].Name != "sprite" {
+		rendererName := ""
+		if len(object.ParticleData.Renderers) > 0 {
+			rendererName = object.ParticleData.Renderers[0].Name
+		}
+		fmt.Printf("warning: skipping particle object %s because of unsupported renderer %s\n", object.Name, rendererName)
+		return false
+	}
+	if object.ParticleData.MaxCount == 0 {
+		fmt.Printf("warning: skipping particle object %s because maxcount is zero\n", object.Name)
+		return false
+	}
+
+	object.ParticleData.Material.ImportedTextures = []int{
+		addImportTextureTask(&ImportTextureTask{Name: object.ParticleData.Material.Textures[0]}),
+	}
+	object.ParticleData.Material.CompiledShader = -1
+	object.Perspective = object.ParticleData.Flags&ParticleFlagPerspective != 0
+
+	applyParticleInstanceOverride(object)
+
+	for i := range 3 {
+		if object.Scale[i] <= 0 {
+			object.Scale[i] = 1
+		}
+	}
+	if object.ParticleData.Flags&ParticleFlagWorldSpace != 0 {
+		scale := float32(math.Pow(float64(object.Scale[0]*object.Scale[1]*object.Scale[2]), -1.0/3.0))
+		object.ParticleData.Initializer.MinSize *= scale
+		object.ParticleData.Initializer.MaxSize *= scale
+	}
+
+	return true
+}
+
+func applyParticleInstanceOverride(object *ParticleObject) {
+	override := object.InstanceOverride
+	if !override.Enabled {
+		return
+	}
+
+	init := &object.ParticleData.Initializer
+	if override.Count != 0 {
+		object.ParticleData.MaxCount = uint32(float32(object.ParticleData.MaxCount) * override.Count)
+		for i := range object.ParticleData.Emitters {
+			object.ParticleData.Emitters[i].Rate *= override.Count
+		}
+	}
+	if override.OverrideColor {
+		for i := range 3 {
+			init.MinColor[i] = override.Color[i]
+			init.MaxColor[i] = override.Color[i]
+		}
+	}
+	if override.OverrideColorN {
+		for i := range 3 {
+			init.MinColor[i] *= override.ColorN[i]
+			init.MaxColor[i] *= override.ColorN[i]
+		}
+	}
+	if override.Lifetime != 0 {
+		init.MinLifetime *= override.Lifetime
+		init.MaxLifetime *= override.Lifetime
+	}
+	if override.Alpha != 0 {
+		init.MinAlpha *= override.Alpha
+		init.MaxAlpha *= override.Alpha
+	}
+	if override.Size != 0 {
+		init.MinSize *= override.Size
+		init.MaxSize *= override.Size
+	}
+	if override.Speed != 0 {
+		object.ParticleData.Operator.Movement.Speed *= override.Speed
+		for i := range init.MinVelocity {
+			init.MinVelocity[i] *= override.Speed
+			init.MaxVelocity[i] *= override.Speed
+		}
+	}
+	if override.Rate != 0 {
+		for i := range object.ParticleData.Emitters {
+			object.ParticleData.Emitters[i].Rate *= override.Rate
+		}
+	}
+}
+
+func addParticleShaderTasks() {
+	for objectIndex, object := range state.Scene.Objects {
+		if objectIndex >= len(state.Scene.Types) || state.Scene.Types[objectIndex] != 1 {
+			continue
+		}
+		particleObject, ok := object.(*ParticleObject)
+		if !ok || len(particleObject.ParticleData.Material.ImportedTextures) == 0 {
+			continue
+		}
+		textureTaskID := particleObject.ParticleData.Material.ImportedTextures[0]
+		if textureTaskID < 0 || textureTaskID >= len(state.Tasks) {
+			continue
+		}
+		textureTask, ok := state.Tasks[textureTaskID].(*ImportTextureTask)
+		if !ok || textureTask.Error != nil {
+			continue
+		}
+
+		particleObject.SpritesheetCols = textureTask.SpritesheetCols
+		particleObject.SpritesheetRows = textureTask.SpritesheetRows
+		particleObject.SpritesheetFrames = textureTask.SpritesheetFrames
+		particleObject.TextureRatio = particleTextureRatio(textureTask)
+
+		particleObject.ParticleData.Material.CompiledShader = addCompileShaderTask(&CompileShaderTask{
+			Name:          "particle",
+			BuiltIn:       "particle",
+			Defines:       map[string]int{"TEX0_FORMAT": particleTextureFormatDefine(textureTask.Format)},
+			BoundTextures: []bool{true},
+		})
+	}
+}
+
+func particleTextureRatio(texture *ImportTextureTask) float32 {
+	textureRatio := float32(1)
+	frameWidth := float32(texture.Width)
+	frameHeight := float32(texture.Height)
+	if texture.SpritesheetCols > 0 && texture.SpritesheetRows > 0 {
+		frameWidth = float32(texture.Width) / float32(texture.SpritesheetCols)
+		frameHeight = float32(texture.Height) / float32(texture.SpritesheetRows)
+	}
+	if frameWidth != 0 {
+		textureRatio = frameHeight / frameWidth
+	}
+	return textureRatio
+}
+
+func particleTextureFormatDefine(format texFormat) int {
+	switch format {
+	case texFormatR8:
+		return 1
+	case texFormatRG88:
+		return 2
+	default:
+		return 0
+	}
+}
+
 func makeEffectPassthrough(colorBlendMode int) (ImageEffect, error) {
 	materialBytes, err := getAssetBytes("materials/util/effectpassthrough.json")
 	if err != nil {
@@ -629,7 +800,9 @@ func processEffectMaterial(material *Material, pass *MaterialPass) {
 }
 
 func collectSceneTaskResults() {
-	reportedCompileTasks := skipFailedEffects()
+	reportedCompileTasks := map[int]bool{}
+	skipFailedParticleObjects(reportedCompileTasks)
+	skipFailedEffects(reportedCompileTasks)
 	state.Scene.Textures = nil
 	state.Scene.Shaders = nil
 	for _, anyTask := range state.Tasks {
@@ -653,8 +826,53 @@ func collectSceneTaskResults() {
 	}
 }
 
-func skipFailedEffects() map[int]bool {
-	reportedCompileTasks := map[int]bool{}
+func skipFailedParticleObjects(reportedCompileTasks map[int]bool) {
+	for objectIndex, object := range state.Scene.Objects {
+		if objectIndex >= len(state.Scene.Types) || state.Scene.Types[objectIndex] != 1 {
+			continue
+		}
+		particleObject, ok := object.(*ParticleObject)
+		if !ok {
+			continue
+		}
+
+		material := &particleObject.ParticleData.Material
+		if len(material.ImportedTextures) == 0 {
+			state.Scene.Types[objectIndex] = 2
+			continue
+		}
+		textureTaskID := material.ImportedTextures[0]
+		if textureTaskID < 0 || textureTaskID >= len(state.Tasks) {
+			state.Scene.Types[objectIndex] = 2
+			continue
+		}
+		textureTask, textureOK := state.Tasks[textureTaskID].(*ImportTextureTask)
+		if !textureOK || textureTask.Error != nil {
+			if textureOK {
+				fmt.Printf("warning: skipping particle object %s because importing texture %s failed: %s\n",
+					particleObject.Name, textureTask.Name, textureTask.Error)
+			}
+			state.Scene.Types[objectIndex] = 2
+			continue
+		}
+
+		if material.CompiledShader < 0 || material.CompiledShader >= len(state.Tasks) {
+			state.Scene.Types[objectIndex] = 2
+			continue
+		}
+		shaderTask, shaderOK := state.Tasks[material.CompiledShader].(*CompileShaderTask)
+		if !shaderOK || shaderTask.Error != nil {
+			if shaderOK {
+				fmt.Printf("warning: skipping particle object %s because compile particle shader failed: %s\n",
+					particleObject.Name, shaderTask.Error)
+				reportedCompileTasks[shaderTask.ID] = true
+			}
+			state.Scene.Types[objectIndex] = 2
+		}
+	}
+}
+
+func skipFailedEffects(reportedCompileTasks map[int]bool) {
 	for _, object := range state.Scene.Objects {
 		imageObject, ok := object.(*ImageObject)
 		if !ok {
@@ -678,7 +896,6 @@ func skipFailedEffects() map[int]bool {
 		}
 		imageObject.Effects = filteredEffects
 	}
-	return reportedCompileTasks
 }
 
 func failedEffectShaderTasks(effect *ImageEffect) []*CompileShaderTask {
@@ -780,6 +997,7 @@ func addCompileShaderTask(task *CompileShaderTask) int {
 			continue
 		}
 		if task2.Name == task.Name &&
+			task2.BuiltIn == task.BuiltIn &&
 			task2.Preprocess == task.Preprocess &&
 			maps.Equal(task2.Defines, task.Defines) &&
 			slices.Equal(task2.BoundTextures, task.BoundTextures) {
@@ -849,14 +1067,17 @@ func executeTasksFrom(startTaskIdx int) {
 						lastTask = idx
 					}
 				}
-				fmt.Printf("\r\033[K[%d/%d] %s", startTaskIdx+finishedCount, len(state.Tasks), descriptions[lastTask])
+				desc := descriptions[lastTask]
+				if desc == "" {
+					desc = "post-processing"
+				}
+				fmt.Printf("\r\033[K[%d/%d] %s", startTaskIdx+finishedCount, len(state.Tasks), desc)
 				mutex.Unlock()
 			}
 		}()
 	}
 
 	wg.Wait()
-	fmt.Printf("\r\033[K")
 }
 
 func importTexture(task *ImportTextureTask) {
@@ -895,14 +1116,27 @@ func compileShader(task *CompileShaderTask) {
 	vertexShaderPath := "shaders/" + task.Name + ".vert"
 	fragmentShaderPath := "shaders/" + task.Name + ".frag"
 
-	vertexShaderBytes, err := getAssetBytes(vertexShaderPath)
-	if err != nil {
-		task.Error = err
-		return
-	}
-	fragmentShaderBytes, err := getAssetBytes(fragmentShaderPath)
-	if err != nil {
-		task.Error = err
+	var vertexShaderBytes []byte
+	var fragmentShaderBytes []byte
+	var err error
+
+	switch task.BuiltIn {
+	case "":
+		vertexShaderBytes, err = getAssetBytes(vertexShaderPath)
+		if err != nil {
+			task.Error = err
+			return
+		}
+		fragmentShaderBytes, err = getAssetBytes(fragmentShaderPath)
+		if err != nil {
+			task.Error = err
+			return
+		}
+	case "particle":
+		vertexShaderBytes = particleVertexGLSL
+		fragmentShaderBytes = particleFragmentGLSL
+	default:
+		task.Error = fmt.Errorf("unknown built-in shader %s", task.BuiltIn)
 		return
 	}
 

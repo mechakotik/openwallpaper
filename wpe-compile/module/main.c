@@ -83,14 +83,18 @@ __attribute__((export_name("init"))) void init() {
 __attribute__((export_name("update"))) void update(float delta) {
     update_camera_state(delta);
     wpe_renderer_begin_frame(&state);
+    wpe_renderer_update_particle_objects(delta);
 
     bool clear = true;
     for(size_t i = 0; i < scene.num_objects; i++) {
         wpe_object* object = &scene.objects[i];
-        if(object->type != OBJECTTYPE_IMAGE) {
-            continue;
+        bool rendered = false;
+        if(object->type == OBJECTTYPE_IMAGE) {
+            rendered = wpe_renderer_render_image_object(object, clear, &state);
+        } else if(object->type == OBJECTTYPE_PARTICLE) {
+            rendered = wpe_renderer_render_particle_object(object, clear, &state);
         }
-        if(wpe_renderer_render_image_object(object, clear, &state)) {
+        if(rendered) {
             clear = false;
         }
     }

@@ -68,6 +68,8 @@ void wpe_renderer_begin_frame(const wpe_renderer_state* state) {
 void wpe_renderer_init_object(wpe_object* obj) {
     if(obj->type == OBJECTTYPE_IMAGE) {
         wpe_renderer_init_image_object(obj);
+    } else if(obj->type == OBJECTTYPE_PARTICLE) {
+        wpe_renderer_init_particle_object(obj);
     }
 }
 

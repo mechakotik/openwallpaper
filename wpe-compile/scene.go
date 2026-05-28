@@ -916,15 +916,20 @@ type ParticleInstanceOverride struct {
 }
 
 type ParticleObject struct {
-	ID               int
-	Parent           int
-	Name             string
-	Origin           Vector3
-	Scale            Vector3
-	Angles           Vector3
-	ParallaxDepth    Vector2
-	ParticleData     Particle
-	InstanceOverride ParticleInstanceOverride
+	ID                int
+	Parent            int
+	Name              string
+	Origin            Vector3
+	Scale             Vector3
+	Angles            Vector3
+	ParallaxDepth     Vector2
+	Perspective       bool
+	SpritesheetCols   int
+	SpritesheetRows   int
+	SpritesheetFrames int
+	TextureRatio      float32
+	ParticleData      Particle
+	InstanceOverride  ParticleInstanceOverride
 }
 
 func (override *ParticleInstanceOverride) parseFromJSON(raw json.RawMessage) error {

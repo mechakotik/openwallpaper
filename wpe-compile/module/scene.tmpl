@@ -186,12 +186,168 @@ NULL
 
 {{define "particle_object"}}
 {{template "object_common" .}}
-.perspective = false,
+.size = {
+    .x = 2,
+    .y = 2,
+},
+.perspective = {{.Perspective}},
 .parallax_depth = {
     .x = {{index .ParallaxDepth 0}},
     .y = {{index .ParallaxDepth 1}},
 },
 .type = OBJECTTYPE_PARTICLE,
+.particle = (wpe_particle_object){
+    .material = (wpe_material){
+        {{template "material" .ParticleData.Material}}
+    },
+    .emitters = {{template "particle_emitters" .ParticleData.Emitters}},
+    .num_emitters = {{len .ParticleData.Emitters}},
+    .init = {
+        .min_lifetime = {{.ParticleData.Initializer.MinLifetime}},
+        .max_lifetime = {{.ParticleData.Initializer.MaxLifetime}},
+        .min_size = {{.ParticleData.Initializer.MinSize}},
+        .max_size = {{.ParticleData.Initializer.MaxSize}},
+        .min_velocity = {
+            {{index .ParticleData.Initializer.MinVelocity 0}},
+            {{index .ParticleData.Initializer.MinVelocity 1}},
+            {{index .ParticleData.Initializer.MinVelocity 2}},
+        },
+        .max_velocity = {
+            {{index .ParticleData.Initializer.MaxVelocity 0}},
+            {{index .ParticleData.Initializer.MaxVelocity 1}},
+            {{index .ParticleData.Initializer.MaxVelocity 2}},
+        },
+        .min_rotation = {
+            {{index .ParticleData.Initializer.MinRotation 0}},
+            {{index .ParticleData.Initializer.MinRotation 1}},
+            {{index .ParticleData.Initializer.MinRotation 2}},
+        },
+        .max_rotation = {
+            {{index .ParticleData.Initializer.MaxRotation 0}},
+            {{index .ParticleData.Initializer.MaxRotation 1}},
+            {{index .ParticleData.Initializer.MaxRotation 2}},
+        },
+        .min_angular_velocity = {
+            {{index .ParticleData.Initializer.MinAngularVelocity 0}},
+            {{index .ParticleData.Initializer.MinAngularVelocity 1}},
+            {{index .ParticleData.Initializer.MinAngularVelocity 2}},
+        },
+        .max_angular_velocity = {
+            {{index .ParticleData.Initializer.MaxAngularVelocity 0}},
+            {{index .ParticleData.Initializer.MaxAngularVelocity 1}},
+            {{index .ParticleData.Initializer.MaxAngularVelocity 2}},
+        },
+        .min_color = {
+            {{index .ParticleData.Initializer.MinColor 0}},
+            {{index .ParticleData.Initializer.MinColor 1}},
+            {{index .ParticleData.Initializer.MinColor 2}},
+        },
+        .max_color = {
+            {{index .ParticleData.Initializer.MaxColor 0}},
+            {{index .ParticleData.Initializer.MaxColor 1}},
+            {{index .ParticleData.Initializer.MaxColor 2}},
+        },
+        .min_alpha = {{.ParticleData.Initializer.MinAlpha}},
+        .max_alpha = {{.ParticleData.Initializer.MaxAlpha}},
+    },
+    .operator = {
+        .movement = {
+            .enabled = {{.ParticleData.Operator.Movement.Enabled}},
+            .gravity = {
+                {{index .ParticleData.Operator.Movement.Gravity 0}},
+                {{index .ParticleData.Operator.Movement.Gravity 1}},
+                {{index .ParticleData.Operator.Movement.Gravity 2}},
+            },
+            .drag = {{.ParticleData.Operator.Movement.Drag}},
+            .speed = {{.ParticleData.Operator.Movement.Speed}},
+        },
+        .angular_movement = {
+            .enabled = {{.ParticleData.Operator.AngularMovement.Enabled}},
+            .drag = {{.ParticleData.Operator.AngularMovement.Drag}},
+            .force = {
+                {{index .ParticleData.Operator.AngularMovement.Force 0}},
+                {{index .ParticleData.Operator.AngularMovement.Force 1}},
+                {{index .ParticleData.Operator.AngularMovement.Force 2}},
+            },
+        },
+        .size_change = {
+            .enabled = {{.ParticleData.Operator.SizeChange.Enabled}},
+            .start_time = {{.ParticleData.Operator.SizeChange.StartTime}},
+            .end_time = {{.ParticleData.Operator.SizeChange.EndTime}},
+            .start_value = {{.ParticleData.Operator.SizeChange.StartValue}},
+            .end_value = {{.ParticleData.Operator.SizeChange.EndValue}},
+        },
+        .color_change = {
+            .enabled = {{.ParticleData.Operator.ColorChange.Enabled}},
+            .start_time = {{.ParticleData.Operator.ColorChange.StartTime}},
+            .end_time = {{.ParticleData.Operator.ColorChange.EndTime}},
+            .start_value = {
+                {{index .ParticleData.Operator.ColorChange.StartValue 0}},
+                {{index .ParticleData.Operator.ColorChange.StartValue 1}},
+                {{index .ParticleData.Operator.ColorChange.StartValue 2}},
+            },
+            .end_value = {
+                {{index .ParticleData.Operator.ColorChange.EndValue 0}},
+                {{index .ParticleData.Operator.ColorChange.EndValue 1}},
+                {{index .ParticleData.Operator.ColorChange.EndValue 2}},
+            },
+        },
+        .alpha_fade = {
+            .enabled = {{.ParticleData.Operator.AlphaFade.Enabled}},
+            .fade_in_time = {{.ParticleData.Operator.AlphaFade.FadeInTime}},
+            .fade_out_time = {{.ParticleData.Operator.AlphaFade.FadeOutTime}},
+        },
+    },
+    .max_count = {{.ParticleData.MaxCount}},
+    .start_time = {{.ParticleData.StartTime}},
+    .sequence_multiplier = {{.ParticleData.SequenceMultiplier}},
+    .random_frame = {{.ParticleData.RandomFrame}},
+    .spritesheet_cols = {{.SpritesheetCols}},
+    .spritesheet_rows = {{.SpritesheetRows}},
+    .spritesheet_frames = {{.SpritesheetFrames}},
+    .texture_ratio = {{.TextureRatio}},
+},
+{{end}}
+
+{{define "particle_emitters"}}
+{{- if eq (len .) 0 -}}
+NULL
+{{- else -}}
+(wpe_particle_emitter[]){
+    {{range $_, $emitter := .}}
+        (wpe_particle_emitter){
+            .directions = {
+                {{index .Directions 0}},
+                {{index .Directions 1}},
+                {{index .Directions 2}},
+            },
+            .distance_max = {
+                {{index .DistanceMax 0}},
+                {{index .DistanceMax 1}},
+                {{index .DistanceMax 2}},
+            },
+            .distance_min = {
+                {{index .DistanceMin 0}},
+                {{index .DistanceMin 1}},
+                {{index .DistanceMin 2}},
+            },
+            .origin = {
+                {{index .Origin 0}},
+                {{index .Origin 1}},
+                {{index .Origin 2}},
+            },
+            .sign = {
+                {{index .Sign 0}},
+                {{index .Sign 1}},
+                {{index .Sign 2}},
+            },
+            .speed_min = {{.SpeedMin}},
+            .speed_max = {{.SpeedMax}},
+            .rate = {{.Rate}},
+        },
+    {{end}}
+}
+{{- end -}}
 {{end}}
 
 {{define "empty_object"}}

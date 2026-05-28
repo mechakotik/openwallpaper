@@ -194,6 +194,127 @@ typedef struct {
     uint32_t ping_pong_height;
 } wpe_image_object;
 
+typedef struct {
+    bool alive;
+    float position[3];
+    float velocity[3];
+    float rotation[3];
+    float angular_velocity[3];
+    float color[3];
+    float initial_color[3];
+    float alpha;
+    float initial_alpha;
+    float size;
+    float initial_size;
+    int frame;
+    float lifetime;
+    float age;
+} wpe_particle_instance;
+
+typedef struct {
+    float position[3];
+    float rotation[3];
+    float size;
+    float color[4];
+    int frame;
+} wpe_particle_instance_data;
+
+typedef struct {
+    float directions[3];
+    float distance_max[3];
+    float distance_min[3];
+    float origin[3];
+    int sign[3];
+    float speed_min;
+    float speed_max;
+    float rate;
+    float interval;
+    float timer;
+} wpe_particle_emitter;
+
+typedef struct {
+    float min_lifetime;
+    float max_lifetime;
+    float min_size;
+    float max_size;
+    float min_velocity[3];
+    float max_velocity[3];
+    float min_rotation[3];
+    float max_rotation[3];
+    float min_angular_velocity[3];
+    float max_angular_velocity[3];
+    float min_color[3];
+    float max_color[3];
+    float min_alpha;
+    float max_alpha;
+} wpe_particle_initializer;
+
+typedef struct {
+    bool enabled;
+    float gravity[3];
+    float drag;
+    float speed;
+} wpe_particle_movement_operator;
+
+typedef struct {
+    bool enabled;
+    float drag;
+    float force[3];
+} wpe_particle_angular_movement_operator;
+
+typedef struct {
+    bool enabled;
+    float start_time;
+    float end_time;
+    float start_value;
+    float end_value;
+} wpe_particle_size_change_operator;
+
+typedef struct {
+    bool enabled;
+    float start_time;
+    float end_time;
+    float start_value[3];
+    float end_value[3];
+} wpe_particle_color_change_operator;
+
+typedef struct {
+    bool enabled;
+    float fade_in_time;
+    float fade_out_time;
+} wpe_particle_alpha_fade_operator;
+
+typedef struct {
+    wpe_particle_movement_operator movement;
+    wpe_particle_angular_movement_operator angular_movement;
+    wpe_particle_size_change_operator size_change;
+    wpe_particle_color_change_operator color_change;
+    wpe_particle_alpha_fade_operator alpha_fade;
+} wpe_particle_operator;
+
+typedef struct {
+    wpe_material material;
+    wpe_particle_emitter* emitters;
+    int num_emitters;
+    wpe_particle_initializer init;
+    wpe_particle_operator operator;
+    int max_count;
+    float start_time;
+    float sequence_multiplier;
+    bool random_frame;
+    int spritesheet_cols;
+    int spritesheet_rows;
+    int spritesheet_frames;
+    float spritesheet_duration;
+    float texture_ratio;
+    wpe_particle_instance* instances;
+    wpe_particle_instance_data* instance_data;
+    ow_vertex_buffer_id instance_buffer;
+    ow_pipeline_id pipeline;
+    int free_pos;
+    int alive_count;
+} wpe_particle_object;
+
 typedef enum {
     OBJECTTYPE_IMAGE,
     OBJECTTYPE_PARTICLE,
@@ -214,6 +335,7 @@ typedef struct wpe_object {
     wpe_object_type type;
     union {
         wpe_image_object image;
+        wpe_particle_object particle;
     };
 } wpe_object;
 
@@ -328,6 +450,8 @@ wpe_effect_fbo* wpe_find_effect_fbo(wpe_image_effect* effect, const char* name);
 
 void wpe_renderer_common_init();
 bool wpe_passthrough_available();
+ow_blend_mode wpe_blend_mode_from_name(const char* name);
+ow_sampler_id wpe_sampler_for_texture(wpe_texture* texture);
 ow_pipeline_id wpe_passthrough_pipeline_for_blending(const char* blending, bool texture_target);
 void wpe_init_texture(wpe_texture* texture);
 void wpe_init_shader(wpe_shader* shader);
@@ -358,7 +482,10 @@ void wpe_renderer_init();
 void wpe_renderer_begin_frame(const wpe_renderer_state* state);
 void wpe_renderer_init_object(wpe_object* obj);
 void wpe_renderer_init_image_object(wpe_object* obj);
+void wpe_renderer_init_particle_object(wpe_object* obj);
+void wpe_renderer_update_particle_objects(float delta);
 bool wpe_renderer_render_image_object(wpe_object* object, bool clear, const wpe_renderer_state* state);
+bool wpe_renderer_render_particle_object(wpe_object* object, bool clear, const wpe_renderer_state* state);
 void wpe_renderer_end_frame(const wpe_renderer_state* state);
 
 #endif
