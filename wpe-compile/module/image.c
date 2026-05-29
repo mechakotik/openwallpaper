@@ -1,3 +1,4 @@
+#include <string.h>
 #include "defs.h"
 
 static uint32_t object_target_width(wpe_object* object, const wpe_renderer_state* state) {
@@ -78,7 +79,44 @@ static bool is_final_present_pass(wpe_object* object, int effect_index, int pass
     return true;
 }
 
-static wpe_effect_render_result render_image_effects(wpe_object* object, const wpe_renderer_state* state) {
+static bool image_has_puppet_mesh(wpe_object* object) {
+    return object->image.puppet != NULL && object->image.puppet->num_meshes > 0 && object->image.puppet->meshes != NULL;
+}
+
+static bool puppet_mesh_is_renderable(wpe_puppet_mesh* mesh) {
+    if(mesh == NULL || mesh->material_name == NULL) {
+        return true;
+    }
+    if(strstr(mesh->material_name, "channelmap") != NULL) {
+        return false;
+    }
+    return true;
+}
+
+static bool render_puppet_material_to_target(wpe_object* object, wpe_material* material, ow_pipeline_id pipeline,
+    ow_texture_id color_target, bool clear, wpe_texture_target previous, bool default_previous,
+    wpe_transform_matrices matrices, const wpe_renderer_state* state) {
+    if(!image_has_puppet_mesh(object)) {
+        return false;
+    }
+
+    bool rendered = false;
+    for(int mesh_idx = 0; mesh_idx < object->image.puppet->num_meshes; mesh_idx++) {
+        wpe_puppet_mesh* mesh = &object->image.puppet->meshes[mesh_idx];
+        if(!puppet_mesh_is_renderable(mesh)) {
+            continue;
+        }
+        if(!wpe_render_material_mesh_to_target(object, material, NULL, pipeline, mesh, color_target, clear && !rendered,
+               previous, default_previous, matrices, state)) {
+            return false;
+        }
+        rendered = true;
+    }
+    return rendered;
+}
+
+static wpe_effect_render_result render_image_effects(
+    wpe_object* object, const wpe_renderer_state* state, bool stop_at_final_present) {
     wpe_effect_render_result result = {
         .previous = image_ping_pong_target(object, 0),
     };
@@ -92,7 +130,7 @@ static wpe_effect_render_result render_image_effects(wpe_object* object, const w
             wpe_material_pass* pass = &effect->passes[pass_idx];
             wpe_texture_target target = image_ping_pong_target(object, write_idx);
             wpe_effect_fbo* fbo = pass->target_fbo;
-            if(fbo == NULL && pass->final_present) {
+            if(stop_at_final_present && fbo == NULL && pass->final_present) {
                 result.final_effect = effect;
                 result.final_pass = pass;
                 result.final_material = material;
@@ -130,6 +168,12 @@ void wpe_renderer_init_image_object(wpe_object* obj) {
         return;
     }
     wpe_init_material(&obj->image.material);
+    if(obj->image.puppet != NULL) {
+        wpe_init_puppet_model(obj->image.puppet);
+        if(image_has_puppet_mesh(obj) && obj->image.num_effects > 0) {
+            wpe_init_material(&obj->image.puppet_material);
+        }
+    }
     for(int effect_idx = 0; effect_idx < obj->image.num_effects; effect_idx++) {
         wpe_image_effect* effect = &obj->image.effects[effect_idx];
         for(int pass_idx = 0; pass_idx < effect->num_passes; pass_idx++) {
@@ -152,21 +196,34 @@ void wpe_renderer_init_image_object(wpe_object* obj) {
 
 bool wpe_renderer_render_image_object(wpe_object* object, bool clear, const wpe_renderer_state* state) {
     wpe_material* material = &object->image.material;
-    if(material->texture_pipeline.id == 0 || material->shader == NULL || !wpe_screen_snapshot_available()) {
+    bool has_puppet_mesh = image_has_puppet_mesh(object);
+    ow_pipeline_id base_pipeline = has_puppet_mesh ? material->mesh_pipeline : material->texture_pipeline;
+    if(base_pipeline.id == 0 || material->shader == NULL || !wpe_screen_snapshot_available()) {
         return false;
     }
 
     wpe_transform_matrices matrices =
         object->image.fullscreen ? wpe_default_transform_matrices()
                                  : wpe_compute_transform_matrices(wpe_transform_parameters_for_object(object, state));
+    wpe_transform_matrices mesh_matrices =
+        object->image.fullscreen
+            ? wpe_default_transform_matrices()
+            : wpe_compute_transform_matrices(wpe_transform_parameters_for_object_mesh(object, state));
     wpe_texture_target screen_previous = wpe_current_screen_snapshot();
 
     if(object->image.num_effects == 0) {
         bool default_previous = object->image.passthrough || material->num_textures == 0;
         wpe_texture_target snapshot_target = wpe_next_screen_snapshot();
-        if(wpe_prepare_next_screen_snapshot(object, clear, state) &&
-            wpe_render_material_to_target(object, material, NULL, material->texture_pipeline, snapshot_target.texture,
-                clear, screen_previous, default_previous, matrices, state)) {
+        bool prepared = wpe_prepare_next_screen_snapshot(object, clear, state);
+        bool rendered = false;
+        if(prepared && has_puppet_mesh) {
+            rendered = render_puppet_material_to_target(object, material, material->mesh_pipeline,
+                snapshot_target.texture, clear, screen_previous, default_previous, mesh_matrices, state);
+        } else if(prepared) {
+            rendered = wpe_render_material_to_target(object, material, NULL, material->texture_pipeline,
+                snapshot_target.texture, clear, screen_previous, default_previous, matrices, state);
+        }
+        if(rendered) {
             wpe_commit_screen_snapshot();
             return true;
         }
@@ -185,11 +242,16 @@ bool wpe_renderer_render_image_object(wpe_object* object, bool clear, const wpe_
         return false;
     }
 
-    wpe_effect_render_result effect_result = render_image_effects(object, state);
+    wpe_effect_render_result effect_result = render_image_effects(object, state, !has_puppet_mesh);
     wpe_texture_target snapshot_target = wpe_next_screen_snapshot();
     bool rendered_snapshot = false;
     if(wpe_prepare_next_screen_snapshot(object, clear, state)) {
-        if(effect_result.has_final_pass) {
+        if(has_puppet_mesh) {
+            wpe_material* puppet_material = &object->image.puppet_material;
+            rendered_snapshot =
+                render_puppet_material_to_target(object, puppet_material, puppet_material->mesh_pipeline,
+                    snapshot_target.texture, clear, effect_result.previous, true, mesh_matrices, state);
+        } else if(effect_result.has_final_pass) {
             rendered_snapshot = wpe_render_material_to_target(object, effect_result.final_material,
                 effect_result.final_pass, effect_result.final_material->present_texture_pipeline,
                 snapshot_target.texture, clear, effect_result.previous, true, matrices, state);

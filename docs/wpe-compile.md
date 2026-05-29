@@ -89,7 +89,7 @@ You can check out this list to see what is not yet implemented or can be improve
     - [x] Alpha random
     - [x] Velocity random
     - [ ] Inherit control point velocity
-    - [x] Turbulent velocity random (*)
+    - [ ] Turbulent velocity random
     - [x] Rotation random
     - [ ] Position offset random
     - [x] Angular velocity random
@@ -104,7 +104,7 @@ You can check out this list to see what is not yet implemented or can be improve
     - [x] Size change
     - [x] Color change
     - [ ] Alpha change
-    - [x] Oscillate position
+    - [ ] Oscillate position
     - [ ] Oscillate alpha
     - [ ] Oscillate size
     - [ ] Control point force
@@ -124,7 +124,10 @@ You can check out this list to see what is not yet implemented or can be improve
 
 - [x] Audio response
 - [ ] Timeline animations
-- [ ] Puppet warp
+- [x] Puppet warp
+  - [x] Parsing (*)
+  - [x] Static rendering (*)
+  - [ ] Animation playback
 - [ ] Lighting and reflections
 - [ ] Sound
 - [ ] User properties

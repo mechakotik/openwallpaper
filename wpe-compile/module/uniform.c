@@ -248,6 +248,22 @@ static bool write_builtin_uniform(uint8_t* data, int offset, int stride, wpe_uni
         write_mat4(data, offset, wpe_mat4_identity());
         return true;
     }
+    if(strcmp(name, "g_Bones") == 0 && strcmp(uniform->type, "mat4x3") == 0 && uniform->array_size > 0) {
+        for(int i = 0; i < uniform->array_size; i++) {
+            wpe_mat4 bone = wpe_mat4_identity();
+            if(image->puppet != NULL && image->puppet->bone_matrices != NULL && i < image->puppet->num_bones) {
+                bone = image->puppet->bone_matrices[i];
+            }
+            write_mat4(data, offset + stride * i, bone);
+        }
+        return true;
+    }
+    if(strcmp(name, "g_BonesAlpha") == 0 && strcmp(uniform->type, "float") == 0 && uniform->array_size > 0) {
+        for(int i = 0; i < uniform->array_size; i++) {
+            write_float_value(data, offset + stride * i, 1.0f);
+        }
+        return true;
+    }
     if(strcmp(name, "g_EffectTextureProjectionMatrix") == 0 ||
         strcmp(name, "g_EffectTextureProjectionMatrixInverse") == 0) {
         write_mat4(data, offset, wpe_mat4_identity());

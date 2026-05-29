@@ -80,6 +80,12 @@ typedef struct {
 
 typedef struct {
     const char* name;
+    const char* type;
+    int array_size;
+} wpe_attribute_info;
+
+typedef struct {
+    const char* name;
     int texture_id;
     wpe_texture* texture;
     wpe_effect_fbo* fbo;
@@ -135,6 +141,8 @@ typedef struct {
     int num_vertex_uniforms;
     wpe_uniform_info* fragment_uniforms;
     int num_fragment_uniforms;
+    wpe_attribute_info* attributes;
+    int num_attributes;
     wpe_sampler_info* samplers;
     int num_samplers;
     ow_vertex_shader_id vertex_shader;
@@ -151,6 +159,9 @@ typedef struct {
     ow_pipeline_id texture_pipeline;
     ow_pipeline_id disabled_texture_pipeline;
     ow_pipeline_id present_texture_pipeline;
+    ow_pipeline_id mesh_pipeline;
+    ow_pipeline_id disabled_mesh_pipeline;
+    ow_pipeline_id present_mesh_pipeline;
 } wpe_material;
 
 typedef struct wpe_effect_fbo {
@@ -192,7 +203,101 @@ typedef struct {
     ow_texture_id ping_pong[2];
     uint32_t ping_pong_width;
     uint32_t ping_pong_height;
+    wpe_material puppet_material;
+    struct wpe_puppet_model* puppet;
 } wpe_image_object;
+
+typedef struct {
+    float position[3];
+    float texcoord[2];
+    float normal[3];
+    float tangent[4];
+    uint32_t blend_indices[4];
+    float blend_weights[4];
+} wpe_puppet_vertex;
+
+typedef struct {
+    uint32_t start;
+    uint32_t size;
+} wpe_puppet_mesh_part;
+
+typedef struct {
+    char* material_name;
+    wpe_puppet_vertex* vertices;
+    int num_vertices;
+    uint16_t* indices;
+    int num_indices;
+    wpe_puppet_mesh_part* parts;
+    int num_parts;
+    ow_vertex_buffer_id vertex_buffer;
+    ow_index_buffer_id index_buffer;
+} wpe_puppet_mesh;
+
+typedef struct {
+    uint32_t parent;
+    wpe_mat4 local_bind;
+    wpe_mat4 bind_pose;
+    wpe_mat4 inv_bind;
+} wpe_puppet_bone;
+
+typedef struct {
+    char* name;
+    uint16_t bone_index;
+    wpe_mat4 local_transform;
+} wpe_puppet_attachment;
+
+typedef struct {
+    wpe_vec3 position;
+    wpe_vec3 angle;
+    wpe_vec3 scale;
+} wpe_puppet_bone_frame;
+
+typedef struct {
+    wpe_puppet_bone_frame* frames;
+    int num_frames;
+} wpe_puppet_bone_track;
+
+typedef enum {
+    WPE_PUPPET_PLAY_LOOP,
+    WPE_PUPPET_PLAY_MIRROR,
+    WPE_PUPPET_PLAY_SINGLE,
+} wpe_puppet_play_mode;
+
+typedef struct {
+    int id;
+    wpe_puppet_play_mode mode;
+    float fps;
+    int length;
+    wpe_puppet_bone_track* bone_tracks;
+    int num_bone_tracks;
+} wpe_puppet_animation;
+
+typedef struct {
+    int id;
+    float blend;
+    float rate;
+    bool visible;
+    bool additive;
+    bool blend_in;
+    bool blend_out;
+    float blend_time;
+} wpe_puppet_animation_layer;
+
+typedef struct wpe_puppet_model {
+    const char* path;
+    wpe_puppet_mesh* meshes;
+    int num_meshes;
+    wpe_puppet_bone* bones;
+    int num_bones;
+    wpe_puppet_attachment* attachments;
+    int num_attachments;
+    wpe_puppet_animation* animations;
+    int num_animations;
+    wpe_puppet_animation_layer* layers;
+    int num_layers;
+    wpe_mat4* pose_matrices;
+    wpe_mat4* bone_matrices;
+} wpe_puppet_model;
 
 typedef struct {
     bool alive;
@@ -326,6 +431,7 @@ typedef struct wpe_object {
     int parent;
     struct wpe_object* parent_object;
     const char* name;
+    const char* attachment;
     wpe_vec3 origin;
     wpe_vec3 scale;
     wpe_vec3 angles;
@@ -401,6 +507,7 @@ typedef struct {
     float mouse_x;
     float mouse_y;
     float time;
+    int mesh_vertices;
 } wpe_transform_parameters;
 
 typedef struct {
@@ -435,6 +542,7 @@ extern wpe_scene scene;
 #endif
 
 wpe_mat4 wpe_mat4_identity();
+wpe_mat4 wpe_mat4_inverse_affine(wpe_mat4 m);
 wpe_transform_matrices wpe_default_transform_matrices();
 wpe_transform_matrices wpe_compute_transform_matrices(wpe_transform_parameters params);
 
@@ -456,6 +564,8 @@ bool wpe_passthrough_available();
 ow_blend_mode wpe_blend_mode_from_name(const char* name);
 ow_sampler_id wpe_sampler_for_texture(wpe_texture* texture);
 ow_pipeline_id wpe_passthrough_pipeline_for_blending(const char* blending, bool texture_target);
+ow_pipeline_id wpe_create_mesh_pipeline(
+    wpe_shader* shader, ow_blend_mode blend_mode, ow_texture_format color_target_format);
 void wpe_init_texture(wpe_texture* texture);
 void wpe_init_shader(wpe_shader* shader);
 void wpe_init_material(wpe_material* material);
@@ -464,6 +574,7 @@ void wpe_init_effect_present_pipeline(wpe_material* material, const char* blendi
 void wpe_ensure_texture_size(
     ow_texture_id* texture, uint32_t* current_width, uint32_t* current_height, uint32_t width, uint32_t height);
 wpe_transform_parameters wpe_transform_parameters_for_object(wpe_object* object, const wpe_renderer_state* state);
+wpe_transform_parameters wpe_transform_parameters_for_object_mesh(wpe_object* object, const wpe_renderer_state* state);
 
 uint8_t* wpe_build_uniform_data(wpe_uniform_info* uniforms, int num_uniforms, wpe_object* object,
     wpe_texture_target* texture_slots, int num_texture_slots, wpe_uniform_constant* constants, int num_constants,
@@ -472,6 +583,9 @@ uint8_t* wpe_build_uniform_data(wpe_uniform_info* uniforms, int num_uniforms, wp
 bool wpe_render_material_to_target(wpe_object* object, wpe_material* material, wpe_material_pass* pass,
     ow_pipeline_id pipeline, ow_texture_id color_target, bool clear, wpe_texture_target previous, bool default_previous,
     wpe_transform_matrices matrices, const wpe_renderer_state* state);
+bool wpe_render_material_mesh_to_target(wpe_object* object, wpe_material* material, wpe_material_pass* pass,
+    ow_pipeline_id pipeline, wpe_puppet_mesh* mesh, ow_texture_id color_target, bool clear, wpe_texture_target previous,
+    bool default_previous, wpe_transform_matrices matrices, const wpe_renderer_state* state);
 bool wpe_render_texture_with_passthrough(wpe_object* object, wpe_texture_target source, ow_pipeline_id pipeline,
     ow_texture_id color_target, bool clear, wpe_transform_matrices matrices, const wpe_renderer_state* state);
 
@@ -485,6 +599,8 @@ void wpe_renderer_init();
 void wpe_renderer_begin_frame(const wpe_renderer_state* state);
 void wpe_renderer_init_object(wpe_object* obj);
 void wpe_renderer_init_image_object(wpe_object* obj);
+void wpe_init_puppet_model(wpe_puppet_model* puppet);
+bool wpe_puppet_attachment_transform(wpe_puppet_model* puppet, const char* name, wpe_mat4* transform_out);
 void wpe_renderer_init_particle_object(wpe_object* obj);
 void wpe_renderer_update_particle_objects(float delta);
 bool wpe_renderer_render_image_object(wpe_object* object, bool clear, const wpe_renderer_state* state);

@@ -466,11 +466,12 @@ func (material *Material) parseFromJSON(raw json.RawMessage) error {
 }
 
 type EmptyObject struct {
-	ID     int
-	Parent int
-	Origin Vector3
-	Scale  Vector3
-	Angles Vector3
+	ID         int
+	Parent     int
+	Attachment string
+	Origin     Vector3
+	Scale      Vector3
+	Angles     Vector3
 }
 
 func (object *EmptyObject) parseFromSceneJSON(raw json.RawMessage) error {
@@ -674,10 +675,22 @@ type ImageConfig struct {
 	Passthrough bool
 }
 
+type PuppetAnimationLayer struct {
+	ID        int
+	Blend     float32
+	Rate      float32
+	Visible   bool
+	Additive  bool
+	BlendIn   bool
+	BlendOut  bool
+	BlendTime float32
+}
+
 type ImageObject struct {
 	ID             int
 	Parent         int
 	Name           string
+	Attachment     string
 	Origin         Vector3
 	Scale          Vector3
 	Angles         Vector3
@@ -690,38 +703,56 @@ type ImageObject struct {
 	Brightness     float32
 	Fullscreen     bool
 	Material       Material
+	PuppetMaterial Material
 	Effects        []ImageEffect
 	Config         ImageConfig
+	Puppet         *PuppetMetadata
+	PuppetData     []byte
+	PuppetLayers   []PuppetAnimationLayer
 }
 
 func (imageObject *ImageObject) parseFromSceneJSON(raw json.RawMessage, pkgMap *map[string][]byte) error {
+	type layerJSON struct {
+		Animation IntValue    `json:"animation"`
+		Blend     *FloatValue `json:"blend"`
+		Rate      *FloatValue `json:"rate"`
+		Visible   *BoolValue  `json:"visible"`
+		Additive  *BoolValue  `json:"additive"`
+		BlendIn   *BoolValue  `json:"blendin"`
+		BlendOut  *BoolValue  `json:"blendout"`
+		BlendTime *FloatValue `json:"blendtime"`
+	}
+
 	type configJSON struct {
 		Passthrough BoolValue `json:"passthrough"`
 	}
 
 	type imageSceneJSON struct {
-		ID             IntValue          `json:"id"`
-		Parent         IntValue          `json:"parent"`
-		Name           StringValue       `json:"name"`
-		Image          StringValue       `json:"image"`
-		Origin         Vector3           `json:"origin"`
-		Scale          Vector3           `json:"scale"`
-		Angles         Vector3           `json:"angles"`
-		Size           Vector2           `json:"size"`
-		Perspective    BoolValue         `json:"perspective"`
-		ParallaxDepth  Vector2           `json:"parallaxDepth"`
-		Color          Vector3           `json:"color"`
-		ColorBlendMode IntValue          `json:"colorBlendMode"`
-		Alpha          FloatValue        `json:"alpha"`
-		Brightness     FloatValue        `json:"brightness"`
-		Effects        []json.RawMessage `json:"effects"`
-		Config         configJSON        `json:"config"`
+		ID              IntValue          `json:"id"`
+		Parent          IntValue          `json:"parent"`
+		Name            StringValue       `json:"name"`
+		Attachment      StringValue       `json:"attachment"`
+		Image           StringValue       `json:"image"`
+		Origin          Vector3           `json:"origin"`
+		Scale           Vector3           `json:"scale"`
+		Angles          Vector3           `json:"angles"`
+		Size            Vector2           `json:"size"`
+		Perspective     BoolValue         `json:"perspective"`
+		ParallaxDepth   Vector2           `json:"parallaxDepth"`
+		Color           Vector3           `json:"color"`
+		ColorBlendMode  IntValue          `json:"colorBlendMode"`
+		Alpha           FloatValue        `json:"alpha"`
+		Brightness      FloatValue        `json:"brightness"`
+		Effects         []json.RawMessage `json:"effects"`
+		AnimationLayers []layerJSON       `json:"animationlayers"`
+		Config          configJSON        `json:"config"`
 	}
 
 	type imageModelJSON struct {
 		Fullscreen BoolValue   `json:"fullscreen"`
 		Width      IntValue    `json:"width"`
 		Height     IntValue    `json:"height"`
+		Puppet     StringValue `json:"puppet"`
 		Material   StringValue `json:"material"`
 	}
 
@@ -744,6 +775,7 @@ func (imageObject *ImageObject) parseFromSceneJSON(raw json.RawMessage, pkgMap *
 	imageObject.Name = string(payload.Name)
 	imageObject.ID = int(payload.ID)
 	imageObject.Parent = int(payload.Parent)
+	imageObject.Attachment = string(payload.Attachment)
 	imageObject.ColorBlendMode = int(payload.ColorBlendMode)
 	imageObject.Origin = payload.Origin
 	imageObject.Angles = payload.Angles
@@ -766,10 +798,6 @@ func (imageObject *ImageObject) parseFromSceneJSON(raw json.RawMessage, pkgMap *
 	imageObject.Fullscreen = bool(model.Fullscreen)
 
 	if !imageObject.Fullscreen {
-		if imageObject.Origin == (Vector3{}) {
-			return fmt.Errorf("image object %s missing origin", imagePath)
-		}
-
 		switch {
 		case model.Width != 0 && model.Height != 0:
 			imageObject.Size = Vector2{float32(model.Width), float32(model.Height)}
@@ -791,6 +819,22 @@ func (imageObject *ImageObject) parseFromSceneJSON(raw json.RawMessage, pkgMap *
 	if err := imageObject.Material.parseFromJSON(materialBytes); err != nil {
 		return fmt.Errorf("cannot parse material %s: %w", materialPath, err)
 	}
+	imageObject.PuppetMaterial = imageObject.Material
+
+	if model.Puppet != "" {
+		puppetPath := string(model.Puppet)
+		puppetBytes, err := loadBytesFromPackage(pkgMap, puppetPath)
+		if err != nil {
+			return fmt.Errorf("cannot load puppet model %s: %w", puppetPath, err)
+		}
+		puppet, err := parsePuppetMetadata(puppetPath, puppetBytes)
+		if err != nil {
+			return fmt.Errorf("cannot parse puppet model %s: %w", puppetPath, err)
+		}
+		puppet.Path = fmt.Sprintf("puppets/%d.mdl", imageObject.ID)
+		imageObject.Puppet = puppet
+		imageObject.PuppetData = puppetBytes
+	}
 
 	for _, effectRaw := range payload.Effects {
 		var effect ImageEffect
@@ -798,6 +842,40 @@ func (imageObject *ImageObject) parseFromSceneJSON(raw json.RawMessage, pkgMap *
 			return err
 		}
 		imageObject.Effects = append(imageObject.Effects, effect)
+	}
+
+	for _, layerRaw := range payload.AnimationLayers {
+		if layerRaw.Animation == 0 {
+			return fmt.Errorf("puppet animation layer missing animation id")
+		}
+		layer := PuppetAnimationLayer{
+			ID:      int(layerRaw.Animation),
+			Blend:   1,
+			Rate:    1,
+			Visible: true,
+		}
+		if layerRaw.Blend != nil {
+			layer.Blend = float32(*layerRaw.Blend)
+		}
+		if layerRaw.Rate != nil {
+			layer.Rate = float32(*layerRaw.Rate)
+		}
+		if layerRaw.Visible != nil {
+			layer.Visible = bool(*layerRaw.Visible)
+		}
+		if layerRaw.Additive != nil {
+			layer.Additive = bool(*layerRaw.Additive)
+		}
+		if layerRaw.BlendIn != nil {
+			layer.BlendIn = bool(*layerRaw.BlendIn)
+		}
+		if layerRaw.BlendOut != nil {
+			layer.BlendOut = bool(*layerRaw.BlendOut)
+		}
+		if layerRaw.BlendTime != nil {
+			layer.BlendTime = float32(*layerRaw.BlendTime)
+		}
+		imageObject.PuppetLayers = append(imageObject.PuppetLayers, layer)
 	}
 
 	imageObject.Config.Passthrough = bool(payload.Config.Passthrough)
@@ -919,6 +997,7 @@ type ParticleObject struct {
 	ID                int
 	Parent            int
 	Name              string
+	Attachment        string
 	Origin            Vector3
 	Scale             Vector3
 	Angles            Vector3
@@ -1404,6 +1483,7 @@ func (particleObject *ParticleObject) parseFromSceneJSON(raw json.RawMessage, pk
 		ID               IntValue        `json:"id"`
 		Parent           IntValue        `json:"parent"`
 		Name             StringValue     `json:"name"`
+		Attachment       StringValue     `json:"attachment"`
 		Origin           Vector3         `json:"origin"`
 		Scale            Vector3         `json:"scale"`
 		Angles           Vector3         `json:"angles"`
@@ -1426,6 +1506,7 @@ func (particleObject *ParticleObject) parseFromSceneJSON(raw json.RawMessage, pk
 	particleObject.Name = string(payload.Name)
 	particleObject.ID = int(payload.ID)
 	particleObject.Parent = int(payload.Parent)
+	particleObject.Attachment = string(payload.Attachment)
 	particleObject.Origin = payload.Origin
 	particleObject.Scale = payload.Scale
 	particleObject.Angles = payload.Angles

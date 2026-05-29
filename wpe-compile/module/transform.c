@@ -116,6 +116,47 @@ static wpe_mat3 mat3_inverse(wpe_mat3 m) {
     return inv;
 }
 
+wpe_mat4 wpe_mat4_inverse_affine(wpe_mat4 m) {
+    float a00 = m.at[0][0], a01 = m.at[1][0], a02 = m.at[2][0];
+    float a10 = m.at[0][1], a11 = m.at[1][1], a12 = m.at[2][1];
+    float a20 = m.at[0][2], a21 = m.at[1][2], a22 = m.at[2][2];
+
+    float c00 = a11 * a22 - a12 * a21;
+    float c01 = a12 * a20 - a10 * a22;
+    float c02 = a10 * a21 - a11 * a20;
+    float c10 = a02 * a21 - a01 * a22;
+    float c11 = a00 * a22 - a02 * a20;
+    float c12 = a01 * a20 - a00 * a21;
+    float c20 = a01 * a12 - a02 * a11;
+    float c21 = a02 * a10 - a00 * a12;
+    float c22 = a00 * a11 - a01 * a10;
+
+    float det = a00 * c00 + a01 * c01 + a02 * c02;
+    if(fabsf(det) < 1e-7f) {
+        return wpe_mat4_identity();
+    }
+
+    float inv_det = 1.0f / det;
+    wpe_mat4 inv = wpe_mat4_identity();
+    inv.at[0][0] = c00 * inv_det;
+    inv.at[1][0] = c10 * inv_det;
+    inv.at[2][0] = c20 * inv_det;
+    inv.at[0][1] = c01 * inv_det;
+    inv.at[1][1] = c11 * inv_det;
+    inv.at[2][1] = c21 * inv_det;
+    inv.at[0][2] = c02 * inv_det;
+    inv.at[1][2] = c12 * inv_det;
+    inv.at[2][2] = c22 * inv_det;
+
+    float tx = m.at[3][0];
+    float ty = m.at[3][1];
+    float tz = m.at[3][2];
+    inv.at[3][0] = -(inv.at[0][0] * tx + inv.at[1][0] * ty + inv.at[2][0] * tz);
+    inv.at[3][1] = -(inv.at[0][1] * tx + inv.at[1][1] * ty + inv.at[2][1] * tz);
+    inv.at[3][2] = -(inv.at[0][2] * tx + inv.at[1][2] * ty + inv.at[2][2] * tz);
+    return inv;
+}
+
 static wpe_vec4 vec4_from_vec3(wpe_vec3 v) {
     return (wpe_vec4){{v.at[0], v.at[1], v.at[2], 0.0f}};
 }
@@ -209,6 +250,14 @@ static wpe_mat4 object_local_transform(wpe_object* object) {
         object->scale.z, object->angles.x, object->angles.y, object->angles.z);
 }
 
+static bool object_attachment_transform(wpe_object* object, wpe_object* parent, wpe_mat4* transform_out) {
+    if(object == NULL || parent == NULL || transform_out == NULL || object->attachment == NULL ||
+        object->attachment[0] == '\0' || parent->type != OBJECTTYPE_IMAGE) {
+        return false;
+    }
+    return wpe_puppet_attachment_transform(parent->image.puppet, object->attachment, transform_out);
+}
+
 static wpe_mat4 object_global_transform(wpe_object* object, wpe_object* root, int depth) {
     if(object == NULL) {
         return wpe_mat4_identity();
@@ -221,7 +270,13 @@ static wpe_mat4 object_global_transform(wpe_object* object, wpe_object* root, in
     if(parent == NULL || parent == root) {
         return object_local_transform(object);
     }
-    return mat4_multiply(object_global_transform(parent, root, depth + 1), object_local_transform(object));
+
+    wpe_mat4 parent_model = object_global_transform(parent, root, depth + 1);
+    wpe_mat4 attachment_model;
+    if(object_attachment_transform(object, parent, &attachment_model)) {
+        parent_model = mat4_multiply(parent_model, attachment_model);
+    }
+    return mat4_multiply(parent_model, object_local_transform(object));
 }
 
 static wpe_mat4 object_parent_transform(wpe_object* object) {
@@ -229,7 +284,12 @@ static wpe_mat4 object_parent_transform(wpe_object* object) {
     if(parent == NULL || parent == object) {
         return wpe_mat4_identity();
     }
-    return object_global_transform(parent, object, 0);
+    wpe_mat4 parent_model = object_global_transform(parent, object, 0);
+    wpe_mat4 attachment_model;
+    if(object_attachment_transform(object, parent, &attachment_model)) {
+        parent_model = mat4_multiply(parent_model, attachment_model);
+    }
+    return parent_model;
 }
 
 static wpe_mat4 mat4_look_at(wpe_vec3 eye, wpe_vec3 center, wpe_vec3 up) {
@@ -399,6 +459,12 @@ wpe_transform_parameters wpe_transform_parameters_for_object(wpe_object* object,
     };
 }
 
+wpe_transform_parameters wpe_transform_parameters_for_object_mesh(wpe_object* object, const wpe_renderer_state* state) {
+    wpe_transform_parameters params = wpe_transform_parameters_for_object(object, state);
+    params.mesh_vertices = true;
+    return params;
+}
+
 wpe_transform_matrices wpe_compute_transform_matrices(wpe_transform_parameters params) {
     wpe_transform_matrices res = wpe_default_transform_matrices();
 
@@ -544,8 +610,8 @@ wpe_transform_matrices wpe_compute_transform_matrices(wpe_transform_parameters p
     float tx = params.origin_x;
     float ty = params.origin_y;
     float tz = params.origin_z;
-    float sx = 0.5f * params.size_x * params.scale_x;
-    float sy = 0.5f * params.size_y * params.scale_y;
+    float sx = params.mesh_vertices ? params.scale_x : 0.5f * params.size_x * params.scale_x;
+    float sy = params.mesh_vertices ? params.scale_y : 0.5f * params.size_y * params.scale_y;
     float sz = params.scale_z;
 
     wpe_mat4 local_model = mat4_transform(tx, ty, tz, sx, sy, sz, params.angle_x, params.angle_y, params.angle_z);

@@ -49,6 +49,7 @@ type CompileShaderTask struct {
 	Error            error
 	VertexUniforms   []UniformInfo
 	FragmentUniforms []UniformInfo
+	Attributes       []AttributeInfo
 	Samplers         []SamplerInfo
 }
 
@@ -90,6 +91,9 @@ var uniformCode []byte
 
 //go:embed module/image.c
 var imageCode []byte
+
+//go:embed module/puppet.c
+var puppetCode []byte
 
 //go:embed module/particle.c
 var particleCode []byte
@@ -190,6 +194,7 @@ func main() {
 		"common.c":     commonCode,
 		"uniform.c":    uniformCode,
 		"image.c":      imageCode,
+		"puppet.c":     puppetCode,
 		"particle.c":   particleCode,
 		"transform.c":  transformCode,
 		"scene_data.c": sceneDataCode,
@@ -210,6 +215,7 @@ func main() {
 		tempDir + "/common.c",
 		tempDir + "/uniform.c",
 		tempDir + "/image.c",
+		tempDir + "/puppet.c",
 		tempDir + "/particle.c",
 		tempDir + "/transform.c",
 		tempDir + "/scene_data.c",
@@ -558,16 +564,9 @@ func indexRangesMatch(ranges []indexRange, index int) bool {
 }
 
 func processImageObject(object *ImageObject) {
-	object.Material.ImportedTextures = make([]int, len(object.Material.Textures))
-	for idx := range object.Material.Textures {
-		object.Material.ImportedTextures[idx] = addImportTextureTask(&ImportTextureTask{Name: object.Material.Textures[idx]})
+	if object.Puppet != nil && len(object.PuppetData) > 0 {
+		state.OutputMap[object.Puppet.Path] = object.PuppetData
 	}
-	object.Material.CompiledShader = addCompileShaderTask(&CompileShaderTask{
-		Name:          object.Material.Shader,
-		Preprocess:    true,
-		Defines:       object.Material.Combos,
-		BoundTextures: []bool{},
-	})
 
 	if object.ColorBlendMode != 0 {
 		effectPassthrough, err := makeEffectPassthrough(object.ColorBlendMode)
@@ -576,6 +575,45 @@ func processImageObject(object *ImageObject) {
 		} else {
 			object.Effects = append(object.Effects, effectPassthrough)
 		}
+	}
+
+	object.Material.ImportedTextures = make([]int, len(object.Material.Textures))
+	for idx := range object.Material.Textures {
+		object.Material.ImportedTextures[idx] = addImportTextureTask(&ImportTextureTask{Name: object.Material.Textures[idx]})
+	}
+	materialDefines := object.Material.Combos
+	if object.Puppet != nil && object.Puppet.BoneCount > 0 && len(object.Effects) == 0 {
+		materialDefines = puppetShaderDefines(materialDefines, object.Puppet)
+		object.Material.Combos = materialDefines
+	}
+	object.Material.CompiledShader = addCompileShaderTask(&CompileShaderTask{
+		Name:          object.Material.Shader,
+		Preprocess:    true,
+		Defines:       materialDefines,
+		BoundTextures: []bool{},
+	})
+
+	if object.Puppet != nil && object.Puppet.HasMesh && len(object.Effects) > 0 {
+		object.PuppetMaterial = cloneMaterial(object.Material)
+		if len(object.PuppetMaterial.Textures) > 0 {
+			object.PuppetMaterial.Textures[0] = ""
+		}
+		object.PuppetMaterial.ImportedTextures = make([]int, len(object.PuppetMaterial.Textures))
+		for idx := range object.PuppetMaterial.Textures {
+			object.PuppetMaterial.ImportedTextures[idx] =
+				addImportTextureTask(&ImportTextureTask{Name: object.PuppetMaterial.Textures[idx]})
+		}
+		puppetDefines := object.PuppetMaterial.Combos
+		if object.Puppet.BoneCount > 0 {
+			puppetDefines = puppetShaderDefines(puppetDefines, object.Puppet)
+			object.PuppetMaterial.Combos = puppetDefines
+		}
+		object.PuppetMaterial.CompiledShader = addCompileShaderTask(&CompileShaderTask{
+			Name:          object.PuppetMaterial.Shader,
+			Preprocess:    true,
+			Defines:       puppetDefines,
+			BoundTextures: []bool{},
+		})
 	}
 	for effectIdx := range object.Effects {
 		effect := &object.Effects[effectIdx]
@@ -588,6 +626,25 @@ func processImageObject(object *ImageObject) {
 			processEffectMaterial(material, pass)
 		}
 	}
+}
+
+func cloneMaterial(material Material) Material {
+	cloned := material
+	cloned.Textures = slices.Clone(material.Textures)
+	cloned.ImportedTextures = nil
+	cloned.CompiledShader = 0
+	if material.Combos != nil {
+		cloned.Combos = maps.Clone(material.Combos)
+	}
+	return cloned
+}
+
+func puppetShaderDefines(base map[string]int, puppet *PuppetMetadata) map[string]int {
+	defines := map[string]int{}
+	maps.Copy(defines, base)
+	defines["SKINNING"] = 1
+	defines["BONECOUNT"] = puppet.BoneCount
+	return defines
 }
 
 func processParticleObject(object *ParticleObject) bool {
@@ -1229,6 +1286,7 @@ func compileShader(task *CompileShaderTask) {
 
 	task.VertexUniforms = transformed.VertexUniforms
 	task.FragmentUniforms = transformed.FragmentUniforms
+	task.Attributes = transformed.Attributes
 	task.Samplers = transformed.Samplers
 }
 

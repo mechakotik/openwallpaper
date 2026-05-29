@@ -29,6 +29,8 @@ wpe_shader scene_shaders[] = {
             .num_vertex_uniforms = {{len $shader.VertexUniforms}},
             .fragment_uniforms = {{template "uniforms" $shader.FragmentUniforms}},
             .num_fragment_uniforms = {{len $shader.FragmentUniforms}},
+            .attributes = {{template "attributes" $shader.Attributes}},
+            .num_attributes = {{len $shader.Attributes}},
             .samplers = {{template "samplers" $shader.Samplers}},
             .num_samplers = {{len $shader.Samplers}},
         },
@@ -98,6 +100,22 @@ NULL
 {{- end -}}
 {{end}}
 
+{{define "attributes"}}
+{{- if eq (len .) 0 -}}
+NULL
+{{- else -}}
+(wpe_attribute_info[]){
+    {{range $_, $attribute := .}}
+        (wpe_attribute_info){
+            .name = {{printf "%q" $attribute.Name}},
+            .type = {{printf "%q" $attribute.Type}},
+            .array_size = {{$attribute.ArraySize}},
+        },
+    {{end}}
+}
+{{- end -}}
+{{end}}
+
 {{define "samplers"}}
 {{- if eq (len .) 0 -}}
 NULL
@@ -137,6 +155,7 @@ NULL
 .id = {{.ID}},
 .parent = {{.Parent}},
 .name = {{printf "%q" .Name}},
+.attachment = {{printf "%q" .Attachment}},
 .origin = {
     .x = {{index .Origin 0}},
     .y = {{index .Origin 1}},
@@ -182,6 +201,14 @@ NULL
     },
     .effects = {{template "effects" .Effects}},
     .num_effects = {{len .Effects}},
+    {{if and .Puppet (gt (len .Effects) 0)}}
+    .puppet_material = (wpe_material){
+        {{template "material" .PuppetMaterial}}
+    },
+    {{else}}
+    .puppet_material = (wpe_material){0},
+    {{end}}
+    .puppet = {{template "puppet_model" .}},
 },
 {{end}}
 
@@ -504,6 +531,40 @@ NULL
         (wpe_effect_fbo){
             .name = {{printf "%q" $fbo.Name}},
             .scale = {{$fbo.Scale}},
+        },
+    {{end}}
+}
+{{- end -}}
+{{end}}
+
+{{define "puppet_model"}}
+{{- if .Puppet -}}
+&(wpe_puppet_model){
+    .path = {{printf "%q" .Puppet.Path}},
+    .num_bones = {{.Puppet.BoneCount}},
+    .layers = {{template "puppet_layers" .PuppetLayers}},
+    .num_layers = {{len .PuppetLayers}},
+}
+{{- else -}}
+NULL
+{{- end -}}
+{{end}}
+
+{{define "puppet_layers"}}
+{{- if eq (len .) 0 -}}
+NULL
+{{- else -}}
+(wpe_puppet_animation_layer[]){
+    {{range $_, $layer := .}}
+        (wpe_puppet_animation_layer){
+            .id = {{$layer.ID}},
+            .blend = {{$layer.Blend}},
+            .rate = {{$layer.Rate}},
+            .visible = {{$layer.Visible}},
+            .additive = {{$layer.Additive}},
+            .blend_in = {{$layer.BlendIn}},
+            .blend_out = {{$layer.BlendOut}},
+            .blend_time = {{$layer.BlendTime}},
         },
     {{end}}
 }

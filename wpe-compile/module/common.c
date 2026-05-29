@@ -220,6 +220,17 @@ static ow_pipeline_id create_quad_pipeline(
     if(shader == NULL || shader->vertex_shader.id == 0 || shader->fragment_shader.id == 0) {
         return (ow_pipeline_id){0};
     }
+    if(shader->num_attributes > 2) {
+        return (ow_pipeline_id){0};
+    }
+    if(shader->num_attributes > 0 &&
+        (strcmp(shader->attributes[0].name, "a_Position") != 0 || strcmp(shader->attributes[0].type, "vec3") != 0)) {
+        return (ow_pipeline_id){0};
+    }
+    if(shader->num_attributes > 1 &&
+        (strcmp(shader->attributes[1].name, "a_TexCoord") != 0 || strcmp(shader->attributes[1].type, "vec2") != 0)) {
+        return (ow_pipeline_id){0};
+    }
 
     return ow_create_pipeline(&(ow_pipeline_info){
         .vertex_bindings =
@@ -236,6 +247,85 @@ static ow_pipeline_id create_quad_pipeline(
         .blend_mode = blend_mode,
         .depth_test_mode = OW_DEPTHTEST_DISABLED,
         .topology = OW_TOPOLOGY_TRIANGLES_STRIP,
+        .cull_mode = OW_CULL_NONE,
+    });
+}
+
+static bool mesh_attribute_for_shader_attribute(wpe_attribute_info* shader_attribute, ow_vertex_attribute* attribute) {
+    attribute->slot = 0;
+    if(shader_attribute->array_size > 0) {
+        return false;
+    }
+
+    if(strcmp(shader_attribute->name, "a_Position") == 0 && strcmp(shader_attribute->type, "vec3") == 0) {
+        attribute->type = OW_ATTRIBUTE_FLOAT3;
+        attribute->offset = offsetof(wpe_puppet_vertex, position);
+        return true;
+    }
+    if(strcmp(shader_attribute->name, "a_TexCoord") == 0 && strcmp(shader_attribute->type, "vec2") == 0) {
+        attribute->type = OW_ATTRIBUTE_FLOAT2;
+        attribute->offset = offsetof(wpe_puppet_vertex, texcoord);
+        return true;
+    }
+    if(strcmp(shader_attribute->name, "a_Normal") == 0 && strcmp(shader_attribute->type, "vec3") == 0) {
+        attribute->type = OW_ATTRIBUTE_FLOAT3;
+        attribute->offset = offsetof(wpe_puppet_vertex, normal);
+        return true;
+    }
+    if(strcmp(shader_attribute->name, "a_Tangent4") == 0 && strcmp(shader_attribute->type, "vec4") == 0) {
+        attribute->type = OW_ATTRIBUTE_FLOAT4;
+        attribute->offset = offsetof(wpe_puppet_vertex, tangent);
+        return true;
+    }
+    if(strcmp(shader_attribute->name, "a_BlendIndices") == 0 && strcmp(shader_attribute->type, "uvec4") == 0) {
+        attribute->type = OW_ATTRIBUTE_UINT4;
+        attribute->offset = offsetof(wpe_puppet_vertex, blend_indices);
+        return true;
+    }
+    if(strcmp(shader_attribute->name, "a_BlendWeights") == 0 && strcmp(shader_attribute->type, "vec4") == 0) {
+        attribute->type = OW_ATTRIBUTE_FLOAT4;
+        attribute->offset = offsetof(wpe_puppet_vertex, blend_weights);
+        return true;
+    }
+
+    return false;
+}
+
+ow_pipeline_id wpe_create_mesh_pipeline(
+    wpe_shader* shader, ow_blend_mode blend_mode, ow_texture_format color_target_format) {
+    if(shader == NULL || shader->vertex_shader.id == 0 || shader->fragment_shader.id == 0 ||
+        shader->num_attributes <= 0) {
+        return (ow_pipeline_id){0};
+    }
+
+    ow_vertex_attribute attributes[16];
+    if(shader->num_attributes > (int)(sizeof(attributes) / sizeof(attributes[0]))) {
+        return (ow_pipeline_id){0};
+    }
+
+    for(int i = 0; i < shader->num_attributes; i++) {
+        attributes[i].location = (uint32_t)i;
+        if(!mesh_attribute_for_shader_attribute(&shader->attributes[i], &attributes[i])) {
+            return (ow_pipeline_id){0};
+        }
+    }
+
+    ow_vertex_binding_info vertex_binding = {
+        .slot = 0,
+        .stride = sizeof(wpe_puppet_vertex),
+    };
+
+    return ow_create_pipeline(&(ow_pipeline_info){
+        .vertex_bindings = &vertex_binding,
+        .vertex_bindings_count = 1,
+        .vertex_attributes = attributes,
+        .vertex_attributes_count = (uint32_t)shader->num_attributes,
+        .vertex_shader = shader->vertex_shader,
+        .fragment_shader = shader->fragment_shader,
+        .color_target_format = color_target_format,
+        .blend_mode = blend_mode,
+        .depth_test_mode = OW_DEPTHTEST_DISABLED,
+        .topology = OW_TOPOLOGY_TRIANGLES,
         .cull_mode = OW_CULL_NONE,
     });
 }
@@ -319,6 +409,10 @@ void wpe_init_material(wpe_material* material) {
         create_quad_pipeline(material->shader, wpe_blend_mode_from_name(material->blending), OW_TEXTURE_RGBA8_UNORM);
     material->disabled_texture_pipeline =
         create_quad_pipeline(material->shader, blend_disabled, OW_TEXTURE_RGBA8_UNORM);
+    material->mesh_pipeline = wpe_create_mesh_pipeline(
+        material->shader, wpe_blend_mode_from_name(material->blending), OW_TEXTURE_RGBA8_UNORM);
+    material->disabled_mesh_pipeline =
+        wpe_create_mesh_pipeline(material->shader, blend_disabled, OW_TEXTURE_RGBA8_UNORM);
 }
 
 void wpe_init_material_pass(wpe_material_pass* pass, wpe_image_effect* effect) {
@@ -344,6 +438,7 @@ void wpe_init_effect_present_pipeline(wpe_material* material, const char* blendi
     }
     ow_blend_mode blend_mode = wpe_blend_mode_from_name(blending);
     material->present_texture_pipeline = create_quad_pipeline(material->shader, blend_mode, OW_TEXTURE_RGBA8_UNORM);
+    material->present_mesh_pipeline = wpe_create_mesh_pipeline(material->shader, blend_mode, OW_TEXTURE_RGBA8_UNORM);
 }
 
 void wpe_ensure_texture_size(
@@ -545,10 +640,13 @@ static bool bindings_are_complete(ow_texture_binding* bindings, int num_bindings
     return true;
 }
 
-bool wpe_render_material_to_target(wpe_object* object, wpe_material* material, wpe_material_pass* pass,
-    ow_pipeline_id pipeline, ow_texture_id color_target, bool clear, wpe_texture_target previous, bool default_previous,
-    wpe_transform_matrices matrices, const wpe_renderer_state* state) {
+static bool render_material_geometry_to_target(wpe_object* object, wpe_material* material, wpe_material_pass* pass,
+    ow_pipeline_id pipeline, wpe_puppet_mesh* mesh, ow_texture_id color_target, bool clear, wpe_texture_target previous,
+    bool default_previous, wpe_transform_matrices matrices, const wpe_renderer_state* state) {
     if(material == NULL || material->shader == NULL || pipeline.id == 0) {
+        return false;
+    }
+    if(mesh != NULL && (mesh->vertex_buffer.id == 0 || mesh->index_buffer.id == 0 || mesh->num_indices <= 0)) {
         return false;
     }
 
@@ -590,19 +688,54 @@ bool wpe_render_material_to_target(wpe_object* object, wpe_material* material, w
         free(fragment_uniform_data);
     }
 
-    ow_render_geometry(pipeline,
-        &(ow_bindings_info){
-            .vertex_buffers = &vertex_quad_buffer,
+    if(mesh != NULL) {
+        ow_vertex_buffer_id vertex_buffers[1] = {mesh->vertex_buffer};
+        ow_bindings_info bindings_info = {
+            .vertex_buffers = vertex_buffers,
             .vertex_buffers_count = 1,
+            .index_buffer = mesh->index_buffer,
             .texture_bindings = bindings,
             .texture_bindings_count = (uint32_t)num_bindings,
-        },
-        0, 4, 1);
+        };
+        if(mesh->num_parts > 0 && mesh->parts != NULL) {
+            for(int i = 0; i < mesh->num_parts; i++) {
+                if(mesh->parts[i].size > 0) {
+                    ow_render_geometry_indexed(
+                        pipeline, &bindings_info, mesh->parts[i].start, mesh->parts[i].size, 0, 1);
+                }
+            }
+        } else {
+            ow_render_geometry_indexed(pipeline, &bindings_info, 0, (uint32_t)mesh->num_indices, 0, 1);
+        }
+    } else {
+        ow_render_geometry(pipeline,
+            &(ow_bindings_info){
+                .vertex_buffers = &vertex_quad_buffer,
+                .vertex_buffers_count = 1,
+                .texture_bindings = bindings,
+                .texture_bindings_count = (uint32_t)num_bindings,
+            },
+            0, 4, 1);
+    }
 
     ow_end_render_pass();
     free(bindings);
     free(texture_slots);
     return true;
+}
+
+bool wpe_render_material_to_target(wpe_object* object, wpe_material* material, wpe_material_pass* pass,
+    ow_pipeline_id pipeline, ow_texture_id color_target, bool clear, wpe_texture_target previous, bool default_previous,
+    wpe_transform_matrices matrices, const wpe_renderer_state* state) {
+    return render_material_geometry_to_target(
+        object, material, pass, pipeline, NULL, color_target, clear, previous, default_previous, matrices, state);
+}
+
+bool wpe_render_material_mesh_to_target(wpe_object* object, wpe_material* material, wpe_material_pass* pass,
+    ow_pipeline_id pipeline, wpe_puppet_mesh* mesh, ow_texture_id color_target, bool clear, wpe_texture_target previous,
+    bool default_previous, wpe_transform_matrices matrices, const wpe_renderer_state* state) {
+    return render_material_geometry_to_target(
+        object, material, pass, pipeline, mesh, color_target, clear, previous, default_previous, matrices, state);
 }
 
 bool wpe_render_texture_with_passthrough(wpe_object* object, wpe_texture_target source, ow_pipeline_id pipeline,
