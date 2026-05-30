@@ -196,6 +196,7 @@ typedef struct {
     float alpha;
     float brightness;
     bool fullscreen;
+    bool composition_layer;
     bool passthrough;
     wpe_material material;
     wpe_image_effect* effects;
@@ -474,6 +475,8 @@ typedef struct {
     float shake_amplitude;
     float shake_roughness;
     float shake_speed;
+    bool clear_enabled;
+    wpe_vec3 clear_color;
     wpe_vec2 ortho;
     float zoom;
     float fov;

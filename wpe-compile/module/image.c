@@ -218,10 +218,10 @@ bool wpe_renderer_render_image_object(wpe_object* object, bool clear, const wpe_
         bool rendered = false;
         if(prepared && has_puppet_mesh) {
             rendered = render_puppet_material_to_target(object, material, material->mesh_pipeline,
-                snapshot_target.texture, clear, screen_previous, default_previous, mesh_matrices, state);
+                snapshot_target.texture, false, screen_previous, default_previous, mesh_matrices, state);
         } else if(prepared) {
             rendered = wpe_render_material_to_target(object, material, NULL, material->texture_pipeline,
-                snapshot_target.texture, clear, screen_previous, default_previous, matrices, state);
+                snapshot_target.texture, false, screen_previous, default_previous, matrices, state);
         }
         if(rendered) {
             wpe_commit_screen_snapshot();
@@ -237,8 +237,10 @@ bool wpe_renderer_render_image_object(wpe_object* object, bool clear, const wpe_
     ensure_image_effect_targets(object, state);
     wpe_texture_target first_target = image_ping_pong_target(object, 0);
     bool default_previous = object->image.passthrough || material->num_textures == 0;
+    wpe_transform_matrices base_matrices =
+        object->image.composition_layer ? matrices : wpe_default_transform_matrices();
     if(!wpe_render_material_to_target(object, material, NULL, material->disabled_texture_pipeline, first_target.texture,
-           true, screen_previous, default_previous, wpe_default_transform_matrices(), state)) {
+           true, screen_previous, default_previous, base_matrices, state)) {
         return false;
     }
 
@@ -250,15 +252,15 @@ bool wpe_renderer_render_image_object(wpe_object* object, bool clear, const wpe_
             wpe_material* puppet_material = &object->image.puppet_material;
             rendered_snapshot =
                 render_puppet_material_to_target(object, puppet_material, puppet_material->mesh_pipeline,
-                    snapshot_target.texture, clear, effect_result.previous, true, mesh_matrices, state);
+                    snapshot_target.texture, false, effect_result.previous, true, mesh_matrices, state);
         } else if(effect_result.has_final_pass) {
             rendered_snapshot = wpe_render_material_to_target(object, effect_result.final_material,
                 effect_result.final_pass, effect_result.final_material->present_texture_pipeline,
-                snapshot_target.texture, clear, effect_result.previous, true, matrices, state);
+                snapshot_target.texture, false, effect_result.previous, true, matrices, state);
         } else {
             ow_pipeline_id final_texture_pipeline = wpe_passthrough_pipeline_for_blending(material->blending, true);
             rendered_snapshot = wpe_render_texture_with_passthrough(object, effect_result.previous,
-                final_texture_pipeline, snapshot_target.texture, clear, matrices, state);
+                final_texture_pipeline, snapshot_target.texture, false, matrices, state);
         }
     }
     if(rendered_snapshot) {

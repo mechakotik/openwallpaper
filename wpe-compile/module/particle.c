@@ -627,7 +627,7 @@ bool wpe_renderer_render_particle_object(wpe_object* object, bool clear, const w
 
     ow_begin_render_pass(&(ow_render_pass_info){
         .color_target = snapshot_target.texture,
-        .clear_color = clear,
+        .clear_color = false,
         .clear_color_rgba = {0.0f, 0.0f, 0.0f, 1.0f},
     });
     ow_push_vertex_uniform_data(0, &vertex_uniforms, sizeof(vertex_uniforms));

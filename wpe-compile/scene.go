@@ -691,29 +691,30 @@ type PuppetAnimationLayer struct {
 }
 
 type ImageObject struct {
-	ID             int
-	Parent         int
-	Visible        bool
-	Name           string
-	Attachment     string
-	Origin         Vector3
-	Scale          Vector3
-	Angles         Vector3
-	Size           Vector2
-	Perspective    bool
-	ParallaxDepth  Vector2
-	Color          Vector3
-	ColorBlendMode int
-	Alpha          float32
-	Brightness     float32
-	Fullscreen     bool
-	Material       Material
-	PuppetMaterial Material
-	Effects        []ImageEffect
-	Config         ImageConfig
-	Puppet         *PuppetMetadata
-	PuppetData     []byte
-	PuppetLayers   []PuppetAnimationLayer
+	ID               int
+	Parent           int
+	Visible          bool
+	Name             string
+	Attachment       string
+	Origin           Vector3
+	Scale            Vector3
+	Angles           Vector3
+	Size             Vector2
+	Perspective      bool
+	ParallaxDepth    Vector2
+	Color            Vector3
+	ColorBlendMode   int
+	Alpha            float32
+	Brightness       float32
+	Fullscreen       bool
+	CompositionLayer bool
+	Material         Material
+	PuppetMaterial   Material
+	Effects          []ImageEffect
+	Config           ImageConfig
+	Puppet           *PuppetMetadata
+	PuppetData       []byte
+	PuppetLayers     []PuppetAnimationLayer
 }
 
 func (imageObject *ImageObject) parseFromSceneJSON(raw json.RawMessage, pkgMap *map[string][]byte) error {
@@ -729,7 +730,7 @@ func (imageObject *ImageObject) parseFromSceneJSON(raw json.RawMessage, pkgMap *
 	}
 
 	type configJSON struct {
-		Passthrough BoolValue `json:"passthrough"`
+		Passthrough *BoolValue `json:"passthrough"`
 	}
 
 	type imageSceneJSON struct {
@@ -755,11 +756,12 @@ func (imageObject *ImageObject) parseFromSceneJSON(raw json.RawMessage, pkgMap *
 	}
 
 	type imageModelJSON struct {
-		Fullscreen BoolValue   `json:"fullscreen"`
-		Width      IntValue    `json:"width"`
-		Height     IntValue    `json:"height"`
-		Puppet     StringValue `json:"puppet"`
-		Material   StringValue `json:"material"`
+		Fullscreen  BoolValue   `json:"fullscreen"`
+		Passthrough BoolValue   `json:"passthrough"`
+		Width       IntValue    `json:"width"`
+		Height      IntValue    `json:"height"`
+		Puppet      StringValue `json:"puppet"`
+		Material    StringValue `json:"material"`
 	}
 
 	payload := imageSceneJSON{
@@ -804,6 +806,7 @@ func (imageObject *ImageObject) parseFromSceneJSON(raw json.RawMessage, pkgMap *
 	}
 
 	imageObject.Fullscreen = bool(model.Fullscreen)
+	imageObject.Config.Passthrough = bool(model.Passthrough)
 
 	if !imageObject.Fullscreen {
 		switch {
@@ -820,6 +823,7 @@ func (imageObject *ImageObject) parseFromSceneJSON(raw json.RawMessage, pkgMap *
 		return fmt.Errorf("image object has no material in model JSON %s", imagePath)
 	}
 	materialPath := string(model.Material)
+	imageObject.CompositionLayer = strings.Contains(materialPath, "composelayer")
 	materialBytes, err := loadBytesFromPackage(pkgMap, materialPath)
 	if err != nil {
 		return fmt.Errorf("cannot load material %s: %w", materialPath, err)
@@ -886,7 +890,9 @@ func (imageObject *ImageObject) parseFromSceneJSON(raw json.RawMessage, pkgMap *
 		imageObject.PuppetLayers = append(imageObject.PuppetLayers, layer)
 	}
 
-	imageObject.Config.Passthrough = bool(payload.Config.Passthrough)
+	if payload.Config.Passthrough != nil {
+		imageObject.Config.Passthrough = bool(*payload.Config.Passthrough)
+	}
 
 	return nil
 }
@@ -1735,6 +1741,8 @@ type SceneGeneral struct {
 	ShakeAmplitude         float32
 	ShakeRoughness         float32
 	ShakeSpeed             float32
+	ClearEnabled           bool
+	ClearColor             Vector3
 	Ortho                  OrthogonalProjection
 	Zoom                   float32
 	FOV                    float32
@@ -1784,6 +1792,8 @@ func parseSceneGeneral(raw json.RawMessage) (SceneGeneral, error) {
 		CameraShakeAmplitude    FloatValue      `json:"camerashakeamplitude"`
 		CameraShakeRoughness    FloatValue      `json:"camerashakeroughness"`
 		CameraShakeSpeed        FloatValue      `json:"camerashakespeed"`
+		ClearEnabled            *BoolValue      `json:"clearenabled"`
+		ClearColor              Vector3         `json:"clearcolor"`
 		Zoom                    FloatValue      `json:"zoom"`
 		FOV                     FloatValue      `json:"perspectiveoverridefov"`
 		NearZ                   FloatValue      `json:"nearz"`
@@ -1801,6 +1811,7 @@ func parseSceneGeneral(raw json.RawMessage) (SceneGeneral, error) {
 		ShakeAmplitude: 0.5,
 		ShakeRoughness: 1,
 		ShakeSpeed:     3,
+		ClearEnabled:   true,
 	}
 
 	var payload generalJSON
@@ -1822,6 +1833,10 @@ func parseSceneGeneral(raw json.RawMessage) (SceneGeneral, error) {
 	if payload.CameraShakeSpeed != 0 {
 		general.ShakeSpeed = float32(payload.CameraShakeSpeed)
 	}
+	if payload.ClearEnabled != nil {
+		general.ClearEnabled = bool(*payload.ClearEnabled)
+	}
+	general.ClearColor = payload.ClearColor
 
 	if payload.Zoom != 0 {
 		general.Zoom = float32(payload.Zoom)

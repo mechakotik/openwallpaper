@@ -141,6 +141,12 @@ NULL
 .shake_amplitude = {{.ShakeAmplitude}},
 .shake_roughness = {{.ShakeRoughness}},
 .shake_speed = {{.ShakeSpeed}},
+.clear_enabled = {{.ClearEnabled}},
+.clear_color = {
+    .r = {{index .ClearColor 0}},
+    .g = {{index .ClearColor 1}},
+    .b = {{index .ClearColor 2}},
+},
 .ortho = {
     .w = {{.Ortho.Width}},
     .h = {{.Ortho.Height}},
@@ -196,6 +202,7 @@ NULL
     .alpha = {{.Alpha}},
     .brightness = {{.Brightness}},
     .fullscreen = {{.Fullscreen}},
+    .composition_layer = {{.CompositionLayer}},
     .passthrough = {{.Config.Passthrough}},
     .material = (wpe_material){
         {{template "material" .Material}}
