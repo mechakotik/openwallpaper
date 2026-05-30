@@ -902,6 +902,25 @@ type ParticleInitializer struct {
 	MaxColor           [3]float32
 	MinAlpha           float32
 	MaxAlpha           float32
+	TurbulentVelocity  bool
+	TurbulentScale     float32
+	TurbulentTimeScale float32
+	TurbulentOffset    float32
+	TurbulentSpeedMin  float32
+	TurbulentSpeedMax  float32
+	TurbulentPhaseMin  float32
+	TurbulentPhaseMax  float32
+	TurbulentForward   Vector3
+	TurbulentRight     Vector3
+	TurbulentAudio     TurbulentAudioResponse
+}
+
+type TurbulentAudioResponse struct {
+	Mode           int32
+	Exponent       float32
+	Bounds         Vector2
+	FrequencyStart int32
+	FrequencyEnd   int32
 }
 
 type MovementOperator struct {
@@ -1064,9 +1083,23 @@ func (render *ParticleRenderer) parseFromJSON(raw json.RawMessage) error {
 
 func (init *ParticleInitializer) parseFromJSON(raw json.RawMessage) error {
 	payload := struct {
-		Name StringValue     `json:"name"`
-		Min  json.RawMessage `json:"min"`
-		Max  json.RawMessage `json:"max"`
+		Name                          StringValue     `json:"name"`
+		Min                           json.RawMessage `json:"min"`
+		Max                           json.RawMessage `json:"max"`
+		Scale                         json.RawMessage `json:"scale"`
+		TimeScale                     json.RawMessage `json:"timescale"`
+		Offset                        json.RawMessage `json:"offset"`
+		SpeedMin                      json.RawMessage `json:"speedmin"`
+		SpeedMax                      json.RawMessage `json:"speedmax"`
+		PhaseMin                      json.RawMessage `json:"phasemin"`
+		PhaseMax                      json.RawMessage `json:"phasemax"`
+		Forward                       json.RawMessage `json:"forward"`
+		Right                         json.RawMessage `json:"right"`
+		AudioProcessingMode           json.RawMessage `json:"audioprocessingmode"`
+		AudioProcessingExponent       json.RawMessage `json:"audioprocessingexponent"`
+		AudioProcessingBounds         json.RawMessage `json:"audioprocessingbounds"`
+		AudioProcessingFrequencyStart json.RawMessage `json:"audioprocessingfrequencystart"`
+		AudioProcessingFrequencyEnd   json.RawMessage `json:"audioprocessingfrequencyend"`
 	}{}
 
 	if err := json.Unmarshal(raw, &payload); err != nil {
@@ -1190,9 +1223,128 @@ func (init *ParticleInitializer) parseFromJSON(raw json.RawMessage) error {
 			}
 			init.MaxAngularVelocity = max
 		}
+	case "turbulentvelocityrandom":
+		init.TurbulentVelocity = true
+		if bytesFromRawNullAware(payload.Scale) != nil {
+			value, err := parseFloat64FromRaw(payload.Scale)
+			if err != nil {
+				return fmt.Errorf("cannot parse scale value for turbulentvelocityrandom initializer: %w", err)
+			}
+			init.TurbulentScale = float32(value)
+		}
+		if bytesFromRawNullAware(payload.TimeScale) != nil {
+			value, err := parseFloat64FromRaw(payload.TimeScale)
+			if err != nil {
+				return fmt.Errorf("cannot parse timescale value for turbulentvelocityrandom initializer: %w", err)
+			}
+			init.TurbulentTimeScale = float32(value)
+		}
+		if bytesFromRawNullAware(payload.Offset) != nil {
+			value, err := parseFloat64FromRaw(payload.Offset)
+			if err != nil {
+				return fmt.Errorf("cannot parse offset value for turbulentvelocityrandom initializer: %w", err)
+			}
+			init.TurbulentOffset = float32(value)
+		}
+		if bytesFromRawNullAware(payload.SpeedMin) != nil {
+			value, err := parseFloat64FromRaw(payload.SpeedMin)
+			if err != nil {
+				return fmt.Errorf("cannot parse speedmin value for turbulentvelocityrandom initializer: %w", err)
+			}
+			init.TurbulentSpeedMin = float32(value)
+		}
+		if bytesFromRawNullAware(payload.SpeedMax) != nil {
+			value, err := parseFloat64FromRaw(payload.SpeedMax)
+			if err != nil {
+				return fmt.Errorf("cannot parse speedmax value for turbulentvelocityrandom initializer: %w", err)
+			}
+			init.TurbulentSpeedMax = float32(value)
+		}
+		if bytesFromRawNullAware(payload.PhaseMin) != nil {
+			value, err := parseFloat64FromRaw(payload.PhaseMin)
+			if err != nil {
+				return fmt.Errorf("cannot parse phasemin value for turbulentvelocityrandom initializer: %w", err)
+			}
+			init.TurbulentPhaseMin = float32(value)
+		}
+		if bytesFromRawNullAware(payload.PhaseMax) != nil {
+			value, err := parseFloat64FromRaw(payload.PhaseMax)
+			if err != nil {
+				return fmt.Errorf("cannot parse phasemax value for turbulentvelocityrandom initializer: %w", err)
+			}
+			init.TurbulentPhaseMax = float32(value)
+		}
+		if bytesFromRawNullAware(payload.Forward) != nil {
+			forward, err := parseVector3FromRaw(payload.Forward, init.TurbulentForward)
+			if err != nil {
+				return fmt.Errorf("cannot parse forward value for turbulentvelocityrandom initializer: %w", err)
+			}
+			init.TurbulentForward = forward
+		}
+		if bytesFromRawNullAware(payload.Right) != nil {
+			right, err := parseVector3FromRaw(payload.Right, init.TurbulentRight)
+			if err != nil {
+				return fmt.Errorf("cannot parse right value for turbulentvelocityrandom initializer: %w", err)
+			}
+			init.TurbulentRight = right
+		}
+		if bytesFromRawNullAware(payload.AudioProcessingMode) != nil {
+			value, err := parseIntFromRaw(payload.AudioProcessingMode)
+			if err != nil {
+				return fmt.Errorf("cannot parse audioprocessingmode value for turbulentvelocityrandom initializer: %w", err)
+			}
+			init.TurbulentAudio.Mode = int32(value)
+		}
+		if bytesFromRawNullAware(payload.AudioProcessingExponent) != nil {
+			value, err := parseFloat64FromRaw(payload.AudioProcessingExponent)
+			if err != nil {
+				return fmt.Errorf("cannot parse audioprocessingexponent value for turbulentvelocityrandom initializer: %w", err)
+			}
+			init.TurbulentAudio.Exponent = float32(value)
+		}
+		if bytesFromRawNullAware(payload.AudioProcessingBounds) != nil {
+			bounds, err := parseVector2FromRaw(payload.AudioProcessingBounds, init.TurbulentAudio.Bounds)
+			if err != nil {
+				return fmt.Errorf("cannot parse audioprocessingbounds value for turbulentvelocityrandom initializer: %w", err)
+			}
+			init.TurbulentAudio.Bounds = bounds
+		}
+		if bytesFromRawNullAware(payload.AudioProcessingFrequencyStart) != nil {
+			value, err := parseIntFromRaw(payload.AudioProcessingFrequencyStart)
+			if err != nil {
+				return fmt.Errorf("cannot parse audioprocessingfrequencystart value for turbulentvelocityrandom initializer: %w", err)
+			}
+			init.TurbulentAudio.FrequencyStart = int32(value)
+		}
+		if bytesFromRawNullAware(payload.AudioProcessingFrequencyEnd) != nil {
+			value, err := parseIntFromRaw(payload.AudioProcessingFrequencyEnd)
+			if err != nil {
+				return fmt.Errorf("cannot parse audioprocessingfrequencyend value for turbulentvelocityrandom initializer: %w", err)
+			}
+			init.TurbulentAudio.FrequencyEnd = int32(value)
+		}
+		clampTurbulentAudioResponse(&init.TurbulentAudio)
 	}
 
 	return nil
+}
+
+func clampTurbulentAudioResponse(audio *TurbulentAudioResponse) {
+	if audio.FrequencyStart > 15 {
+		audio.FrequencyStart = 15
+	}
+	if audio.FrequencyEnd > 15 {
+		audio.FrequencyEnd = 15
+	}
+	if audio.FrequencyStart < 0 {
+		audio.FrequencyStart = 0
+	}
+	if audio.FrequencyEnd < 0 {
+		audio.FrequencyEnd = 0
+	}
+	if audio.FrequencyEnd < audio.FrequencyStart {
+		audio.FrequencyStart, audio.FrequencyEnd = audio.FrequencyEnd, audio.FrequencyStart
+	}
 }
 
 func (operator *ParticleOperator) parseFromJSON(raw json.RawMessage) error {
@@ -1442,6 +1594,20 @@ func (particle *Particle) parseFromJSON(raw json.RawMessage, pkgMap *map[string]
 		MaxColor:           [3]float32{1, 1, 1},
 		MinAlpha:           1,
 		MaxAlpha:           1,
+		TurbulentScale:     1,
+		TurbulentTimeScale: 1,
+		TurbulentSpeedMin:  100,
+		TurbulentSpeedMax:  250,
+		TurbulentPhaseMin:  0,
+		TurbulentPhaseMax:  0.1,
+		TurbulentForward:   Vector3{0, 1, 0},
+		TurbulentRight:     Vector3{0, 0, 1},
+		TurbulentAudio: TurbulentAudioResponse{
+			Exponent:       2,
+			Bounds:         Vector2{0.8, 1},
+			FrequencyStart: 0,
+			FrequencyEnd:   1,
+		},
 	}
 	for _, initRaw := range payload.Initializers {
 		if err := particle.Initializer.parseFromJSON(initRaw); err != nil {

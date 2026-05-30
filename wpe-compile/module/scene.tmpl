@@ -277,6 +277,34 @@ NULL
         },
         .min_alpha = {{.ParticleData.Initializer.MinAlpha}},
         .max_alpha = {{.ParticleData.Initializer.MaxAlpha}},
+        .turbulent_velocity = {{.ParticleData.Initializer.TurbulentVelocity}},
+        .turbulent_scale = {{.ParticleData.Initializer.TurbulentScale}},
+        .turbulent_time_scale = {{.ParticleData.Initializer.TurbulentTimeScale}},
+        .turbulent_offset = {{.ParticleData.Initializer.TurbulentOffset}},
+        .turbulent_speed_min = {{.ParticleData.Initializer.TurbulentSpeedMin}},
+        .turbulent_speed_max = {{.ParticleData.Initializer.TurbulentSpeedMax}},
+        .turbulent_phase_min = {{.ParticleData.Initializer.TurbulentPhaseMin}},
+        .turbulent_phase_max = {{.ParticleData.Initializer.TurbulentPhaseMax}},
+        .turbulent_forward = {
+            {{index .ParticleData.Initializer.TurbulentForward 0}},
+            {{index .ParticleData.Initializer.TurbulentForward 1}},
+            {{index .ParticleData.Initializer.TurbulentForward 2}},
+        },
+        .turbulent_right = {
+            {{index .ParticleData.Initializer.TurbulentRight 0}},
+            {{index .ParticleData.Initializer.TurbulentRight 1}},
+            {{index .ParticleData.Initializer.TurbulentRight 2}},
+        },
+        .turbulent_audio = {
+            .mode = {{.ParticleData.Initializer.TurbulentAudio.Mode}},
+            .exponent = {{.ParticleData.Initializer.TurbulentAudio.Exponent}},
+            .bounds = {
+                {{index .ParticleData.Initializer.TurbulentAudio.Bounds 0}},
+                {{index .ParticleData.Initializer.TurbulentAudio.Bounds 1}},
+            },
+            .frequency_start = {{.ParticleData.Initializer.TurbulentAudio.FrequencyStart}},
+            .frequency_end = {{.ParticleData.Initializer.TurbulentAudio.FrequencyEnd}},
+        },
     },
     .operator = {
         .movement = {

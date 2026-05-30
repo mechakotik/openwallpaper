@@ -173,7 +173,7 @@ static int audio_spectrum_size_from_uniform_name(const char* name) {
     return (int)size;
 }
 
-static float audio_spectrum_value(const wpe_renderer_state* state, int target_size, int index) {
+float wpe_audio_spectrum_value(const wpe_renderer_state* state, int target_size, int index) {
     if(state == NULL || state->audio_spectrum == NULL || state->audio_spectrum_size <= 0 || target_size <= 0 ||
         index < 0) {
         return 0.0f;
@@ -210,7 +210,7 @@ static bool write_audio_spectrum_uniform(
     }
 
     for(int i = 0; i < uniform->array_size; i++) {
-        float value = i < spectrum_size ? audio_spectrum_value(state, spectrum_size, i) : 0.0f;
+        float value = i < spectrum_size ? wpe_audio_spectrum_value(state, spectrum_size, i) : 0.0f;
         write_float_value(data, offset + stride * i, value);
     }
     return true;

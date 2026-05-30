@@ -62,6 +62,175 @@ static float fade_value(float life, float start, float end, float start_value, f
     return start_value + (end_value - start_value) * pass;
 }
 
+static float vec3_length(float v[3]) {
+    return sqrtf(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
+}
+
+static void vec3_normalize(float v[3]) {
+    float len = vec3_length(v);
+    if(len > 0.0001f) {
+        float inv = 1.0f / len;
+        v[0] *= inv;
+        v[1] *= inv;
+        v[2] *= inv;
+    }
+}
+
+static float vec3_dot(float a[3], float b[3]) {
+    return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+}
+
+static void vec3_cross(float a[3], float b[3], float out[3]) {
+    out[0] = a[1] * b[2] - a[2] * b[1];
+    out[1] = a[2] * b[0] - a[0] * b[2];
+    out[2] = a[0] * b[1] - a[1] * b[0];
+}
+
+static void vec3_copy(float src[3], float dst[3]) {
+    dst[0] = src[0];
+    dst[1] = src[1];
+    dst[2] = src[2];
+}
+
+static void axis_angle_rotate(float v[3], float axis_in[3], float angle, float out[3]) {
+    float axis[3];
+    vec3_copy(axis_in, axis);
+    vec3_normalize(axis);
+
+    float c = cosf(angle);
+    float s = sinf(angle);
+    float dot = vec3_dot(axis, v);
+    float cross[3];
+    vec3_cross(axis, v, cross);
+    out[0] = v[0] * c + cross[0] * s + axis[0] * dot * (1.0f - c);
+    out[1] = v[1] * c + cross[1] * s + axis[1] * dot * (1.0f - c);
+    out[2] = v[2] * c + cross[2] * s + axis[2] * dot * (1.0f - c);
+}
+
+static const uint8_t perlin_perm[512] = {151, 160, 137, 91, 90, 15, 131, 13, 201, 95, 96, 53, 194, 233, 7, 225, 140, 36,
+    103, 30, 69, 142, 8, 99, 37, 240, 21, 10, 23, 190, 6, 148, 247, 120, 234, 75, 0, 26, 197, 62, 94, 252, 219, 203,
+    117, 35, 11, 32, 57, 177, 33, 88, 237, 149, 56, 87, 174, 20, 125, 136, 171, 168, 68, 175, 74, 165, 71, 134, 139, 48,
+    27, 166, 77, 146, 158, 231, 83, 111, 229, 122, 60, 211, 133, 230, 220, 105, 92, 41, 55, 46, 245, 40, 244, 102, 143,
+    54, 65, 25, 63, 161, 1, 216, 80, 73, 209, 76, 132, 187, 208, 89, 18, 169, 200, 196, 135, 130, 116, 188, 159, 86,
+    164, 100, 109, 198, 173, 186, 3, 64, 52, 217, 226, 250, 124, 123, 5, 202, 38, 147, 118, 126, 255, 82, 85, 212, 207,
+    206, 59, 227, 47, 16, 58, 17, 182, 189, 28, 42, 223, 183, 170, 213, 119, 248, 152, 2, 44, 154, 163, 70, 221, 153,
+    101, 155, 167, 43, 172, 9, 129, 22, 39, 253, 19, 98, 108, 110, 79, 113, 224, 232, 178, 185, 112, 104, 218, 246, 97,
+    228, 251, 34, 242, 193, 238, 210, 144, 12, 191, 179, 162, 241, 81, 51, 145, 235, 249, 14, 239, 107, 49, 192, 214,
+    31, 181, 199, 106, 157, 184, 84, 204, 176, 115, 121, 50, 45, 127, 4, 150, 254, 138, 236, 205, 93, 222, 114, 67, 29,
+    24, 72, 243, 141, 128, 195, 78, 66, 215, 61, 156, 180, 151, 160, 137, 91, 90, 15, 131, 13, 201, 95, 96, 53, 194,
+    233, 7, 225, 140, 36, 103, 30, 69, 142, 8, 99, 37, 240, 21, 10, 23, 190, 6, 148, 247, 120, 234, 75, 0, 26, 197, 62,
+    94, 252, 219, 203, 117, 35, 11, 32, 57, 177, 33, 88, 237, 149, 56, 87, 174, 20, 125, 136, 171, 168, 68, 175, 74,
+    165, 71, 134, 139, 48, 27, 166, 77, 146, 158, 231, 83, 111, 229, 122, 60, 211, 133, 230, 220, 105, 92, 41, 55, 46,
+    245, 40, 244, 102, 143, 54, 65, 25, 63, 161, 1, 216, 80, 73, 209, 76, 132, 187, 208, 89, 18, 169, 200, 196, 135,
+    130, 116, 188, 159, 86, 164, 100, 109, 198, 173, 186, 3, 64, 52, 217, 226, 250, 124, 123, 5, 202, 38, 147, 118, 126,
+    255, 82, 85, 212, 207, 206, 59, 227, 47, 16, 58, 17, 182, 189, 28, 42, 223, 183, 170, 213, 119, 248, 152, 2, 44,
+    154, 163, 70, 221, 153, 101, 155, 167, 43, 172, 9, 129, 22, 39, 253, 19, 98, 108, 110, 79, 113, 224, 232, 178, 185,
+    112, 104, 218, 246, 97, 228, 251, 34, 242, 193, 238, 210, 144, 12, 191, 179, 162, 241, 81, 51, 145, 235, 249, 14,
+    239, 107, 49, 192, 214, 31, 181, 199, 106, 157, 184, 84, 204, 176, 115, 121, 50, 45, 127, 4, 150, 254, 138, 236,
+    205, 93, 222, 114, 67, 29, 24, 72, 243, 141, 128, 195, 78, 66, 215, 61, 156, 180};
+
+static float perlin_gradient(uint8_t hash, float x) {
+    float gradient = (float)((hash & 7) + 1);
+    if((hash & 8) != 0) {
+        gradient = -gradient;
+    }
+    return gradient * x;
+}
+
+static float perlin_noise(float x) {
+    int cell = (int)x;
+    if((float)cell > x) {
+        cell--;
+    }
+
+    float t = x - (float)cell;
+    float t1 = t - 1.0f;
+    uint8_t hash0 = perlin_perm[(uint8_t)cell];
+    uint8_t hash1 = perlin_perm[(uint8_t)(cell + 1)];
+
+    float a0 = 1.0f - t * t;
+    float a1 = 1.0f - t1 * t1;
+    a0 *= a0;
+    a1 *= a1;
+
+    return (perlin_gradient(hash1, t1) * a1 * a1 + perlin_gradient(hash0, t) * a0 * a0) * 0.395f;
+}
+
+static float clamp_audio_response(float value) {
+    if(value < 1.0f) {
+        if(value < 0.0f) {
+            return 0.0f;
+        }
+        if(value < 1.0f) {
+            return value;
+        }
+    }
+    return 1.0f;
+}
+
+static float turbulent_audio_response_value(wpe_turbulent_audio_response* audio, const wpe_renderer_state* state) {
+    if(audio->mode == 0 || state == NULL) {
+        return 0.0f;
+    }
+
+    int start = audio->frequency_start;
+    int end = audio->frequency_end;
+    if(start < 0) {
+        start = 0;
+    } else if(start > 15) {
+        start = 15;
+    }
+    if(end < 0) {
+        end = 0;
+    } else if(end > 15) {
+        end = 15;
+    }
+    if(end < start) {
+        int temp = start;
+        start = end;
+        end = temp;
+    }
+
+    float value = 0.0f;
+    if(audio->mode >= 1 && audio->mode <= 3) {
+        for(int i = start; i <= end; i++) {
+            float spectrum = wpe_audio_spectrum_value(state, 16, i);
+            if(spectrum > value) {
+                value = spectrum;
+            }
+        }
+    }
+
+    float min = audio->bounds[0];
+    float max = audio->bounds[1];
+    value = clamp_audio_response((value - min) / (max - min));
+    value = (3.0f - value * 2.0f) * value * value;
+    return clamp_audio_response(powf(value, audio->exponent));
+}
+
+static void generate_turbulent_velocity(
+    wpe_particle_initializer* init, const wpe_renderer_state* state, float out_velocity[3]) {
+    float phase_range = init->turbulent_phase_max - init->turbulent_phase_min;
+    if(init->turbulent_audio.mode != 0) {
+        phase_range *= turbulent_audio_response_value(&init->turbulent_audio, state);
+    }
+
+    float phase = rand_float(0.0f, 1.0f) * phase_range + init->turbulent_phase_min;
+    if(state != NULL) {
+        phase += state->time_seconds;
+    }
+    phase *= init->turbulent_time_scale;
+
+    float angle = perlin_noise(phase) * (float)M_PI * init->turbulent_scale + init->turbulent_offset;
+    float direction[3];
+    axis_angle_rotate(init->turbulent_forward, init->turbulent_right, angle, direction);
+    float speed = rand_float(init->turbulent_speed_min, init->turbulent_speed_max);
+
+    out_velocity[0] = direction[0] * speed;
+    out_velocity[1] = direction[1] * speed;
+    out_velocity[2] = direction[2] * speed;
+}
+
 static int particle_spritesheet_frame(wpe_particle_object* particle, wpe_particle_instance* instance) {
     if(particle->spritesheet_frames <= 0) {
         return 0;
@@ -90,7 +259,8 @@ static int particle_spritesheet_frame(wpe_particle_object* particle, wpe_particl
     return frame;
 }
 
-static void spawn_particle_instance(wpe_particle_object* particle, wpe_particle_emitter* emitter, float duration) {
+static void spawn_particle_instance(
+    wpe_particle_object* particle, wpe_particle_emitter* emitter, float duration, const wpe_renderer_state* state) {
     (void)duration;
     if(particle->alive_count == particle->max_count) {
         return;
@@ -141,6 +311,13 @@ static void spawn_particle_instance(wpe_particle_object* particle, wpe_particle_
         instance->rotation[i] = rand_float(particle->init.min_rotation[i], particle->init.max_rotation[i]);
         instance->angular_velocity[i] =
             rand_float(particle->init.min_angular_velocity[i], particle->init.max_angular_velocity[i]);
+    }
+    if(particle->init.turbulent_velocity) {
+        float turbulent_velocity[3];
+        generate_turbulent_velocity(&particle->init, state, turbulent_velocity);
+        for(int i = 0; i < 3; i++) {
+            instance->velocity[i] += turbulent_velocity[i];
+        }
     }
 
     instance->lifetime = rand_float(particle->init.min_lifetime, particle->init.max_lifetime);
@@ -238,7 +415,7 @@ static void update_particle_instance(wpe_particle_object* particle, wpe_particle
     instance->frame = particle_spritesheet_frame(particle, instance);
 }
 
-static void update_particle(wpe_particle_object* particle, float delta) {
+static void update_particle(wpe_particle_object* particle, float delta, const wpe_renderer_state* state) {
     for(int i = 0; i < particle->num_emitters; i++) {
         if(particle->emitters[i].interval <= 0.0f) {
             continue;
@@ -246,7 +423,7 @@ static void update_particle(wpe_particle_object* particle, float delta) {
         particle->emitters[i].timer += delta;
         while(particle->emitters[i].timer >= particle->emitters[i].interval) {
             particle->emitters[i].timer -= particle->emitters[i].interval;
-            spawn_particle_instance(particle, &particle->emitters[i], particle->emitters[i].interval);
+            spawn_particle_instance(particle, &particle->emitters[i], particle->emitters[i].interval, state);
         }
     }
     for(int i = 0; i < particle->max_count; i++) {
@@ -358,7 +535,7 @@ void wpe_renderer_init_particle_object(wpe_object* obj) {
     particle->pipeline = create_particle_pipeline(particle->material.shader, particle->material.blending);
 
     for(float timer = 0.0f; timer < particle->start_time; timer += 0.05f) {
-        update_particle(particle, 0.05f);
+        update_particle(particle, 0.05f, NULL);
     }
     update_particle_instance_data(particle);
     ow_update_vertex_buffer(particle->instance_buffer, 0, particle->instance_data,
@@ -370,7 +547,7 @@ static bool particle_ready_for_update(wpe_particle_object* particle) {
            particle->instance_buffer.id != 0;
 }
 
-void wpe_renderer_update_particle_objects(float delta) {
+void wpe_renderer_update_particle_objects(float delta, const wpe_renderer_state* state) {
     bool needs_upload = false;
 
     for(size_t i = 0; i < scene.num_objects; i++) {
@@ -384,7 +561,7 @@ void wpe_renderer_update_particle_objects(float delta) {
             continue;
         }
 
-        update_particle(particle, delta);
+        update_particle(particle, delta, state);
         update_particle_instance_data(particle);
         needs_upload = true;
     }

@@ -338,6 +338,14 @@ typedef struct {
 } wpe_particle_emitter;
 
 typedef struct {
+    int mode;
+    float exponent;
+    float bounds[2];
+    int frequency_start;
+    int frequency_end;
+} wpe_turbulent_audio_response;
+
+typedef struct {
     float min_lifetime;
     float max_lifetime;
     float min_size;
@@ -352,6 +360,17 @@ typedef struct {
     float max_color[3];
     float min_alpha;
     float max_alpha;
+    bool turbulent_velocity;
+    float turbulent_scale;
+    float turbulent_time_scale;
+    float turbulent_offset;
+    float turbulent_speed_min;
+    float turbulent_speed_max;
+    float turbulent_phase_min;
+    float turbulent_phase_max;
+    float turbulent_forward[3];
+    float turbulent_right[3];
+    wpe_turbulent_audio_response turbulent_audio;
 } wpe_particle_initializer;
 
 typedef struct {
@@ -579,6 +598,7 @@ wpe_transform_parameters wpe_transform_parameters_for_object_mesh(wpe_object* ob
 uint8_t* wpe_build_uniform_data(wpe_uniform_info* uniforms, int num_uniforms, wpe_object* object,
     wpe_texture_target* texture_slots, int num_texture_slots, wpe_uniform_constant* constants, int num_constants,
     wpe_transform_matrices matrices, const wpe_renderer_state* state, int* size_out);
+float wpe_audio_spectrum_value(const wpe_renderer_state* state, int target_size, int index);
 
 bool wpe_render_material_to_target(wpe_object* object, wpe_material* material, wpe_material_pass* pass,
     ow_pipeline_id pipeline, ow_texture_id color_target, bool clear, wpe_texture_target previous, bool default_previous,
@@ -602,7 +622,7 @@ void wpe_renderer_init_image_object(wpe_object* obj);
 void wpe_init_puppet_model(wpe_puppet_model* puppet);
 bool wpe_puppet_attachment_transform(wpe_puppet_model* puppet, const char* name, wpe_mat4* transform_out);
 void wpe_renderer_init_particle_object(wpe_object* obj);
-void wpe_renderer_update_particle_objects(float delta);
+void wpe_renderer_update_particle_objects(float delta, const wpe_renderer_state* state);
 bool wpe_renderer_render_image_object(wpe_object* object, bool clear, const wpe_renderer_state* state);
 bool wpe_renderer_render_particle_object(wpe_object* object, bool clear, const wpe_renderer_state* state);
 void wpe_renderer_end_frame(const wpe_renderer_state* state);

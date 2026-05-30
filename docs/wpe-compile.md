@@ -89,7 +89,7 @@ You can check out this list to see what is not yet implemented or can be improve
     - [x] Alpha random
     - [x] Velocity random
     - [ ] Inherit control point velocity
-    - [ ] Turbulent velocity random
+    - [x] Turbulent velocity random
     - [x] Rotation random
     - [ ] Position offset random
     - [x] Angular velocity random

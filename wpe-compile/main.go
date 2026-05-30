@@ -600,8 +600,7 @@ func processImageObject(object *ImageObject) {
 		}
 		object.PuppetMaterial.ImportedTextures = make([]int, len(object.PuppetMaterial.Textures))
 		for idx := range object.PuppetMaterial.Textures {
-			object.PuppetMaterial.ImportedTextures[idx] =
-				addImportTextureTask(&ImportTextureTask{Name: object.PuppetMaterial.Textures[idx]})
+			object.PuppetMaterial.ImportedTextures[idx] = addImportTextureTask(&ImportTextureTask{Name: object.PuppetMaterial.Textures[idx]})
 		}
 		puppetDefines := object.PuppetMaterial.Combos
 		if object.Puppet.BoneCount > 0 {
@@ -683,6 +682,10 @@ func processParticleObject(object *ParticleObject) bool {
 		object.ParticleData.Initializer.MinSize *= scale
 		object.ParticleData.Initializer.MaxSize *= scale
 	}
+	if object.ParticleData.Initializer.TurbulentVelocity && object.ParticleData.Initializer.TurbulentAudio.Mode != 0 &&
+		state.Scene.AudioSpectrumSize < 16 {
+		state.Scene.AudioSpectrumSize = 16
+	}
 
 	return true
 }
@@ -729,6 +732,10 @@ func applyParticleInstanceOverride(object *ParticleObject) {
 		for i := range init.MinVelocity {
 			init.MinVelocity[i] *= override.Speed
 			init.MaxVelocity[i] *= override.Speed
+		}
+		if init.TurbulentVelocity {
+			init.TurbulentSpeedMin *= override.Speed
+			init.TurbulentSpeedMax *= override.Speed
 		}
 	}
 	if override.Rate != 0 {

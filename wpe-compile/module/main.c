@@ -93,7 +93,7 @@ __attribute__((export_name("init"))) void init() {
 __attribute__((export_name("update"))) void update(float delta) {
     update_camera_state(delta);
     wpe_renderer_begin_frame(&state);
-    wpe_renderer_update_particle_objects(delta);
+    wpe_renderer_update_particle_objects(delta, &state);
 
     bool clear = true;
     for(size_t i = 0; i < scene.num_objects; i++) {
