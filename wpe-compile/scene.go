@@ -1113,6 +1113,8 @@ func (init *ParticleInitializer) parseFromJSON(raw json.RawMessage) error {
 
 	switch name {
 	case "lifetimerandom":
+		init.MinLifetime = 0
+		init.MaxLifetime = 1
 		if bytesFromRawNullAware(payload.Min) != nil {
 			min, err := parseFloat64FromRaw(payload.Min)
 			if err != nil {
@@ -1128,6 +1130,8 @@ func (init *ParticleInitializer) parseFromJSON(raw json.RawMessage) error {
 			init.MaxLifetime = float32(max)
 		}
 	case "sizerandom":
+		init.MinSize = 5
+		init.MaxSize = 50
 		if bytesFromRawNullAware(payload.Min) != nil {
 			min, err := parseFloat64FromRaw(payload.Min)
 			if err != nil {
@@ -1143,7 +1147,7 @@ func (init *ParticleInitializer) parseFromJSON(raw json.RawMessage) error {
 			init.MaxSize = float32(max)
 		}
 	case "alpharandom":
-		init.MinAlpha = 0.0
+		init.MinAlpha = 0.05
 		init.MaxAlpha = 1.0
 		if bytesFromRawNullAware(payload.Min) != nil {
 			min, err := parseFloat64FromRaw(payload.Min)
@@ -1160,6 +1164,8 @@ func (init *ParticleInitializer) parseFromJSON(raw json.RawMessage) error {
 			init.MaxAlpha = float32(max)
 		}
 	case "velocityrandom":
+		init.MinVelocity = [3]float32{-32, -32, 0}
+		init.MaxVelocity = [3]float32{32, 32, 0}
 		if bytesFromRawNullAware(payload.Min) != nil {
 			min, err := parseVector3FromRaw(payload.Min, init.MinVelocity)
 			if err != nil {
@@ -1175,6 +1181,8 @@ func (init *ParticleInitializer) parseFromJSON(raw json.RawMessage) error {
 			init.MaxVelocity = max
 		}
 	case "colorrandom":
+		init.MinColor = [3]float32{0, 0, 0}
+		init.MaxColor = [3]float32{1, 1, 1}
 		if bytesFromRawNullAware(payload.Min) != nil {
 			min, err := parseVector3FromRaw(payload.Min, init.MinColor)
 			if err != nil {
@@ -1194,6 +1202,8 @@ func (init *ParticleInitializer) parseFromJSON(raw json.RawMessage) error {
 			}
 		}
 	case "rotationrandom":
+		init.MinRotation = [3]float32{0, 0, 0}
+		init.MaxRotation = [3]float32{0, 0, 6.28318530717}
 		if bytesFromRawNullAware(payload.Min) != nil {
 			min, err := parseVector3FromRaw(payload.Min, init.MinRotation)
 			if err != nil {
@@ -1209,6 +1219,8 @@ func (init *ParticleInitializer) parseFromJSON(raw json.RawMessage) error {
 			init.MaxRotation = max
 		}
 	case "angularvelocityrandom":
+		init.MinAngularVelocity = [3]float32{0, 0, -5}
+		init.MaxAngularVelocity = [3]float32{0, 0, 5}
 		if bytesFromRawNullAware(payload.Min) != nil {
 			min, err := parseVector3FromRaw(payload.Min, init.MinAngularVelocity)
 			if err != nil {
@@ -1446,7 +1458,7 @@ func (operator *ParticleOperator) parseFromJSON(raw json.RawMessage) error {
 			StartTime:  0,
 			EndTime:    1,
 			StartValue: Vector3{1, 1, 1},
-			EndValue:   Vector3{1, 1, 1},
+			EndValue:   Vector3{0, 0, 0},
 		}
 		if bytesFromRawNullAware(payload.StartTime) != nil {
 			startTime, err := parseFloat64FromRaw(payload.StartTime)
