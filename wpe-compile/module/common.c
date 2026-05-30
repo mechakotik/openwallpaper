@@ -156,8 +156,7 @@ wpe_object* wpe_find_object(int id) {
 }
 
 static bool texture_name_is_previous(const char* name) {
-    return name == NULL || name[0] == '\0' || strcmp(name, "previous") == 0 ||
-           wpe_starts_with(name, "_rt_imageLayerComposite");
+    return name != NULL && (strcmp(name, "previous") == 0 || wpe_starts_with(name, "_rt_imageLayerComposite"));
 }
 
 static bool texture_name_is_full_frame(const char* name) {
