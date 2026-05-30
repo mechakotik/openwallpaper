@@ -363,7 +363,7 @@ func (materialPass *MaterialPass) parseFromJSON(raw json.RawMessage) error {
 			materialPass.Combos = make(map[string]int)
 		}
 		for key, value := range payload.Combos {
-			materialPass.Combos[key] = int(value)
+			materialPass.Combos[strings.ToUpper(key)] = int(value)
 		}
 	}
 
@@ -458,7 +458,7 @@ func (material *Material) parseFromJSON(raw json.RawMessage) error {
 			material.Combos = make(map[string]int)
 		}
 		for key, value := range firstPass.Combos {
-			material.Combos[key] = int(value)
+			material.Combos[strings.ToUpper(key)] = int(value)
 		}
 	}
 
