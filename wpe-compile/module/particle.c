@@ -552,7 +552,7 @@ void wpe_renderer_update_particle_objects(float delta, const wpe_renderer_state*
 
     for(size_t i = 0; i < scene.num_objects; i++) {
         wpe_object* object = &scene.objects[i];
-        if(object->type != OBJECTTYPE_PARTICLE) {
+        if(!object->visible || object->type != OBJECTTYPE_PARTICLE) {
             continue;
         }
 
@@ -573,7 +573,7 @@ void wpe_renderer_update_particle_objects(float delta, const wpe_renderer_state*
     ow_begin_copy_pass();
     for(size_t i = 0; i < scene.num_objects; i++) {
         wpe_object* object = &scene.objects[i];
-        if(object->type != OBJECTTYPE_PARTICLE) {
+        if(!object->visible || object->type != OBJECTTYPE_PARTICLE) {
             continue;
         }
 

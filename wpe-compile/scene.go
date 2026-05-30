@@ -468,6 +468,7 @@ func (material *Material) parseFromJSON(raw json.RawMessage) error {
 type EmptyObject struct {
 	ID         int
 	Parent     int
+	Visible    bool
 	Attachment string
 	Origin     Vector3
 	Scale      Vector3
@@ -476,14 +477,16 @@ type EmptyObject struct {
 
 func (object *EmptyObject) parseFromSceneJSON(raw json.RawMessage) error {
 	payload := struct {
-		ID     IntValue `json:"id"`
-		Parent IntValue `json:"parent"`
-		Origin Vector3
-		Scale  Vector3
-		Angles Vector3
+		ID      IntValue  `json:"id"`
+		Parent  IntValue  `json:"parent"`
+		Visible BoolValue `json:"visible"`
+		Origin  Vector3
+		Scale   Vector3
+		Angles  Vector3
 	}{
-		Parent: -1,
-		Scale:  Vector3{1, 1, 1},
+		Parent:  -1,
+		Visible: true,
+		Scale:   Vector3{1, 1, 1},
 	}
 
 	if err := json.Unmarshal(raw, &payload); err != nil {
@@ -491,6 +494,7 @@ func (object *EmptyObject) parseFromSceneJSON(raw json.RawMessage) error {
 	}
 	object.ID = int(payload.ID)
 	object.Parent = int(payload.Parent)
+	object.Visible = bool(payload.Visible)
 	object.Origin = payload.Origin
 	object.Scale = payload.Scale
 	object.Angles = payload.Angles
@@ -689,6 +693,7 @@ type PuppetAnimationLayer struct {
 type ImageObject struct {
 	ID             int
 	Parent         int
+	Visible        bool
 	Name           string
 	Attachment     string
 	Origin         Vector3
@@ -730,6 +735,7 @@ func (imageObject *ImageObject) parseFromSceneJSON(raw json.RawMessage, pkgMap *
 	type imageSceneJSON struct {
 		ID              IntValue          `json:"id"`
 		Parent          IntValue          `json:"parent"`
+		Visible         BoolValue         `json:"visible"`
 		Name            StringValue       `json:"name"`
 		Attachment      StringValue       `json:"attachment"`
 		Image           StringValue       `json:"image"`
@@ -758,6 +764,7 @@ func (imageObject *ImageObject) parseFromSceneJSON(raw json.RawMessage, pkgMap *
 
 	payload := imageSceneJSON{
 		Parent:     -1,
+		Visible:    true,
 		Scale:      Vector3{1, 1, 1},
 		Color:      Vector3{1, 1, 1},
 		Alpha:      1,
@@ -775,6 +782,7 @@ func (imageObject *ImageObject) parseFromSceneJSON(raw json.RawMessage, pkgMap *
 	imageObject.Name = string(payload.Name)
 	imageObject.ID = int(payload.ID)
 	imageObject.Parent = int(payload.Parent)
+	imageObject.Visible = bool(payload.Visible)
 	imageObject.Attachment = string(payload.Attachment)
 	imageObject.ColorBlendMode = int(payload.ColorBlendMode)
 	imageObject.Origin = payload.Origin
@@ -1015,6 +1023,7 @@ type ParticleInstanceOverride struct {
 type ParticleObject struct {
 	ID                int
 	Parent            int
+	Visible           bool
 	Name              string
 	Attachment        string
 	Origin            Vector3
@@ -1660,6 +1669,7 @@ func (particleObject *ParticleObject) parseFromSceneJSON(raw json.RawMessage, pk
 	payload := struct {
 		ID               IntValue        `json:"id"`
 		Parent           IntValue        `json:"parent"`
+		Visible          BoolValue       `json:"visible"`
 		Name             StringValue     `json:"name"`
 		Attachment       StringValue     `json:"attachment"`
 		Origin           Vector3         `json:"origin"`
@@ -1669,7 +1679,8 @@ func (particleObject *ParticleObject) parseFromSceneJSON(raw json.RawMessage, pk
 		Particle         StringValue     `json:"particle"`
 		InstanceOverride json.RawMessage `json:"instanceoverride"`
 	}{
-		Parent: -1,
+		Parent:  -1,
+		Visible: true,
 	}
 
 	if err := json.Unmarshal(raw, &payload); err != nil {
@@ -1684,6 +1695,7 @@ func (particleObject *ParticleObject) parseFromSceneJSON(raw json.RawMessage, pk
 	particleObject.Name = string(payload.Name)
 	particleObject.ID = int(payload.ID)
 	particleObject.Parent = int(payload.Parent)
+	particleObject.Visible = bool(payload.Visible)
 	particleObject.Attachment = string(payload.Attachment)
 	particleObject.Origin = payload.Origin
 	particleObject.Scale = payload.Scale

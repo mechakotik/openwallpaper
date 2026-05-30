@@ -98,6 +98,9 @@ __attribute__((export_name("update"))) void update(float delta) {
     bool clear = true;
     for(size_t i = 0; i < scene.num_objects; i++) {
         wpe_object* object = &scene.objects[i];
+        if(!object->visible) {
+            continue;
+        }
         bool rendered = false;
         if(object->type == OBJECTTYPE_IMAGE) {
             rendered = wpe_renderer_render_image_object(object, clear, &state);

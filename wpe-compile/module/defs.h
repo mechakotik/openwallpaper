@@ -449,6 +449,7 @@ typedef struct wpe_object {
     int id;
     int parent;
     struct wpe_object* parent_object;
+    bool visible;
     const char* name;
     const char* attachment;
     wpe_vec3 origin;
