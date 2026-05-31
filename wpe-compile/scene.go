@@ -509,6 +509,7 @@ type EffectFBO struct {
 type ImageEffect struct {
 	Name      string
 	Path      string
+	Visible   bool
 	Passes    []MaterialPass
 	FBOs      []EffectFBO
 	Materials []Material
@@ -631,10 +632,13 @@ func (effect *ImageEffect) parseFromFileJSON(raw json.RawMessage, pkgMap *map[st
 
 func (effect *ImageEffect) parseFromSceneJSON(raw json.RawMessage, pkgMap *map[string][]byte) error {
 	payload := struct {
-		File   StringValue       `json:"file"`
-		Name   StringValue       `json:"name"`
-		Passes []json.RawMessage `json:"passes"`
-	}{}
+		File    StringValue       `json:"file"`
+		Name    StringValue       `json:"name"`
+		Visible BoolValue         `json:"visible"`
+		Passes  []json.RawMessage `json:"passes"`
+	}{
+		Visible: true,
+	}
 
 	if err := json.Unmarshal(raw, &payload); err != nil {
 		return fmt.Errorf("cannot parse image effect from scene: %w", err)
@@ -656,6 +660,7 @@ func (effect *ImageEffect) parseFromSceneJSON(raw json.RawMessage, pkgMap *map[s
 	if strings.TrimSpace(string(payload.Name)) != "" {
 		effect.Name = string(payload.Name)
 	}
+	effect.Visible = bool(payload.Visible)
 
 	for index, passOverrideRaw := range payload.Passes {
 		if index >= len(effect.Passes) {

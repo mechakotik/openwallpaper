@@ -465,6 +465,7 @@ NULL
     {{range $_, $effect := .}}
         (wpe_image_effect){
             .name = {{printf "%q" $effect.Name}},
+            .visible = {{$effect.Visible}},
             .passes = {{template "passes" $effect.Passes}},
             .num_passes = {{len $effect.Passes}},
             .fbos = {{template "fbos" $effect.FBOs}},

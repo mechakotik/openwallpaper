@@ -174,6 +174,7 @@ typedef struct wpe_effect_fbo {
 
 typedef struct {
     const char* name;
+    bool visible;
     wpe_material_pass* passes;
     int num_passes;
     wpe_effect_fbo* fbos;

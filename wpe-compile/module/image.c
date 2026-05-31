@@ -67,6 +67,9 @@ static wpe_texture_target image_ping_pong_target(wpe_object* object, int index) 
 static bool is_final_present_pass(wpe_object* object, int effect_index, int pass_index) {
     for(int scan_effect_idx = effect_index; scan_effect_idx < object->image.num_effects; scan_effect_idx++) {
         wpe_image_effect* scan_effect = &object->image.effects[scan_effect_idx];
+        if(!scan_effect->visible) {
+            continue;
+        }
         int scan_pass_count =
             scan_effect->num_passes < scan_effect->num_materials ? scan_effect->num_passes : scan_effect->num_materials;
         int scan_pass_idx = scan_effect_idx == effect_index ? pass_index + 1 : 0;
@@ -124,6 +127,9 @@ static wpe_effect_render_result render_image_effects(
 
     for(int effect_idx = 0; effect_idx < object->image.num_effects; effect_idx++) {
         wpe_image_effect* effect = &object->image.effects[effect_idx];
+        if(!effect->visible) {
+            continue;
+        }
         int pass_count = effect->num_passes < effect->num_materials ? effect->num_passes : effect->num_materials;
         for(int pass_idx = 0; pass_idx < pass_count; pass_idx++) {
             wpe_material* material = &effect->materials[pass_idx];
