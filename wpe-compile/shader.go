@@ -71,6 +71,8 @@ func preprocessShader(vertexSource, fragmentSource, includePath string, boundTex
 	fragmentSource = appendGLSL450Header(fragmentSource)
 	vertexSource = takeAbsFromPowBase(vertexSource)
 	fragmentSource = takeAbsFromPowBase(fragmentSource)
+	vertexSource = removeUnmatchedEndifs(vertexSource)
+	fragmentSource = removeUnmatchedEndifs(fragmentSource)
 
 	vertexCombos, vertexDefaults := parseSamplerCombos(vertexSource, boundTextures)
 	fragmentCombos, fragmentDefaults := parseSamplerCombos(fragmentSource, boundTextures)
@@ -94,6 +96,9 @@ func preprocessShader(vertexSource, fragmentSource, includePath string, boundTex
 		return PreprocessedShader{}, err
 	}
 
+	vertexSource = rewriteHLSLImplicitConversions(vertexSource)
+	fragmentSource = rewriteHLSLImplicitConversions(fragmentSource)
+
 	vertexSource, attributes := preprocessVertexAttributes(vertexSource)
 	vertexSource, vertexVarying := findAndRemoveVarying(vertexSource)
 	fragmentSource, fragmentVarying := findAndRemoveVarying(fragmentSource)
@@ -102,19 +107,30 @@ func preprocessShader(vertexSource, fragmentSource, includePath string, boundTex
 		vertexInfo, exists := vertexVarying[name]
 		if exists {
 			if vertexInfo != info {
-				return PreprocessedShader{}, fmt.Errorf("varying %s has different type in vertex and fragment shader", name)
+				mergedInfo, ok := mergeVaryingInfo(vertexInfo, info)
+				if !ok {
+					return PreprocessedShader{}, fmt.Errorf("varying %s has different type in vertex and fragment shader", name)
+				}
+				vertexVarying[name] = mergedInfo
 			}
 		} else {
 			vertexVarying[name] = info
 		}
 	}
 
+	vertexSource = rewriteTypedVectorAssignments(vertexSource, shaderVariableTypes(attributes, vertexVarying))
+	fragmentAliases := map[string]string{}
+	fragmentSource, fragmentAliases = rewriteWritableFragmentVaryings(fragmentSource, vertexVarying)
+	fragmentTypes := shaderVariableTypes(nil, vertexVarying)
+	maps.Copy(fragmentTypes, fragmentAliases)
+	fragmentSource = rewriteTypedVectorAssignments(fragmentSource, fragmentTypes)
+
 	varying := []AttributeInfo{}
 	for _, info := range vertexVarying {
 		varying = append(varying, info)
 	}
 
-	fragmentSource, samplers := preprocessSamplers(fragmentSource)
+	vertexSource, fragmentSource, samplers := preprocessShaderSamplers(vertexSource, fragmentSource)
 	vertexSource = insertIntermediateAttributes(vertexSource, varying, "out")
 	fragmentSource = insertIntermediateAttributes(fragmentSource, varying, "in")
 
@@ -184,6 +200,27 @@ func removeRequireDirectives(source string) string {
 	return reRequire.ReplaceAllString(source, "")
 }
 
+func removeUnmatchedEndifs(source string) string {
+	lines := strings.SplitAfter(source, "\n")
+	reIf := regexp.MustCompile(`^\s*#\s*if(?:def|ndef)?\b`)
+	reEndif := regexp.MustCompile(`^\s*#\s*endif\b`)
+	depth := 0
+	out := strings.Builder{}
+	for _, line := range lines {
+		switch {
+		case reIf.MatchString(line):
+			depth++
+		case reEndif.MatchString(line):
+			if depth == 0 {
+				continue
+			}
+			depth--
+		}
+		out.WriteString(line)
+	}
+	return out.String()
+}
+
 func removePrecisionSpecifiers(source string) string {
 	rePrecision := regexp.MustCompile(`uniform *(lowp|mediump|highp)`)
 	return rePrecision.ReplaceAllString(source, "uniform ")
@@ -200,6 +237,7 @@ func appendGLSL450Header(source string) string {
 #define CAST3(x) (vec3(x))
 #define CAST4(x) (vec4(x))
 #define CAST3X3(x) (mat3(x))
+#define CASTU(x) (uint(x))
 
 #define texSample2D texture
 #define texSample2DLod textureLod
@@ -255,6 +293,419 @@ func takeAbsFromPowBase(source string) string {
 		}
 	}
 	return source
+}
+
+func rewriteHLSLImplicitConversions(source string) string {
+	source = renameUserFunction(source, "mod", "mod_")
+	source = rewriteNonConstantConstFloats(source)
+	source = rewriteIntCastsStoredInFloat(source)
+	source = rewriteStepStoredInInt(source)
+	source = rewriteUintModulo(source)
+	source = rewriteBoolMultiplication(source)
+	source = rewriteBoolCompoundMultiply(source)
+	source = rewriteBoolCompoundAdd(source)
+	source = rewriteVectorToScalarAssignments(source)
+	source = rewriteTextureVectorAssignments(source)
+	source = rewriteVectorFunctionArguments(source)
+	source = rewriteVectorMixOperands(source)
+	source = rewriteVectorMaxCalls(source)
+	source = rewriteVectorBinaryOperands(source)
+	source = rewriteVectorScalarAdditions(source)
+	source = rewriteVec2ResolutionOperands(source)
+	return source
+}
+
+func renameUserFunction(source string, name string, replacement string) string {
+	reDefinition := regexp.MustCompile(`\b(float|vec[234]|int|uint)\s+` + regexp.QuoteMeta(name) + `\s*\(`)
+	if !reDefinition.MatchString(source) {
+		return source
+	}
+	source = reDefinition.ReplaceAllString(source, "$1 "+replacement+"(")
+
+	reCall := regexp.MustCompile(`\b` + regexp.QuoteMeta(name) + `\s*\(`)
+	return reCall.ReplaceAllString(source, replacement+"(")
+}
+
+func rewriteNonConstantConstFloats(source string) string {
+	reConst := regexp.MustCompile(`\bconst\s+float\s+([A-Z_][A-Z0-9_]*)\s*=\s*([^;\n]*(?:g_|u_)[^;\n]*)\s*;`)
+	return reConst.ReplaceAllString(source, "#define $1 ($2)")
+}
+
+func rewriteIntCastsStoredInFloat(source string) string {
+	reIntCast := regexp.MustCompile(`\bfloat\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*=\s*int\s*\(`)
+	return reIntCast.ReplaceAllString(source, "int $1 = int(")
+}
+
+func rewriteStepStoredInInt(source string) string {
+	reStep := regexp.MustCompile(`\bint\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*=\s*((?:smoothstep|step)\s*\()`)
+	return reStep.ReplaceAllString(source, "float $1 = $2")
+}
+
+func rewriteUintModulo(source string) string {
+	reFloatModulo := regexp.MustCompile(`\buint\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*=\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*%\s*([a-zA-Z_][a-zA-Z0-9_]*|[0-9]+)\s*;`)
+	source = reFloatModulo.ReplaceAllString(source, "uint $1 = uint(mod($2, float($3)));")
+
+	reUintModulo := regexp.MustCompile(`\buint\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*=\s*\(([a-zA-Z_][a-zA-Z0-9_]*)\s*\+\s*([0-9]+)\)\s*%\s*([a-zA-Z_][a-zA-Z0-9_]*|[0-9]+)\s*;`)
+	return reUintModulo.ReplaceAllString(source, "uint $1 = ($2 + ${3}u) % uint($4);")
+}
+
+func rewriteBoolMultiplication(source string) string {
+	reBoolProduct := regexp.MustCompile(`\(([^()\n;]*(?:<=|>=|==|!=|<|>)[^()\n;]*)\)\s*\*`)
+	return reBoolProduct.ReplaceAllString(source, "(($1) ? 1.0 : 0.0) *")
+}
+
+func rewriteBoolCompoundMultiply(source string) string {
+	reBoolMultiply := regexp.MustCompile(`\b([a-zA-Z_][a-zA-Z0-9_]*)\s*\*=\s*([^;\n]*(?:&&|\|\|)[^;\n]*)\s*;`)
+	source = reBoolMultiply.ReplaceAllString(source, "$1 *= (($2) ? 1.0 : 0.0);")
+
+	boolVariables := declaredBoolVariables(source)
+	for name := range boolVariables {
+		reBoolVariableMultiply := regexp.MustCompile(`\b([a-zA-Z_][a-zA-Z0-9_]*)\s*\*=\s*` + regexp.QuoteMeta(name) + `\s*;`)
+		source = reBoolVariableMultiply.ReplaceAllString(source, "$1 *= ("+name+" ? 1.0 : 0.0);")
+	}
+
+	return source
+}
+
+func rewriteBoolCompoundAdd(source string) string {
+	reBoolAdd := regexp.MustCompile(`\b([a-zA-Z_][a-zA-Z0-9_]*(?:\.[xyzwrgba]+)?)\s*\+=\s*([^;\n]*(?:<=|>=|==|!=|<|>)[^;\n]*)\s*;`)
+	return reBoolAdd.ReplaceAllString(source, "$1 += (($2) ? 1.0 : 0.0);")
+}
+
+func rewriteVectorToScalarAssignments(source string) string {
+	reVectorScalar := regexp.MustCompile(`\bfloat\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*=\s*([^;\n]*(?:\.[xyzwrgba]{2,4}|vec[234]\s*\()[^;\n]*)\s*;`)
+	return reVectorScalar.ReplaceAllString(source, "float $1 = ($2).x;")
+}
+
+func rewriteTextureVectorAssignments(source string) string {
+	reTextureVector := regexp.MustCompile(`\bvec([23])\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*=\s*(texture\s*\([^;\n]+?\))\s*;`)
+	return reTextureVector.ReplaceAllStringFunc(source, func(match string) string {
+		submatches := reTextureVector.FindStringSubmatch(match)
+		swizzle := "xy"
+		if submatches[1] == "3" {
+			swizzle = "rgb"
+		}
+		return fmt.Sprintf("vec%s %s = %s.%s;", submatches[1], submatches[2], submatches[3], swizzle)
+	})
+}
+
+func rewriteVectorFunctionArguments(source string) string {
+	reRotateVec2 := regexp.MustCompile(`\brotateVec2\s*\(\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*,`)
+	source = reRotateVec2.ReplaceAllString(source, "rotateVec2($1.xy,")
+
+	reTextureCoord := regexp.MustCompile(`\btexture\s*\(\s*([^,\n]+?)\s*,\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\)`)
+	return reTextureCoord.ReplaceAllString(source, "texture($1, $2.xy)")
+}
+
+func rewriteVectorMixOperands(source string) string {
+	types := declaredVariableTypes(source)
+
+	reReturnMix := regexp.MustCompile(`\breturn\s+mix\s*\(\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*,\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*,`)
+	source = reReturnMix.ReplaceAllStringFunc(source, func(match string) string {
+		submatches := reReturnMix.FindStringSubmatch(match)
+		first := submatches[1]
+		second := submatches[2]
+		firstComponents, firstOK := vectorComponentCount(types[first])
+		secondComponents, secondOK := vectorComponentCount(types[second])
+		if !firstOK || !secondOK || firstComponents == secondComponents {
+			return match
+		}
+		if firstComponents == 1 && secondComponents > 1 {
+			return strings.Replace(match, "mix("+first+",", fmt.Sprintf("mix(%s(%s),", types[second], first), 1)
+		}
+		if secondComponents == 1 && firstComponents > 1 {
+			return strings.Replace(match, ", "+second+",", fmt.Sprintf(", %s(%s),", types[first], second), 1)
+		}
+		return match
+	})
+
+	reRGBMix := regexp.MustCompile(`\b([a-zA-Z_][a-zA-Z0-9_]*\.rgb\s*=\s*mix\s*\()\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*,`)
+	return reRGBMix.ReplaceAllStringFunc(source, func(match string) string {
+		submatches := reRGBMix.FindStringSubmatch(match)
+		components, ok := vectorComponentCount(types[submatches[2]])
+		if !ok || components <= 3 {
+			return match
+		}
+		return submatches[1] + submatches[2] + ".rgb,"
+	})
+}
+
+func rewriteVectorMaxCalls(source string) string {
+	reVectorMax := regexp.MustCompile(`\bmax\s*\(\s*([0-9]+(?:\.[0-9]+)?)\s*,\s*([a-zA-Z_][a-zA-Z0-9_]*(?:\.[rgbaxyzw]{2,4}))\s*\)`)
+	return reVectorMax.ReplaceAllStringFunc(source, func(match string) string {
+		submatches := reVectorMax.FindStringSubmatch(match)
+		components := componentSelectorCount(submatches[2])
+		if components <= 1 {
+			return match
+		}
+		typeName, ok := vectorTypeWithComponentCount(components)
+		if !ok {
+			return match
+		}
+		value := submatches[1]
+		if !strings.Contains(value, ".") {
+			value += ".0"
+		}
+		return fmt.Sprintf("max(%s(%s), %s)", typeName, value, submatches[2])
+	})
+}
+
+func rewriteVectorBinaryOperands(source string) string {
+	reRoundMultiply := regexp.MustCompile(`\bround\s*\(\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\)\s*\*\s*([a-zA-Z_][a-zA-Z0-9_]*)\b`)
+	source = reRoundMultiply.ReplaceAllString(source, "round($1.xy) * $2.xy")
+
+	reVectorMinusVec2 := regexp.MustCompile(`\b([a-zA-Z_][a-zA-Z0-9_]*)\s*-\s*(\(?vec2\s*\()`)
+	return reVectorMinusVec2.ReplaceAllString(source, "$1.xy - $2")
+}
+
+func rewriteVectorScalarAdditions(source string) string {
+	types := declaredVariableTypes(source)
+	reVec2ScalarProduct := regexp.MustCompile(`\b([a-zA-Z_][a-zA-Z0-9_]*)\s*\+\s*([a-zA-Z_][a-zA-Z0-9_]*\s*\*\s*[a-zA-Z_][a-zA-Z0-9_]*)`)
+	source = reVec2ScalarProduct.ReplaceAllStringFunc(source, func(match string) string {
+		submatches := reVec2ScalarProduct.FindStringSubmatch(match)
+		leftComponents, leftOK := vectorComponentCount(types[submatches[1]])
+		if !leftOK || leftComponents < 2 {
+			return match
+		}
+		productParts := strings.Split(submatches[2], "*")
+		if len(productParts) != 2 {
+			return match
+		}
+		for _, part := range productParts {
+			part = strings.TrimSpace(part)
+			components, ok := vectorComponentCount(types[part])
+			if !ok || components != 1 {
+				return match
+			}
+		}
+		typeName, ok := vectorTypeWithComponentCount(leftComponents)
+		if !ok {
+			return match
+		}
+		return fmt.Sprintf("%s + %s(%s)", submatches[1], typeName, submatches[2])
+	})
+
+	reVec2SelectorScalar := regexp.MustCompile(`\b([a-zA-Z_][a-zA-Z0-9_]*\.[xyzwrgba]{2})\s*\+\s*([a-zA-Z_][a-zA-Z0-9_]*)\b`)
+	source = reVec2SelectorScalar.ReplaceAllStringFunc(source, func(match string) string {
+		submatches := reVec2SelectorScalar.FindStringSubmatch(match)
+		components, ok := vectorComponentCount(types[submatches[2]])
+		if !ok || components != 1 {
+			return match
+		}
+		return fmt.Sprintf("%s + vec2(%s)", submatches[1], submatches[2])
+	})
+
+	reVec2Scalar := regexp.MustCompile(`\b([a-zA-Z_][a-zA-Z0-9_]*)\s*\+\s*([a-zA-Z_][a-zA-Z0-9_]*)\b`)
+	return reVec2Scalar.ReplaceAllStringFunc(source, func(match string) string {
+		submatches := reVec2Scalar.FindStringSubmatch(match)
+		leftComponents, leftOK := vectorComponentCount(types[submatches[1]])
+		rightComponents, rightOK := vectorComponentCount(types[submatches[2]])
+		if !leftOK || !rightOK || leftComponents < 2 || rightComponents != 1 {
+			return match
+		}
+		typeName, ok := vectorTypeWithComponentCount(leftComponents)
+		if !ok {
+			return match
+		}
+		return fmt.Sprintf("%s + %s(%s)", submatches[1], typeName, submatches[2])
+	})
+}
+
+func rewriteVec2ResolutionOperands(source string) string {
+	reResolution := regexp.MustCompile(`((?:CAST2\s*\([^;\n]*?\)|\(?vec2\s*\([^;\n]*?\)\)?)\s*/\s*)(g_Texture[0-9]+Resolution)(\.[xyzwrgba]+)?`)
+	return reResolution.ReplaceAllStringFunc(source, func(match string) string {
+		submatches := reResolution.FindStringSubmatch(match)
+		if submatches[3] != "" {
+			return match
+		}
+		return submatches[1] + submatches[2] + ".xy"
+	})
+}
+
+func declaredVariableTypes(source string) map[string]string {
+	types := map[string]string{}
+	reDeclaration := regexp.MustCompile(`\b(float|vec[234])\s+([a-zA-Z_][a-zA-Z0-9_]*)\b`)
+	for _, match := range reDeclaration.FindAllStringSubmatch(source, -1) {
+		types[match[2]] = match[1]
+	}
+	return types
+}
+
+func declaredBoolVariables(source string) map[string]bool {
+	variables := map[string]bool{}
+	reBool := regexp.MustCompile(`\bbool\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*=`)
+	for _, match := range reBool.FindAllStringSubmatch(source, -1) {
+		variables[match[1]] = true
+	}
+	return variables
+}
+
+func shaderVariableTypes(attributes []AttributeInfo, varying map[string]AttributeInfo) map[string]string {
+	types := map[string]string{}
+	for _, attribute := range attributes {
+		types[attribute.Name] = attribute.Type
+	}
+	for name, info := range varying {
+		types[name] = info.Type
+	}
+	return types
+}
+
+func rewriteTypedVectorAssignments(source string, types map[string]string) string {
+	reAssignment := regexp.MustCompile(`\b([a-zA-Z_][a-zA-Z0-9_]*)\s*=\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*;`)
+	return reAssignment.ReplaceAllStringFunc(source, func(match string) string {
+		submatches := reAssignment.FindStringSubmatch(match)
+		lhs := submatches[1]
+		rhs := submatches[2]
+		lhsComponents, lhsOK := vectorComponentCount(types[lhs])
+		rhsComponents, rhsOK := vectorComponentCount(types[rhs])
+		if !lhsOK || !rhsOK || lhsComponents == rhsComponents {
+			return match
+		}
+		if lhsComponents < rhsComponents {
+			return fmt.Sprintf("%s = %s.%s;", lhs, rhs, vectorSwizzle(lhsComponents))
+		}
+		return fmt.Sprintf("%s = %s.%s;", lhs, rhs, expandedVectorSwizzle(rhsComponents, lhsComponents))
+	})
+}
+
+func rewriteWritableFragmentVaryings(source string, varying map[string]AttributeInfo) (string, map[string]string) {
+	aliases := map[string]string{}
+	init := ""
+	localTypes := declaredVariableTypes(source)
+	for name, info := range varying {
+		if localType, exists := localTypes[name]; exists {
+			alias := name + "_local"
+			source = replaceIdentifier(source, name, alias)
+			aliases[alias] = localType
+			continue
+		}
+
+		reWrite := regexp.MustCompile(`\b` + regexp.QuoteMeta(name) + `(?:\.[xyzwrgba]+)?\s*(?:[+\-*/]?=|\+\+|--)`)
+		if !reWrite.MatchString(source) {
+			continue
+		}
+
+		alias := name + "_local"
+		source = replaceIdentifier(source, name, alias)
+		aliases[alias] = info.Type
+		init += fmt.Sprintf(" %s %s = %s;\n", info.Type, alias, name)
+	}
+	if init == "" {
+		return source, aliases
+	}
+
+	return insertAtMainStart(source, init), aliases
+}
+
+func replaceIdentifier(source string, from string, to string) string {
+	reIdentifier := regexp.MustCompile(`\b` + regexp.QuoteMeta(from) + `\b`)
+	return reIdentifier.ReplaceAllString(source, to)
+}
+
+func insertAtMainStart(source string, text string) string {
+	reMain := regexp.MustCompile(`void\s+main\s*\(\s*\)\s*\{`)
+	inserted := false
+	return reMain.ReplaceAllStringFunc(source, func(match string) string {
+		if inserted {
+			return match
+		}
+		inserted = true
+		return match + "\n" + text
+	})
+}
+
+func mergeVaryingInfo(vertexInfo AttributeInfo, fragmentInfo AttributeInfo) (AttributeInfo, bool) {
+	if vertexInfo.Name != fragmentInfo.Name || vertexInfo.ArraySize != fragmentInfo.ArraySize {
+		return AttributeInfo{}, false
+	}
+	vertexComponents, vertexOK := vectorComponentCount(vertexInfo.Type)
+	fragmentComponents, fragmentOK := vectorComponentCount(fragmentInfo.Type)
+	if !vertexOK || !fragmentOK {
+		return AttributeInfo{}, false
+	}
+	components := vertexComponents
+	if fragmentComponents > components {
+		components = fragmentComponents
+	}
+	mergedType, ok := vectorTypeWithComponentCount(components)
+	if !ok {
+		return AttributeInfo{}, false
+	}
+	return AttributeInfo{
+		Name:      vertexInfo.Name,
+		Type:      mergedType,
+		ArraySize: vertexInfo.ArraySize,
+	}, true
+}
+
+func vectorComponentCount(typeName string) (int, bool) {
+	switch typeName {
+	case "float":
+		return 1, true
+	case "vec2":
+		return 2, true
+	case "vec3":
+		return 3, true
+	case "vec4":
+		return 4, true
+	default:
+		return 0, false
+	}
+}
+
+func componentSelectorCount(expression string) int {
+	dot := strings.LastIndex(expression, ".")
+	if dot < 0 || dot+1 >= len(expression) {
+		return 1
+	}
+
+	return len(expression[dot+1:])
+}
+
+func vectorTypeWithComponentCount(components int) (string, bool) {
+	switch components {
+	case 1:
+		return "float", true
+	case 2:
+		return "vec2", true
+	case 3:
+		return "vec3", true
+	case 4:
+		return "vec4", true
+	default:
+		return "", false
+	}
+}
+
+func vectorSwizzle(components int) string {
+	switch components {
+	case 1:
+		return "x"
+	case 2:
+		return "xy"
+	case 3:
+		return "xyz"
+	default:
+		return "xyzw"
+	}
+}
+
+func expandedVectorSwizzle(sourceComponents int, targetComponents int) string {
+	switch sourceComponents {
+	case 1:
+		return strings.Repeat("x", targetComponents)
+	case 2:
+		if targetComponents == 3 {
+			return "xyx"
+		}
+		return "xyxy"
+	case 3:
+		if targetComponents == 4 {
+			return "xyzx"
+		}
+	}
+	return vectorSwizzle(targetComponents)
 }
 
 func parseUniformConstantNames(source string) map[string]string {
@@ -467,12 +918,56 @@ func insertIntermediateAttributes(source string, attributes []AttributeInfo, sid
 	return normalizeNewlines(source)
 }
 
-func preprocessSamplers(source string) (string, []SamplerInfo) {
-	reSampler := regexp.MustCompile(`uniform\s*sampler2D\s*([a-z|A-Z|0-9|_]*)\s*;`)
+func preprocessShaderSamplers(vertexSource string, fragmentSource string) (string, string, []SamplerInfo) {
+	vertexSource, vertexDeclaredSamplers := removeDeclaredSamplers(vertexSource)
+	fragmentSource, fragmentDeclaredSamplers := removeDeclaredSamplers(fragmentSource)
+
+	vertexSearchSource := stripGLSLComments(vertexSource)
+	fragmentSearchSource := stripGLSLComments(fragmentSource)
+	samplerBindings := map[string]int{}
+	samplers := []SamplerInfo{}
+
+	appendUsedSampler := func(sampler SamplerInfo) {
+		if _, exists := samplerBindings[sampler.Name]; exists {
+			return
+		}
+		if !sourceUsesIdentifier(vertexSearchSource, sampler.Name) && !sourceUsesIdentifier(fragmentSearchSource, sampler.Name) {
+			return
+		}
+
+		samplerBindings[sampler.Name] = len(samplers)
+		samplers = append(samplers, sampler)
+	}
+
+	for _, sampler := range fragmentDeclaredSamplers {
+		appendUsedSampler(sampler)
+	}
+	for _, sampler := range vertexDeclaredSamplers {
+		appendUsedSampler(sampler)
+	}
+
+	vertexHeader := ""
+	fragmentHeader := ""
+	for idx, sampler := range samplers {
+		if sourceUsesIdentifier(vertexSearchSource, sampler.Name) {
+			vertexHeader += fmt.Sprintf("layout(set = 2, binding = %d) uniform sampler2D %s;\n", idx, sampler.Name)
+		}
+		if sourceUsesIdentifier(fragmentSearchSource, sampler.Name) {
+			fragmentHeader += fmt.Sprintf("layout(set = 2, binding = %d) uniform sampler2D %s;\n", idx, sampler.Name)
+		}
+	}
+
+	vertexSource = insertSamplerHeader(vertexSource, vertexHeader)
+	fragmentSource = insertSamplerHeader(fragmentSource, fragmentHeader)
+	return vertexSource, fragmentSource, samplers
+}
+
+func removeDeclaredSamplers(source string) (string, []SamplerInfo) {
+	reSampler := regexp.MustCompile(`uniform\s*sampler2D\s*([A-Za-z0-9_]*)\s*;`)
 	declaredSamplers := []SamplerInfo{}
 	source = reSampler.ReplaceAllStringFunc(source, func(match string) string {
 		submatches := reSampler.FindStringSubmatch(match)
-		name := string(submatches[1])
+		name := submatches[1]
 		textureSlot := len(declaredSamplers)
 		if parsedSlot, ok := parseTextureSlotFromSamplerName(name); ok {
 			textureSlot = parsedSlot
@@ -484,19 +979,17 @@ func preprocessSamplers(source string) (string, []SamplerInfo) {
 		return ""
 	})
 
-	searchSource := stripGLSLComments(source)
-	samplers := []SamplerInfo{}
-	header := ""
-	for _, sampler := range declaredSamplers {
-		if !sourceUsesIdentifier(searchSource, sampler.Name) {
-			continue
-		}
-		samplers = append(samplers, sampler)
-		header += fmt.Sprintf("layout(set = 2, binding = %d) uniform sampler2D %s;\n", len(samplers)-1, sampler.Name)
-	}
+	return source, declaredSamplers
+}
 
-	source = strings.Replace(source, "#version 450", "#version 450\n"+header, 1)
-	return source, samplers
+func insertSamplerHeader(source string, header string) string {
+	if header == "" {
+		return source
+	}
+	if strings.Contains(source, "#version 450") {
+		return strings.Replace(source, "#version 450", "#version 450\n"+header, 1)
+	}
+	return header + source
 }
 
 func stripGLSLComments(source string) string {
