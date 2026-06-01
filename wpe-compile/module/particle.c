@@ -47,6 +47,38 @@ static float rand_float(float min, float max) {
     return min + (max - min) * (float)rand() / (float)RAND_MAX;
 }
 
+static float lerp_random(float min, float max, float random) {
+    return min + (max - min) * random;
+}
+
+static float oscillate_scalar_factor(wpe_particle_oscillate_scalar_operator* op, float age, float random) {
+    float frequency = lerp_random(op->frequency_min, op->frequency_max, random);
+    float phase = lerp_random(op->phase_min, op->phase_max, random);
+    float wave = sinf((age + phase) * frequency) * 0.5f + 0.5f;
+    return op->scale_min + random * (op->scale_max - op->scale_min) * wave;
+}
+
+static void apply_oscillate_position(
+    wpe_particle_oscillate_position_operator* op, wpe_particle_instance* instance, float delta) {
+    const float tau = (float)(2.0 * M_PI);
+    float random = instance->oscillate_random;
+    float frequency = lerp_random(op->frequency_min, op->frequency_max, random);
+    float phase = lerp_random(op->phase_min, op->phase_max, random);
+    float scale = lerp_random(op->scale_min, op->scale_max, random);
+    float previous_age = instance->age - delta;
+
+    float xz_current = sinf((instance->age + phase) * frequency);
+    float xz_previous = sinf((previous_age + phase) * frequency);
+    float xz_delta = (xz_current - xz_previous) * scale;
+    instance->position[0] += xz_delta * op->mask[0];
+    instance->position[2] += xz_delta * op->mask[2];
+
+    float y_phase = phase + random * tau;
+    float y_current = sinf((instance->age + y_phase) * frequency);
+    float y_previous = sinf((previous_age + y_phase) * frequency);
+    instance->position[1] += (y_current - y_previous) * op->mask[1] * scale;
+}
+
 static float fade_value(float life, float start, float end, float start_value, float end_value) {
     if(life <= start) {
         return start_value;
@@ -333,6 +365,7 @@ static void spawn_particle_instance(
     instance->alpha = rand_float(particle->init.min_alpha, particle->init.max_alpha);
     instance->initial_alpha = instance->alpha;
     instance->age = 0.0f;
+    instance->oscillate_random = rand_float(0.0f, 1.0f);
 }
 
 static void update_particle_instance(wpe_particle_object* particle, wpe_particle_instance* instance, float delta) {
@@ -378,6 +411,9 @@ static void update_particle_instance(wpe_particle_object* particle, wpe_particle
         }
     }
 
+    instance->size = instance->initial_size;
+    instance->alpha = instance->initial_alpha;
+
     if(particle->operator.size_change.enabled && instance->lifetime > 0.0f) {
         float life = instance->age / instance->lifetime;
         float multiplier =
@@ -410,6 +446,20 @@ static void update_particle_instance(wpe_particle_object* particle, wpe_particle
             fade = 1.0f;
         }
         instance->alpha = instance->initial_alpha * fade;
+    }
+
+    if(particle->operator.oscillate_position.enabled) {
+        apply_oscillate_position(&particle->operator.oscillate_position, instance, delta);
+    }
+
+    if(particle->operator.oscillate_alpha.enabled) {
+        instance->alpha *=
+            oscillate_scalar_factor(&particle->operator.oscillate_alpha, instance->age, instance->oscillate_random);
+    }
+
+    if(particle->operator.oscillate_size.enabled) {
+        instance->size *=
+            oscillate_scalar_factor(&particle->operator.oscillate_size, instance->age, instance->oscillate_random);
     }
 
     instance->frame = particle_spritesheet_frame(particle, instance);

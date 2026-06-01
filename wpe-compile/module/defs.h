@@ -316,6 +316,7 @@ typedef struct {
     int frame;
     float lifetime;
     float age;
+    float oscillate_random;
 } wpe_particle_instance;
 
 typedef struct {
@@ -411,11 +412,35 @@ typedef struct {
 } wpe_particle_alpha_fade_operator;
 
 typedef struct {
+    bool enabled;
+    float mask[3];
+    float frequency_min;
+    float frequency_max;
+    float phase_min;
+    float phase_max;
+    float scale_min;
+    float scale_max;
+} wpe_particle_oscillate_position_operator;
+
+typedef struct {
+    bool enabled;
+    float frequency_min;
+    float frequency_max;
+    float phase_min;
+    float phase_max;
+    float scale_min;
+    float scale_max;
+} wpe_particle_oscillate_scalar_operator;
+
+typedef struct {
     wpe_particle_movement_operator movement;
     wpe_particle_angular_movement_operator angular_movement;
     wpe_particle_size_change_operator size_change;
     wpe_particle_color_change_operator color_change;
     wpe_particle_alpha_fade_operator alpha_fade;
+    wpe_particle_oscillate_position_operator oscillate_position;
+    wpe_particle_oscillate_scalar_operator oscillate_alpha;
+    wpe_particle_oscillate_scalar_operator oscillate_size;
 } wpe_particle_operator;
 
 typedef struct {
