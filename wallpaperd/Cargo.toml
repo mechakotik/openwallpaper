@@ -1,0 +1,11 @@
+[package]
+name = "wallpaperd"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow = "1.0"
+raw-window-handle = "0.6.2"
+rustix = { version = "1.0", features = ["event"] }
+wayland-client = { version = "0.31", features = ["system"] }
+wayland-protocols-wlr = { version = "0.3", features = ["client"] }
