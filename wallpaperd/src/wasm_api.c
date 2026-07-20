@@ -271,6 +271,32 @@ void ow_update_buffer(wasm_exec_env_t exec_env, uint32_t buffer, uint32_t offset
     SDL_ReleaseGPUTransferBuffer(scene->gpu, transfer_buffer);
 }
 
+static bool get_texture_format(wd_state* state, ow_texture_format format, SDL_GPUTextureFormat* result) {
+    switch(format) {
+        case OW_TEXTURE_SWAPCHAIN:
+            *result = SDL_GetGPUSwapchainTextureFormat(state->scene.gpu, state->output.window);
+            return true;
+        case OW_TEXTURE_RGBA8_UNORM:
+            *result = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM;
+            return true;
+        case OW_TEXTURE_RGBA8_UNORM_SRGB:
+            *result = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM_SRGB;
+            return true;
+        case OW_TEXTURE_RGBA16_FLOAT:
+            *result = SDL_GPU_TEXTUREFORMAT_R16G16B16A16_FLOAT;
+            return true;
+        case OW_TEXTURE_R8_UNORM:
+            *result = SDL_GPU_TEXTUREFORMAT_R8_UNORM;
+            return true;
+        case OW_TEXTURE_DEPTH16_UNORM:
+            *result = SDL_GPU_TEXTUREFORMAT_D16_UNORM;
+            return true;
+        default:
+            wd_set_error("unknown texture format %d", format);
+            return false;
+    }
+}
+
 uint32_t ow_create_texture(wasm_exec_env_t exec_env, uint32_t info_ptr) {
     wasm_module_inst_t instance = wasm_runtime_get_module_inst(exec_env);
     wd_state* state = wasm_runtime_get_custom_data(instance);
@@ -288,29 +314,9 @@ uint32_t ow_create_texture(wasm_exec_env_t exec_env, uint32_t info_ptr) {
         texture_info.num_levels = 1;
     }
 
-    switch(info->format) {
-        case OW_TEXTURE_SWAPCHAIN:
-            texture_info.format = SDL_GetGPUSwapchainTextureFormat(scene->gpu, state->output.window);
-            break;
-        case OW_TEXTURE_RGBA8_UNORM:
-            texture_info.format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM;
-            break;
-        case OW_TEXTURE_RGBA8_UNORM_SRGB:
-            texture_info.format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM_SRGB;
-            break;
-        case OW_TEXTURE_RGBA16_FLOAT:
-            texture_info.format = SDL_GPU_TEXTUREFORMAT_R16G16B16A16_FLOAT;
-            break;
-        case OW_TEXTURE_R8_UNORM:
-            texture_info.format = SDL_GPU_TEXTUREFORMAT_R8_UNORM;
-            break;
-        case OW_TEXTURE_DEPTH16_UNORM:
-            texture_info.format = SDL_GPU_TEXTUREFORMAT_D16_UNORM;
-            break;
-        default:
-            wd_set_error("unknown texture format %d", info->format);
-            wasm_runtime_set_exception(instance, "");
-            return 0;
+    if(!get_texture_format(state, info->format, &texture_info.format)) {
+        wasm_runtime_set_exception(instance, "");
+        return 0;
     }
 
     texture_info.usage = SDL_GPU_TEXTUREUSAGE_SAMPLER;
@@ -334,6 +340,37 @@ uint32_t ow_create_texture(wasm_exec_env_t exec_env, uint32_t info_ptr) {
     return result;
 }
 
+typedef struct {
+    SDL_PixelFormat surface_format;
+    uint32_t surface_bytes_per_pixel;
+    uint32_t texture_bytes_per_pixel;
+} image_upload_format;
+
+static bool get_image_upload_format(SDL_GPUTextureFormat texture_format, image_upload_format* result) {
+    switch(texture_format) {
+        case SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM:
+        case SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM_SRGB:
+            *result = (image_upload_format){SDL_PIXELFORMAT_RGBA32, 4, 4};
+            return true;
+        case SDL_GPU_TEXTUREFORMAT_B8G8R8A8_UNORM:
+        case SDL_GPU_TEXTUREFORMAT_B8G8R8A8_UNORM_SRGB:
+            *result = (image_upload_format){SDL_PIXELFORMAT_BGRA32, 4, 4};
+            return true;
+        case SDL_GPU_TEXTUREFORMAT_R16G16B16A16_FLOAT:
+            *result = (image_upload_format){SDL_PIXELFORMAT_RGBA64_FLOAT, 8, 8};
+            return true;
+        case SDL_GPU_TEXTUREFORMAT_R8_UNORM:
+            *result = (image_upload_format){SDL_PIXELFORMAT_RGBA32, 4, 1};
+            return true;
+        case SDL_GPU_TEXTUREFORMAT_D16_UNORM:
+            *result = (image_upload_format){SDL_PIXELFORMAT_RGBA64, 8, 2};
+            return true;
+        default:
+            wd_set_error("SDL_GPUTextureFormat %d cannot be initialized from an image", texture_format);
+            return false;
+    }
+}
+
 uint32_t ow_create_texture_from_image(wasm_exec_env_t exec_env, uint32_t image_ptr, uint32_t size, uint32_t info_ptr) {
     wasm_module_inst_t instance = wasm_runtime_get_module_inst(exec_env);
     wd_state* state = wasm_runtime_get_custom_data(instance);
@@ -345,8 +382,14 @@ uint32_t ow_create_texture_from_image(wasm_exec_env_t exec_env, uint32_t image_p
     DEBUG_CHECK_RET0(info != NULL, "ow_create_texture_from_image info address is out of bounds");
     DEBUG_CHECK_RET0(scene->copy_pass != NULL, "called ow_create_texture_from_image when no copy pass is active");
 
-    if(info->format != OW_TEXTURE_RGBA8_UNORM && info->format != OW_TEXTURE_RGBA8_UNORM_SRGB) {
-        wd_set_error("unsupported texture format (TODO)");
+    SDL_GPUTextureFormat texture_format;
+    if(!get_texture_format(state, info->format, &texture_format)) {
+        wasm_runtime_set_exception(instance, "");
+        return 0;
+    }
+
+    image_upload_format upload_format;
+    if(!get_image_upload_format(texture_format, &upload_format)) {
         wasm_runtime_set_exception(instance, "");
         return 0;
     }
@@ -356,11 +399,19 @@ uint32_t ow_create_texture_from_image(wasm_exec_env_t exec_env, uint32_t image_p
     SDL_Surface* raw_surface = IMG_Load_IO(image_stream, true);
     DEBUG_CHECK_RET0(raw_surface != NULL, "IMG_Load failed: %s", SDL_GetError());
 
-    SDL_Surface* surface = SDL_ConvertSurface(raw_surface, SDL_PIXELFORMAT_ABGR8888);
+    SDL_Surface* surface = SDL_ConvertSurface(raw_surface, upload_format.surface_format);
     SDL_DestroySurface(raw_surface);
     DEBUG_CHECK_RET0(surface != NULL, "SDL_ConvertSurface failed: %s", SDL_GetError());
-    DEBUG_CHECK_RET0(
-        surface->pitch == surface->w * 4, "converted surface pitch is not equal to width * 4, this is not supported");
+
+    uint64_t surface_row_size = (uint64_t)surface->w * upload_format.surface_bytes_per_pixel;
+    uint64_t texture_data_size = (uint64_t)surface->w * surface->h * upload_format.texture_bytes_per_pixel;
+    if(surface->w <= 0 || surface->h <= 0 || surface_row_size > INT32_MAX || surface->pitch < (int)surface_row_size ||
+        texture_data_size > UINT32_MAX) {
+        SDL_DestroySurface(surface);
+        wd_set_error("decoded image dimensions or pitch are too large");
+        wasm_runtime_set_exception(instance, "");
+        return 0;
+    }
 
     info->width = surface->w;
     info->height = surface->h;
@@ -379,15 +430,47 @@ uint32_t ow_create_texture_from_image(wasm_exec_env_t exec_env, uint32_t image_p
         "ow_create_texture succeeded, but object is not a texture, please report this");
 
     SDL_GPUTransferBufferCreateInfo transfer_info = {0};
-    transfer_info.size = surface->w * surface->h * 4;
+    transfer_info.size = (uint32_t)texture_data_size;
     transfer_info.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
 
     SDL_GPUTransferBuffer* transfer_buffer = SDL_CreateGPUTransferBuffer(scene->gpu, &transfer_info);
-    DEBUG_CHECK_RET0(transfer_buffer != NULL, "SDL_CreateGPUTransferBuffer failed: %s", SDL_GetError());
+    if(transfer_buffer == NULL) {
+        wd_set_error("SDL_CreateGPUTransferBuffer failed: %s", SDL_GetError());
+        SDL_DestroySurface(surface);
+        wd_free_object(state, result);
+        wasm_runtime_set_exception(instance, "");
+        return 0;
+    }
 
     void* transfer_data = SDL_MapGPUTransferBuffer(scene->gpu, transfer_buffer, false);
-    DEBUG_CHECK_RET0(transfer_data != NULL, "SDL_MapGPUTransferBuffer failed: %s", SDL_GetError());
-    memcpy(transfer_data, surface->pixels, (uint32_t)(surface->w * surface->h * 4));
+    if(transfer_data == NULL) {
+        wd_set_error("SDL_MapGPUTransferBuffer failed: %s", SDL_GetError());
+        SDL_ReleaseGPUTransferBuffer(scene->gpu, transfer_buffer);
+        SDL_DestroySurface(surface);
+        wd_free_object(state, result);
+        wasm_runtime_set_exception(instance, "");
+        return 0;
+    }
+
+    uint8_t* dest_pixels = transfer_data;
+    const uint8_t* surface_pixels = surface->pixels;
+    if(upload_format.surface_bytes_per_pixel == upload_format.texture_bytes_per_pixel) {
+        uint32_t row_size = surface->w * upload_format.texture_bytes_per_pixel;
+        for(int y = 0; y < surface->h; y++) {
+            memcpy(dest_pixels + (size_t)y * row_size, surface_pixels + (size_t)y * surface->pitch, row_size);
+        }
+    } else {
+        for(int y = 0; y < surface->h; y++) {
+            const uint8_t* source_row = surface_pixels + (size_t)y * surface->pitch;
+            uint8_t* dest_row = dest_pixels + (size_t)y * surface->w * upload_format.texture_bytes_per_pixel;
+            for(int x = 0; x < surface->w; x++) {
+                memcpy(dest_row + (size_t)x * upload_format.texture_bytes_per_pixel,
+                    source_row + (size_t)x * upload_format.surface_bytes_per_pixel,
+                    upload_format.texture_bytes_per_pixel);
+            }
+        }
+    }
+
     SDL_UnmapGPUTransferBuffer(scene->gpu, transfer_buffer);
 
     SDL_GPUTextureTransferInfo source = {0};
