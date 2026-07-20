@@ -208,6 +208,10 @@ static bool init_gpu(wd_state* state) {
         wd_set_error("failed to enable SPIRV shaders: %s", SDL_GetError());
         return false;
     }
+    if(!SDL_SetBooleanProperty(gpu_properties, SDL_PROP_GPU_DEVICE_CREATE_DEBUGMODE_BOOLEAN, false)) {
+        wd_set_error("failed to disable GPU debug mode: %s", SDL_GetError());
+        return false;
+    }
 
     scene->gpu = SDL_CreateGPUDeviceWithProperties(gpu_properties);
     if(scene->gpu == NULL) {
