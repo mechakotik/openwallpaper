@@ -403,7 +403,8 @@ extern void ow_update_index_buffer(ow_index_buffer_id buffer, uint32_t offset, c
 extern ow_texture_id ow_create_texture(const ow_texture_info* info);
 
 /**
- * Creates a texture from PNG or WEBP image data.
+ * Creates a texture from PNG or WEBP image data. The image is converted to the requested texture format. For
+ * single-channel and depth formats, the image's red channel supplies the texture value.
  *
  * \param image Pointer to the encoded image data
  * \param size Size of the encoded image data in bytes
