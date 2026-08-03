@@ -144,6 +144,28 @@ bool wd_parse_args(wd_args_state* args, int argc, char* argv[]) {
                 return false;
             }
             args->no_audio = true;
+        } else if(strcmp(key, "no-aot") == 0) {
+            if(value[0] != '\0') {
+                wd_set_error("--no-aot is a flag, cannot set value");
+                return false;
+            }
+            args->no_aot = true;
+        } else if(strcmp(key, "debug-port") == 0) {
+            if(value[0] == '\0') {
+                wd_set_error("no value for --debug-port is set");
+                return false;
+            }
+            args->debug_port = atoi(value);
+            if(args->debug_port == 0) {
+                wd_set_error("invalid --debug-port");
+                return false;
+            }
+        } else if(strcmp(key, "debug-addr") == 0) {
+            if(value[0] == '\0') {
+                wd_set_error("no value for --debug-addr is set");
+                return false;
+            }
+            args->debug_addr = value;
         } else if(strcmp(key, "scale-mode") == 0) {
             if(value[0] == '\0') {
                 wd_set_error("no value for --scale-mode is set");

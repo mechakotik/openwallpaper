@@ -297,8 +297,32 @@ bool init_wasm(wd_state* state) {
 
     const uint32_t stack_size = 4 * 1024 * 1024;
 
-    if(!wasm_runtime_init()) {
-        wd_set_error("wasm_runtime_init failed");
+    RuntimeInitArgs init_args = {
+        .mem_alloc_type = Alloc_With_System_Allocator,
+    };
+
+    if(args->debug_port) {
+#if WD_DEBUG != 1
+        wd_set_error("wasm debugging requires wallpaperd compiled with -DWD_DEBUG=ON");
+        return false;
+#endif
+
+        init_args.instance_port = args->debug_port;
+
+        const char* addr = args->debug_addr;
+        if(addr == NULL) {
+            addr = "127.0.0.1";
+        }
+
+        strncpy(init_args.ip_addr, addr, sizeof(init_args.ip_addr));
+        if(init_args.ip_addr[sizeof(init_args.ip_addr) - 1] != '\0') {
+            wd_set_error("--debug-addr is too long");
+            return false;
+        }
+    }
+
+    if(!wasm_runtime_full_init(&init_args)) {
+        wd_set_error("wasm_runtime_full_init failed");
         return false;
     }
     scene->wasm_initialized = true;
@@ -324,7 +348,12 @@ bool init_wasm(wd_state* state) {
 
     char error_buf[128];
     uint8_t* wasm_buffer = scene->module_buffer;
-    if(load_aot_module(scene, wasm_buffer, module_size, error_buf, sizeof(error_buf))) {
+    // AOT/JIT debugging seems to be less supported, wamrc fails to build with
+    // -DWAMR_BUILD_DEBUG_AOT=1 against LLVM past 18, and then it even couldn't
+    // compile the doom example with debug info.
+    // Related issue: https://github.com/bytecodealliance/wasm-micro-runtime/issues/3187
+    if(!args->no_aot && init_args.instance_port == 0 &&
+        load_aot_module(scene, wasm_buffer, module_size, error_buf, sizeof(error_buf))) {
         free(wasm_buffer);
     } else {
         scene->module = wasm_runtime_load(scene->module_buffer, module_size, error_buf, sizeof(error_buf));
@@ -356,6 +385,32 @@ bool init_wasm(wd_state* state) {
         wd_set_error("wasm_runtime_create_exec_env failed");
         return false;
     }
+
+#if WD_DEBUG == 1
+    if(init_args.instance_port != 0) {
+        uint32_t debug_port = wasm_runtime_start_debug_instance_with_port(scene->exec_env, -1);
+        if(debug_port == 0) {
+            wd_set_error("failed to start debug endpoint at port %u", init_args.instance_port);
+            return false;
+        }
+
+        printf(
+            "Debug endpoint is up. Attach to it using:\n"
+            "\n"
+            "    $ lldb\n"
+            "    (lldb) process connect -p wasm connect://%s:%u\n"
+            "    (lldb) b init\n"
+            "    (lldb) b update\n"
+            "    (lldb) b scene.c:<line num>\n"
+            "    (lldb) c\n"
+            "\n"
+            "Note: If lldb doesn't see the source code, make sure you compile with -g flag: $WASMCC -g [...]\n"
+            "\n"
+            "Note: lldb received adequate wasm support only in LLVM 22, make sure your lldb --version is at least "
+            "that\n",
+            init_args.ip_addr, debug_port);
+    }
+#endif
 
     wasm_function_inst_t init_func = wasm_runtime_lookup_function(scene->instance, "init");
     if(init_func == NULL) {
